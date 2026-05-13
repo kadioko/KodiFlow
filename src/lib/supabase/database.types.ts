@@ -17,6 +17,7 @@ export interface Database {
           phone: string | null
           currency_preference: string
           dashboard_hidden_property_ids: Json
+          late_fee_rate: number
           created_at: string
           updated_at: string
         }
@@ -27,6 +28,7 @@ export interface Database {
           phone?: string | null
           currency_preference?: string
           dashboard_hidden_property_ids?: Json
+          late_fee_rate?: number
           created_at?: string
           updated_at?: string
         }
@@ -37,6 +39,7 @@ export interface Database {
           phone?: string | null
           currency_preference?: string
           dashboard_hidden_property_ids?: Json
+          late_fee_rate?: number
           created_at?: string
           updated_at?: string
         }
@@ -225,6 +228,8 @@ export interface Database {
           end_date: string
           monthly_rent: number
           deposit_amount: number
+          deposit_paid_amount: number
+          deposit_status: 'pending' | 'partial' | 'paid' | 'refunded'
           rent_due_day: number
           lease_type: 'residential' | 'commercial'
           billing_frequency: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
@@ -246,9 +251,11 @@ export interface Database {
           end_date: string
           monthly_rent: number
           deposit_amount?: number
+          deposit_paid_amount?: number
+          deposit_status?: 'pending' | 'partial' | 'paid' | 'refunded'
           rent_due_day?: number
           lease_type: 'residential' | 'commercial'
-          billing_frequency?: 'monthly' | 'quarterly' | 'annually'
+          billing_frequency?: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
           rent_escalation_type?: 'none' | 'percentage' | 'fixed_amount'
           rent_escalation_value?: number | null
           rent_escalation_frequency?: 'none' | 'annually' | 'custom'
@@ -267,9 +274,11 @@ export interface Database {
           end_date?: string
           monthly_rent?: number
           deposit_amount?: number
+          deposit_paid_amount?: number
+          deposit_status?: 'pending' | 'partial' | 'paid' | 'refunded'
           rent_due_day?: number
           lease_type?: 'residential' | 'commercial'
-          billing_frequency?: 'monthly' | 'quarterly' | 'annually'
+          billing_frequency?: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
           rent_escalation_type?: 'none' | 'percentage' | 'fixed_amount'
           rent_escalation_value?: number | null
           rent_escalation_frequency?: 'none' | 'annually' | 'custom'

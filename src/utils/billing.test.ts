@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calculateInvoiceTotal, calculatePaymentBalance, createProfileInsert, getBillingPeriod } from './billing'
+import { calculateLateFee, calculateNetIncome } from './finance'
 
 describe('billing helpers', () => {
   it('calculates six-month invoice totals from monthly rent and charges', () => {
@@ -24,5 +25,13 @@ describe('billing helpers', () => {
       full_name: 'Dora Tower',
       currency_preference: 'TZS',
     })
+  })
+
+  it('calculates late fees for overdue invoice balances', () => {
+    expect(calculateLateFee(100000, '2026-01-01', 5, new Date('2026-01-15'))).toBe(5000)
+  })
+
+  it('calculates net income after expenses', () => {
+    expect(calculateNetIncome(900000, 250000)).toBe(650000)
   })
 })

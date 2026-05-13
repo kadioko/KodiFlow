@@ -6,7 +6,8 @@ export function formatCurrency(
   amount: number,
   currency: string = DEFAULT_CURRENCY
 ): string {
-  const formatter = new Intl.NumberFormat('en-TZ', {
+  const locale = currency === 'TZS' ? 'en-TZ' : 'en-US';
+  const formatter = new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency,
     minimumFractionDigits: 0,

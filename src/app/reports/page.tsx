@@ -24,6 +24,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { calculateLateFee, calculateNetIncome } from '@/utils/finance'
 
 interface MonthlyData {
   month: number
@@ -44,6 +45,21 @@ interface PropertyReport {
   total_invoiced: number
   total_collected: number
   outstanding: number
+  expenses: number
+  net_income: number
+}
+
+interface TenantBalanceReport {
+  tenant_id: string
+  tenant_name: string
+  outstanding: number
+}
+
+interface DepositReport {
+  expected: number
+  paid: number
+  outstanding: number
+  pendingCount: number
 }
 
 const currentYear = new Date().getFullYear()
@@ -57,6 +73,13 @@ export default function ReportsPage() {
   
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [propertyReports, setPropertyReports] = useState<PropertyReport[]>([])
+  const [tenantBalances, setTenantBalances] = useState<TenantBalanceReport[]>([])
+  const [depositReport, setDepositReport] = useState<DepositReport>({
+    expected: 0,
+    paid: 0,
+    outstanding: 0,
+    pendingCount: 0,
+  })
   const [summary, setSummary] = useState({
     totalProperties: 0,
     totalUnits: 0,
@@ -68,6 +91,9 @@ export default function ReportsPage() {
     monthlyCollected: 0,
     totalOutstanding: 0,
     overdueCount: 0,
+    totalExpenses: 0,
+    netIncome: 0,
+    lateFeesEstimated: 0,
   })
 
   useEffect(() => {
@@ -99,12 +125,28 @@ export default function ReportsPage() {
       .eq('billing_month', selectedMonth)
       .eq('billing_year', selectedYear)
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('late_fee_rate')
+      .eq('id', user.id)
+      .single()
+
     // Fetch all active leases
     const { data: leases } = await supabase
       .from('leases')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
+
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('user_id', user.id)
+
+    const monthlyExpenses = expenses?.filter((expense: any) => {
+      const date = new Date(expense.expense_date)
+      return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear
+    }) || []
 
     // Fetch tenants count
     const { data: tenants } = await supabase
@@ -122,8 +164,10 @@ export default function ReportsPage() {
         const vacant = units.filter((u: any) => u.status === 'vacant').length
         
         const propInvoices = invoices?.filter((inv: any) => inv.property_id === prop.id) || []
+        const propExpenses = monthlyExpenses.filter((expense: any) => expense.property_id === prop.id)
         const totalInvoiced = propInvoices.reduce((sum: number, inv: any) => sum + inv.subtotal, 0)
         const totalCollected = propInvoices.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0)
+        const totalExpenses = propExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0)
         
         propertyReportsData.push({
           property_id: prop.id,
@@ -136,6 +180,8 @@ export default function ReportsPage() {
           total_invoiced: totalInvoiced,
           total_collected: totalCollected,
           outstanding: totalInvoiced - totalCollected,
+          expenses: totalExpenses,
+          net_income: calculateNetIncome(totalCollected, totalExpenses),
         })
       })
     }
@@ -146,6 +192,33 @@ export default function ReportsPage() {
     const totalInvoiced = invoices?.reduce((sum: number, inv: any) => sum + inv.subtotal, 0) || 0
     const totalCollected = invoices?.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0) || 0
     const overdueInvoices = invoices?.filter((inv: any) => inv.status === 'overdue') || []
+    const totalExpenses = monthlyExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0)
+    const lateFeeRate = Number(profile?.late_fee_rate || 0)
+    const lateFeesEstimated = overdueInvoices.reduce((sum: number, invoice: any) => {
+      return sum + calculateLateFee(invoice.balance || 0, invoice.due_date, lateFeeRate)
+    }, 0)
+
+    const tenantBalanceMap = new Map<string, TenantBalanceReport>()
+    invoices?.forEach((invoice: any) => {
+      if ((invoice.balance || 0) <= 0) return
+      const current = tenantBalanceMap.get(invoice.tenant_id) || {
+        tenant_id: invoice.tenant_id,
+        tenant_name: invoice.tenant_id,
+        outstanding: 0,
+      }
+      current.outstanding += invoice.balance || 0
+      tenantBalanceMap.set(invoice.tenant_id, current)
+    })
+    setTenantBalances(Array.from(tenantBalanceMap.values()).sort((a, b) => b.outstanding - a.outstanding))
+
+    const depositExpected = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_amount || 0), 0) || 0
+    const depositPaid = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_paid_amount || 0), 0) || 0
+    setDepositReport({
+      expected: depositExpected,
+      paid: depositPaid,
+      outstanding: depositExpected - depositPaid,
+      pendingCount: leases?.filter((lease: any) => lease.deposit_status !== 'paid').length || 0,
+    })
 
     const totalUnits = properties?.reduce((sum: number, p: any) => sum + (p.units?.length || 0), 0) || 0
     const occupiedUnits = properties?.reduce((sum: number, p: any) => {
@@ -163,6 +236,9 @@ export default function ReportsPage() {
       monthlyCollected: totalCollected,
       totalOutstanding: totalInvoiced - totalCollected,
       overdueCount: overdueInvoices.length,
+      totalExpenses,
+      netIncome: calculateNetIncome(totalCollected, totalExpenses),
+      lateFeesEstimated,
     })
 
     setLoading(false)
@@ -170,7 +246,7 @@ export default function ReportsPage() {
 
   const handleExportCSV = () => {
     const csvContent = [
-      ['Property', 'Type', 'Units', 'Occupied', 'Vacant', 'Monthly Rent', 'Invoiced', 'Collected', 'Outstanding'],
+      ['Property', 'Type', 'Units', 'Occupied', 'Vacant', 'Monthly Rent', 'Invoiced', 'Collected', 'Expenses', 'Net Income', 'Outstanding'],
       ...propertyReports.map(p => [
         p.property_name,
         p.property_type,
@@ -180,6 +256,8 @@ export default function ReportsPage() {
         p.monthly_rent,
         p.total_invoiced,
         p.total_collected,
+        p.expenses,
+        p.net_income,
         p.outstanding,
       ]),
     ].map(row => row.join(',')).join('\n')
@@ -339,6 +417,29 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Financial Enhancements */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="stat-card">
+          <p className="stat-label">Expenses</p>
+          <p className="stat-value text-warning-600">{formatCurrency(summary.totalExpenses)}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Net Income</p>
+          <p className={`stat-value ${summary.netIncome >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
+            {formatCurrency(summary.netIncome)}
+          </p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Late Fees Estimated</p>
+          <p className="stat-value text-danger-600">{formatCurrency(summary.lateFeesEstimated)}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Deposit Outstanding</p>
+          <p className="stat-value text-warning-600">{formatCurrency(depositReport.outstanding)}</p>
+          <p className="text-sm text-gray-500">{depositReport.pendingCount} pending lease(s)</p>
+        </div>
+      </div>
+
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="card p-6">
@@ -376,6 +477,27 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Outstanding Balances by Tenant */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="text-lg font-semibold">Outstanding Balances by Tenant</h3>
+        </div>
+        <div className="card-body">
+          {tenantBalances.length === 0 ? (
+            <p className="text-gray-500">No outstanding tenant balances for this period.</p>
+          ) : (
+            <div className="space-y-3">
+              {tenantBalances.slice(0, 10).map((tenant) => (
+                <div key={tenant.tenant_id} className="flex items-center justify-between border-b border-gray-100 pb-2">
+                  <span className="text-gray-700">{tenant.tenant_name}</span>
+                  <span className="font-semibold text-danger-600">{formatCurrency(tenant.outstanding)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Property Reports Table */}
       <div className="card">
         <div className="card-header">
@@ -391,6 +513,8 @@ export default function ReportsPage() {
                 <th className="table-header-cell">Occupancy</th>
                 <th className="table-header-cell">Expected</th>
                 <th className="table-header-cell">Collected</th>
+                <th className="table-header-cell">Expenses</th>
+                <th className="table-header-cell">Net Income</th>
                 <th className="table-header-cell">Outstanding</th>
               </tr>
             </thead>
@@ -421,7 +545,11 @@ export default function ReportsPage() {
                   </td>
                   <td className="table-cell">{formatCurrency(property.total_invoiced)}</td>
                   <td className="table-cell text-success-600">{formatCurrency(property.total_collected)}</td>
-                  <td className={`table-cell ${property.outstanding > 0 ? 'text-danger-600' : ''}`}>
+                  <td className="table-cell text-warning-600">{formatCurrency(property.expenses)}</td>
+                  <td className={`table-cell font-medium ${property.net_income >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
+                    {formatCurrency(property.net_income)}
+                  </td>
+                  <td className={`table-cell font-medium ${property.outstanding > 0 ? 'text-danger-600' : 'text-success-600'}`}>
                     {formatCurrency(property.outstanding)}
                   </td>
                 </tr>
