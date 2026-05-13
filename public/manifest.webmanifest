@@ -6,7 +6,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#f9fafb",
-  "theme_color": "#2563eb",
+  "theme_color": "#0f766e",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -14,6 +14,12 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/logo.svg",
+      "sizes": "560x144",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

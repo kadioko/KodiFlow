@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Building2, Users, Receipt, TrendingUp, CheckCircle, ArrowRight } from 'lucide-react'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 
 export default function LandingPage() {
   const currentYear = new Date().getFullYear()
@@ -10,12 +11,7 @@ export default function LandingPage() {
       <nav className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-lg font-bold">K</span>
-              </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">KodiFlow</span>
-            </div>
+            <BrandLogo href="/" size="sm" tone="dark" />
             <div className="flex items-center space-x-4">
               <Link href="/auth/login" className="text-gray-600 hover:text-gray-900">
                 Sign in
@@ -152,14 +148,9 @@ export default function LandingPage() {
       <footer className="bg-gray-900 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-lg font-bold">K</span>
-              </div>
-              <span className="ml-2 text-xl font-bold text-white">KodiFlow</span>
-            </div>
+            <BrandLogo href="/" size="sm" tone="light" />
             <p className="text-gray-400 text-sm">
-              © {currentYear} KodiFlow. All rights reserved.
+              &copy; {currentYear} KodiFlow. All rights reserved.
             </p>
           </div>
         </div>

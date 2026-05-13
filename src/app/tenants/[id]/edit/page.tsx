@@ -1,14 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, User, Building2, Loader2 } from 'lucide-react'
 import { TENANT_TYPES } from '@/utils/constants'
 
-export default function EditTenantPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function EditTenantPage() {
   const router = useRouter()
+  const params = useParams()
+  const tenantId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -45,8 +51,14 @@ export default function EditTenantPage({ params }: { params: { id: string } }) {
   })
 
   useEffect(() => {
+    if (!tenantId) {
+      setError('Tenant not found')
+      setLoading(false)
+      return
+    }
+
     fetchTenant()
-  }, [params.id])
+  }, [tenantId])
 
   const fetchTenant = async () => {
     const supabase = createClient()
@@ -60,7 +72,7 @@ export default function EditTenantPage({ params }: { params: { id: string } }) {
     const { data, error: fetchError } = await supabase
       .from('tenants')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', tenantId)
       .eq('user_id', user.id)
       .single()
 
@@ -121,13 +133,13 @@ export default function EditTenantPage({ params }: { params: { id: string } }) {
         notes: formData.notes || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', tenantId)
       .eq('user_id', user.id)
 
     if (updateError) {
       setError(updateError.message)
     } else {
-      router.push(`/tenants/${params.id}`)
+      router.push(`/tenants/${tenantId}`)
       router.refresh()
     }
 
@@ -148,7 +160,7 @@ export default function EditTenantPage({ params }: { params: { id: string } }) {
     <div className="max-w-3xl mx-auto">
       <div className="page-header">
         <div className="flex items-center">
-          <Link href={`/tenants/${params.id}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
+          <Link href={`/tenants/${tenantId}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="h-5 w-5 text-gray-500" />
           </Link>
           <div>
@@ -369,7 +381,7 @@ export default function EditTenantPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex items-center justify-end space-x-4 pt-4">
-            <Link href={`/tenants/${params.id}`} className="btn-secondary">
+            <Link href={`/tenants/${tenantId}`} className="btn-secondary">
               Cancel
             </Link>
             <button type="submit" disabled={saving} className="btn-primary">

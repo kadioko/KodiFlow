@@ -18,6 +18,13 @@
       radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 32rem),
       linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+    background:
+      radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 30rem),
+      linear-gradient(180deg, #020617 0%, #0f172a 100%);
+  }
 }
 
 @layer components {
@@ -145,6 +152,106 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  .dark .bg-white,
+  .dark .bg-white\/85,
+  .dark .bg-white\/90,
+  .dark .bg-white\/95 {
+    background-color: rgb(15 23 42 / 0.92) !important;
+  }
+
+  .dark .bg-gray-50,
+  .dark .bg-slate-50,
+  .dark .bg-slate-50\/80 {
+    background-color: rgb(2 6 23 / 0.72) !important;
+  }
+
+  .dark .bg-gray-100,
+  .dark .bg-slate-100,
+  .dark .bg-primary-50 {
+    background-color: rgb(30 41 59 / 0.86) !important;
+  }
+
+  .dark .border-gray-100,
+  .dark .border-gray-200,
+  .dark .border-slate-100,
+  .dark .border-slate-200,
+  .dark .border-white\/70 {
+    border-color: rgb(51 65 85 / 0.86) !important;
+  }
+
+  .dark .text-gray-400,
+  .dark .text-gray-500,
+  .dark .text-gray-600,
+  .dark .text-slate-400,
+  .dark .text-slate-500,
+  .dark .text-slate-600 {
+    color: rgb(148 163 184) !important;
+  }
+
+  .dark .text-gray-700,
+  .dark .text-gray-800,
+  .dark .text-gray-900,
+  .dark .text-slate-700,
+  .dark .text-slate-800,
+  .dark .text-slate-900,
+  .dark .text-slate-950,
+  .dark .page-title,
+  .dark .label,
+  .dark .table-cell,
+  .dark .stat-value {
+    color: rgb(226 232 240) !important;
+  }
+
+  .dark .card,
+  .dark .stat-card,
+  .dark .table-container {
+    border-color: rgb(51 65 85 / 0.9) !important;
+    background-color: rgb(15 23 42 / 0.9) !important;
+    box-shadow: 0 18px 45px rgb(2 6 23 / 0.28);
+  }
+
+  .dark .card-header,
+  .dark .table-header {
+    background-color: rgb(15 23 42 / 0.95) !important;
+  }
+
+  .dark .table-body {
+    background-color: rgb(15 23 42 / 0.88) !important;
+  }
+
+  .dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+  .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(51 65 85 / 0.82) !important;
+  }
+
+  .dark .input,
+  .dark input,
+  .dark select,
+  .dark textarea {
+    border-color: rgb(51 65 85) !important;
+    background-color: rgb(2 6 23 / 0.72) !important;
+    color: rgb(241 245 249) !important;
+  }
+
+  .dark .input::placeholder,
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: rgb(100 116 139) !important;
+  }
+
+  .dark .btn-secondary {
+    border-color: rgb(51 65 85) !important;
+    background-color: rgb(15 23 42) !important;
+    color: rgb(226 232 240) !important;
+  }
+
+  .dark .btn-secondary:hover {
+    background-color: rgb(30 41 59) !important;
+    color: rgb(255 255 255) !important;
   }
 }
 

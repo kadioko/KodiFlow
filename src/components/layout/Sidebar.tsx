@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import {
   LayoutDashboard,
   Building2,
@@ -49,24 +50,18 @@ export function Sidebar({ user }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className={`${collapsed ? 'w-16' : 'w-64'} flex-shrink-0 bg-slate-950 text-white transition-all duration-300 flex flex-col shadow-2xl shadow-slate-950/20`}>
-      <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
+    <div className={`${collapsed ? 'w-16' : 'w-64'} hidden flex-shrink-0 bg-slate-950 text-white shadow-2xl shadow-slate-950/20 transition-all duration-300 lg:flex lg:flex-col`}>
+      <div className={`relative flex h-16 items-center border-b border-white/10 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         {!collapsed && (
-          <Link href="/dashboard" className="flex items-center space-x-2">
-            <div className="h-9 w-9 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-900/30">
-              <span className="text-white text-lg font-bold">K</span>
-            </div>
-            <span className="text-xl font-black tracking-tight text-white">KodiFlow</span>
-          </Link>
+          <BrandLogo href="/dashboard" size="sm" tone="light" priorityLabel="KodiFlow dashboard" />
         )}
         {collapsed && (
-          <div className="h-9 w-9 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center mx-auto">
-            <span className="text-white text-lg font-bold">K</span>
-          </div>
+          <BrandLogo href="/dashboard" size="sm" variant="mark" tone="light" priorityLabel="KodiFlow dashboard" />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded-lg text-white/70 hover:bg-white/10 hover:text-white"
+          className={`${collapsed ? 'absolute left-12' : ''} rounded-lg p-1 text-white/70 hover:bg-white/10 hover:text-white`}
+          aria-label={collapsed ? 'Expand dashboard navigation' : 'Collapse dashboard navigation'}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
@@ -113,5 +108,3 @@ export function Sidebar({ user }: SidebarProps) {
     </div>
   )
 }
-
-

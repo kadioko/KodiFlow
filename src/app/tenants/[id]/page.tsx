@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -71,8 +71,14 @@ interface Payment {
   invoice_number: string
 }
 
-export default function TenantDetailPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function TenantDetailPage() {
   const router = useRouter()
+  const params = useParams()
+  const tenantId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [error, setError] = useState('')
@@ -92,8 +98,14 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
   })
 
   useEffect(() => {
+    if (!tenantId) {
+      setError('Tenant not found')
+      setLoading(false)
+      return
+    }
+
     fetchTenantData()
-  }, [params.id])
+  }, [tenantId])
 
   const fetchTenantData = async () => {
     const supabase = createClient()
@@ -108,7 +120,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
     const { data: tenantData } = await supabase
       .from('tenants')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', tenantId)
       .eq('user_id', user.id)
       .single()
 
@@ -128,7 +140,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
         units(unit_name),
         properties(name)
       `)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -154,7 +166,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
         *,
         units(unit_name)
       `)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -183,7 +195,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
         *,
         rent_invoices(invoice_number)
       `)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
       .eq('user_id', user.id)
       .order('payment_date', { ascending: false })
 
@@ -209,17 +221,17 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
     const { data: leasesCheck } = await supabase
       .from('leases')
       .select('id', { count: 'exact' })
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
 
     const { data: invoicesCheck } = await supabase
       .from('rent_invoices')
       .select('id', { count: 'exact' })
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
 
     const { data: paymentsCheck } = await supabase
       .from('payments')
       .select('id', { count: 'exact' })
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', tenantId)
 
     if ((leasesCheck && leasesCheck.length > 0) || 
         (invoicesCheck && invoicesCheck.length > 0) ||
@@ -233,7 +245,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
     const { error: deleteError } = await supabase
       .from('tenants')
       .delete()
-      .eq('id', params.id)
+      .eq('id', tenantId)
       .eq('user_id', user.id)
 
     if (deleteError) {
@@ -302,7 +314,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
           </div>
         </div>
         <div className="flex space-x-3">
-          <Link href={`/tenants/${params.id}/edit`} className="btn-secondary">
+          <Link href={`/tenants/${tenantId}/edit`} className="btn-secondary">
             <Edit2 className="h-4 w-4 mr-2" />
             Edit
           </Link>
@@ -473,7 +485,7 @@ export default function TenantDetailPage({ params }: { params: { id: string } })
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Lease History</h3>
-              <Link href={`/leases/new?tenant=${params.id}`} className="btn-primary">
+              <Link href={`/leases/new?tenant=${tenantId}`} className="btn-primary">
                 Create Lease
               </Link>
             </div>

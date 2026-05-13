@@ -1,4 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KodiFlow icon">
-  <rect width="512" height="512" rx="112" fill="#2563eb"/>
-  <path d="M139 372V140h58v95l91-95h72l-103 108 110 124h-76l-94-109v109h-58Z" fill="#ffffff"/>
+  <defs>
+    <linearGradient id="mark" x1="88" x2="430" y1="48" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14b8a6"/>
+      <stop offset="0.52" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="132" x2="396" y1="362" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#facc15"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#mark)"/>
+  <path d="M136 350c66 16 115 1 150-45l18-24c26-35 50-54 90-54" fill="none" stroke="url(#flow)" stroke-linecap="round" stroke-width="40"/>
+  <path d="M152 352V160h48v78l80-78h62L251 248l98 104h-62l-73-82-14 15v67h-48Z" fill="#fff"/>
+  <path d="M336 352V160h56v192h-56Z" fill="#dbeafe" opacity="0.92"/>
 </svg>
