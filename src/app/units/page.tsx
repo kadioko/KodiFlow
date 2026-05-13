@@ -4,6 +4,16 @@ import { Plus, DoorOpen, MapPin, Users, CheckCircle, XCircle, AlertCircle, Clock
 import { getLabelByValue, getColorByValue, UNIT_TYPES, UNIT_STATUSES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
+const floorSortOrder: Record<string, number> = {
+  basement: 0,
+  'ground floor': 1,
+  'first floor': 2,
+  'second floor': 3,
+  'third floor': 4,
+  'fourth floor': 5,
+  'fifth floor': 6,
+}
+
 async function getUnits() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,7 +61,19 @@ async function getUnits() {
     })
   )
 
-  return unitsWithLeases
+  return unitsWithLeases.sort((a, b) => {
+    const propertyCompare = (a.property_name || '').localeCompare(b.property_name || '')
+    if (propertyCompare !== 0) return propertyCompare
+
+    const aFloorOrder = floorSortOrder[(a.section_name || '').toLowerCase()] ?? 999
+    const bFloorOrder = floorSortOrder[(b.section_name || '').toLowerCase()] ?? 999
+    if (aFloorOrder !== bFloorOrder) return aFloorOrder - bFloorOrder
+
+    const tenantCompare = (a.current_tenant_name || '').localeCompare(b.current_tenant_name || '')
+    if (tenantCompare !== 0) return tenantCompare
+
+    return a.unit_name.localeCompare(b.unit_name)
+  })
 }
 
 export default async function UnitsPage() {

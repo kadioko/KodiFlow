@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import DashboardPropertyVisibility from '@/components/dashboard/DashboardPropertyVisibility'
 import Link from 'next/link'
 import {
   Building2,
@@ -23,8 +24,14 @@ async function getDashboardMetrics() {
   // Get counts
   const { data: properties } = await supabase
     .from('properties')
-    .select('id, property_type')
+    .select(`
+      id,
+      name,
+      property_type,
+      units(id, status, monthly_rent)
+    `)
     .eq('user_id', user.id)
+    .order('name')
 
   const { data: units } = await supabase
     .from('units')
@@ -74,6 +81,19 @@ async function getDashboardMetrics() {
   const residentialUnits = units?.filter(u => u.usage_type === 'residential').length || 0
   const commercialUnits = units?.filter(u => u.usage_type === 'commercial').length || 0
   const mixedUnits = units?.filter(u => u.usage_type === 'mixed').length || 0
+  const propertySummaries = (properties || []).map((property: any) => {
+    const propertyUnits = property.units || []
+
+    return {
+      id: property.id,
+      name: property.name,
+      property_type: property.property_type,
+      total_units: propertyUnits.length,
+      occupied_units: propertyUnits.filter((unit: any) => unit.status === 'occupied').length,
+      vacant_units: propertyUnits.filter((unit: any) => unit.status === 'vacant').length,
+      monthly_rent: propertyUnits.reduce((sum: number, unit: any) => sum + (unit.monthly_rent || 0), 0),
+    }
+  })
 
   return {
     month: getMonthName(month),
@@ -94,6 +114,7 @@ async function getDashboardMetrics() {
     residentialUnits,
     commercialUnits,
     mixedUnits,
+    propertySummaries,
   }
 }
 
@@ -208,6 +229,8 @@ export default async function DashboardPage() {
           </p>
         </div>
       </div>
+
+      <DashboardPropertyVisibility properties={metrics.propertySummaries} />
 
       {/* Quick Actions */}
       <div className="card">
