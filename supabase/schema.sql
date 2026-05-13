@@ -14,6 +14,8 @@ CREATE TABLE profiles (
   phone TEXT,
   currency_preference TEXT DEFAULT 'TZS',
   dashboard_hidden_property_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  language_preference TEXT DEFAULT 'en' CHECK (language_preference IN ('en', 'sw')),
+  late_fee_rate DECIMAL(5, 2) DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -102,6 +104,8 @@ CREATE TABLE leases (
   end_date DATE NOT NULL,
   monthly_rent DECIMAL(12, 2) NOT NULL,
   deposit_amount DECIMAL(12, 2) DEFAULT 0,
+  deposit_paid_amount DECIMAL(12, 2) DEFAULT 0,
+  deposit_status TEXT DEFAULT 'pending' CHECK (deposit_status IN ('pending', 'partial', 'paid', 'refunded')),
   rent_due_day INTEGER DEFAULT 1 CHECK (rent_due_day BETWEEN 1 AND 31),
   lease_type TEXT NOT NULL CHECK (lease_type IN ('residential', 'commercial')),
   billing_frequency TEXT DEFAULT 'monthly' CHECK (billing_frequency IN ('monthly', 'quarterly', 'semi_annually', 'annually')),
@@ -231,6 +235,28 @@ CREATE TABLE documents (
 );
 
 -- ============================================
+-- 13. UTILITY METER READINGS TABLE
+-- ============================================
+CREATE TABLE utility_meter_readings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  unit_id UUID REFERENCES units(id) ON DELETE SET NULL,
+  utility_type TEXT NOT NULL CHECK (utility_type IN ('water', 'electricity')),
+  previous_reading DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  current_reading DECIMAL(12, 2) NOT NULL,
+  usage_amount DECIMAL(12, 2) GENERATED ALWAYS AS (current_reading - previous_reading) STORED,
+  rate_per_unit DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(12, 2) GENERATED ALWAYS AS ((current_reading - previous_reading) * rate_per_unit) STORED,
+  reading_date DATE NOT NULL,
+  billing_month INTEGER NOT NULL CHECK (billing_month BETWEEN 1 AND 12),
+  billing_year INTEGER NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ============================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================
 CREATE INDEX idx_properties_user_id ON properties(user_id);
@@ -264,6 +290,10 @@ CREATE INDEX idx_expenses_user_id ON expenses(user_id);
 CREATE INDEX idx_documents_property_id ON documents(property_id);
 CREATE INDEX idx_documents_tenant_id ON documents(tenant_id);
 CREATE INDEX idx_documents_lease_id ON documents(lease_id);
+CREATE INDEX idx_utility_meter_readings_user_id ON utility_meter_readings(user_id);
+CREATE INDEX idx_utility_meter_readings_property_id ON utility_meter_readings(property_id);
+CREATE INDEX idx_utility_meter_readings_unit_id ON utility_meter_readings(unit_id);
+CREATE INDEX idx_utility_meter_readings_billing ON utility_meter_readings(billing_month, billing_year);
 
 -- ============================================
 -- FUNCTIONS
@@ -406,6 +436,7 @@ ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE utility_meter_readings ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Users can only see and update their own profile
 CREATE POLICY "Users can view own profile" ON profiles
@@ -558,4 +589,17 @@ CREATE POLICY "Users can update own documents" ON documents
   FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete own documents" ON documents
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Utility meter readings: Users can only access their own readings
+CREATE POLICY "Users can view own utility meter readings" ON utility_meter_readings
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own utility meter readings" ON utility_meter_readings
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own utility meter readings" ON utility_meter_readings
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own utility meter readings" ON utility_meter_readings
   FOR DELETE USING (auth.uid() = user_id);

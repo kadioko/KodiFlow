@@ -95,6 +95,16 @@ export const CHARGE_TYPES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+export const UTILITY_TYPES = [
+  { value: 'water', label: 'Water' },
+  { value: 'electricity', label: 'Electricity' },
+] as const;
+
+export const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'sw', label: 'Swahili' },
+] as const;
+
 // Charge frequencies
 export const CHARGE_FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
@@ -162,3 +172,4 @@ export function getColorByValue(
 ): string {
   return constants.find((c) => c.value === value)?.color || 'bg-gray-100 text-gray-800';
 }
+

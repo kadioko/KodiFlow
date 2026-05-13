@@ -62,6 +62,17 @@ interface DepositReport {
   pendingCount: number
 }
 
+interface TenantMixReport {
+  tenant_type: string
+  count: number
+}
+
+interface UtilityReport {
+  utility_type: string
+  usage_amount: number
+  total_amount: number
+}
+
 const currentYear = new Date().getFullYear()
 const reportYears = Array.from({ length: 7 }, (_, index) => currentYear - 3 + index)
 
@@ -74,6 +85,8 @@ export default function ReportsPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [propertyReports, setPropertyReports] = useState<PropertyReport[]>([])
   const [tenantBalances, setTenantBalances] = useState<TenantBalanceReport[]>([])
+  const [tenantMix, setTenantMix] = useState<TenantMixReport[]>([])
+  const [utilityReports, setUtilityReports] = useState<UtilityReport[]>([])
   const [depositReport, setDepositReport] = useState<DepositReport>({
     expected: 0,
     paid: 0,
@@ -151,8 +164,15 @@ export default function ReportsPage() {
     // Fetch tenants count
     const { data: tenants } = await supabase
       .from('tenants')
-      .select('id', { count: 'exact' })
+      .select('id, tenant_type', { count: 'exact' })
       .eq('user_id', user.id)
+
+    const { data: utilities } = await supabase
+      .from('utility_meter_readings')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('billing_month', selectedMonth)
+      .eq('billing_year', selectedYear)
 
     // Calculate property reports
     const propertyReportsData: PropertyReport[] = []
@@ -210,6 +230,25 @@ export default function ReportsPage() {
       tenantBalanceMap.set(invoice.tenant_id, current)
     })
     setTenantBalances(Array.from(tenantBalanceMap.values()).sort((a, b) => b.outstanding - a.outstanding))
+
+    const tenantMixMap = new Map<string, number>()
+    tenants?.forEach((tenant: any) => {
+      tenantMixMap.set(tenant.tenant_type, (tenantMixMap.get(tenant.tenant_type) || 0) + 1)
+    })
+    setTenantMix(Array.from(tenantMixMap.entries()).map(([tenant_type, count]) => ({ tenant_type, count })))
+
+    const utilityMap = new Map<string, UtilityReport>()
+    utilities?.forEach((utility: any) => {
+      const current = utilityMap.get(utility.utility_type) || {
+        utility_type: utility.utility_type,
+        usage_amount: 0,
+        total_amount: 0,
+      }
+      current.usage_amount += utility.usage_amount || 0
+      current.total_amount += utility.total_amount || 0
+      utilityMap.set(utility.utility_type, current)
+    })
+    setUtilityReports(Array.from(utilityMap.values()))
 
     const depositExpected = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_amount || 0), 0) || 0
     const depositPaid = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_paid_amount || 0), 0) || 0
@@ -473,6 +512,49 @@ export default function ReportsPage() {
                 <Bar dataKey="vacant_units" name="Vacant" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Tenant Mix and Utilities */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-semibold">Tenant Mix</h3>
+          </div>
+          <div className="card-body">
+            {tenantMix.length === 0 ? (
+              <p className="text-gray-500">No tenant mix data available.</p>
+            ) : (
+              <div className="space-y-3">
+                {tenantMix.map((item) => (
+                  <div key={item.tenant_type} className="flex items-center justify-between border-b border-gray-100 pb-2">
+                    <span className="capitalize text-gray-700">{item.tenant_type.replace('_', ' ')}</span>
+                    <span className="font-semibold">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-semibold">Utility Usage Summary</h3>
+          </div>
+          <div className="card-body">
+            {utilityReports.length === 0 ? (
+              <p className="text-gray-500">No utility readings for this period.</p>
+            ) : (
+              <div className="space-y-3">
+                {utilityReports.map((item) => (
+                  <div key={item.utility_type} className="flex items-center justify-between border-b border-gray-100 pb-2">
+                    <span className="capitalize text-gray-700">{item.utility_type}</span>
+                    <span className="font-semibold">{item.usage_amount} units • {formatCurrency(item.total_amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

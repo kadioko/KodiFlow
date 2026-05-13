@@ -13,6 +13,7 @@ import {
   Receipt,
   CreditCard,
   Wallet,
+  Gauge,
   FileStack,
   BarChart3,
   UserRound,
@@ -36,6 +37,7 @@ const navigation = [
   { name: 'Invoices', href: '/invoices', icon: Receipt },
   { name: 'Payments', href: '/payments', icon: CreditCard },
   { name: 'Expenses', href: '/expenses', icon: Wallet },
+  { name: 'Utilities', href: '/utilities', icon: Gauge },
   { name: 'Documents', href: '/documents', icon: FileStack },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Tenant Portal', href: '/tenant-portal', icon: UserRound },
@@ -111,3 +113,5 @@ export function Sidebar({ user }: SidebarProps) {
     </div>
   )
 }
+
+

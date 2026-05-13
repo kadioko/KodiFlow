@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SUPPORTED_CURRENCIES } from '@/utils/finance'
+import { LANGUAGE_OPTIONS } from '@/utils/constants'
 import { Save } from 'lucide-react'
 
 export default function SettingsPage() {
   const [currency, setCurrency] = useState('TZS')
+  const [language, setLanguage] = useState('en')
   const [lateFeeRate, setLateFeeRate] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -21,12 +23,13 @@ export default function SettingsPage() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('currency_preference, late_fee_rate')
+        .select('currency_preference, language_preference, late_fee_rate')
         .eq('id', user.id)
         .single()
 
       if (data) {
         setCurrency(data.currency_preference || 'TZS')
+        setLanguage(data.language_preference || 'en')
         setLateFeeRate(Number(data.late_fee_rate || 0))
       }
       setLoading(false)
@@ -52,7 +55,7 @@ export default function SettingsPage() {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ currency_preference: currency, late_fee_rate: lateFeeRate })
+      .update({ currency_preference: currency, language_preference: language, late_fee_rate: lateFeeRate })
       .eq('id', user.id)
 
     if (error) {
@@ -87,6 +90,16 @@ export default function SettingsPage() {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+        </div>
+
+        <div className="form-group">
+          <label className="label" htmlFor="language">Language</label>
+          <select id="language" className="input" value={language} onChange={(event) => setLanguage(event.target.value)}>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <p className="text-sm text-gray-500 mt-1">Stores your preferred language for English/Swahili UI support.</p>
         </div>
 
         <div className="form-group">

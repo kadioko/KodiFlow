@@ -21,7 +21,7 @@ A modern, full-stack property management web application for managing residentia
 ### Lease Management
 
 - **Flexible Leases**: Residential and commercial lease types
-- **Billing Options**: Monthly, quarterly, and annual billing
+- **Billing Options**: Monthly, quarterly, six-month, and annual billing
 - **Rent Escalation**: Automatic rent increase with percentage or fixed amount
 - **Status Tracking**: Active, expired, terminated, renewed, pending leases
 - **Overlap Prevention**: Database constraints prevent overlapping active leases
@@ -32,7 +32,9 @@ A modern, full-stack property management web application for managing residentia
 - **Charge Types**: Rent, service charge, security, water, electricity, garbage, maintenance, parking, tax, penalty
 - **Payment Recording**: Full and partial payment support
 - **Expense Tracking**: Track property expenses by category
-- **Currency**: TZS (Tanzanian Shilling) as default, configurable
+- **Utility Tracking**: Water and electricity meter readings with usage and amount calculations
+- **Currency**: TZS (Tanzanian Shilling) as default, with USD, EUR, and GBP support
+- **Deposit and Late Fees**: Security deposit tracking and late-fee estimates
 
 ### Dashboard & Reports
 
@@ -41,6 +43,8 @@ A modern, full-stack property management web application for managing residentia
 - **Dashboard Property Controls**: Show or hide property cards from the dashboard view
 - **Lease Alerts**: Notifications for leases ending within 30/60/90 days
 - **Financial Reports**: Monthly collection, property income, expense reports
+- **Tenant Mix Reporting**: Analyze tenant composition by tenant type
+- **Language Preference**: English and Swahili preference foundation
 
 ### Security
 
@@ -124,7 +128,8 @@ After creating an account:
 9. **invoice_items** - Individual line items on invoices
 10. **payments** - Payment records
 11. **expenses** - Property expenses
-12. **documents** - File storage for leases, IDs, receipts
+12. **documents** - File metadata for uploaded documents
+13. **utility_meter_readings** - Water/electricity meter readings and usage totals
 
 ### Key Features
 

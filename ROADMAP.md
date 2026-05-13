@@ -90,14 +90,14 @@ Property Management System - A modern web application for managing residential a
 - [ ] **Inspection Scheduling** - Property inspection calendar
 - [ ] **Vendor Management** - Track contractors and service providers
 - [ ] **Inventory Tracking** - Furniture/fixtures in units
-- [ ] **Utility Management** - Water/electricity meter tracking
+- [x] **Utility Management** - Water/electricity meter tracking
 
 ### Phase 9: Commercial Features (Medium Priority)
 - [ ] **Percentage Rent** - For retail tenants with variable rent
 - [ ] **CAM Charges** - Common Area Maintenance calculations
 - [ ] **Sales Reporting** - Track tenant sales (for percentage rent)
 - [ ] **Commercial Lease Templates** - Specialized lease clauses
-- [ ] **Tenant Mix Reporting** - Analyze tenant composition
+- [x] **Tenant Mix Reporting** - Analyze tenant composition
 
 ### Phase 10: Integrations & API (Medium Priority)
 - [ ] **Mobile Money Integration** - M-Pesa, Tigo Pesa, Airtel Money (TZ)
@@ -119,7 +119,7 @@ Property Management System - A modern web application for managing residential a
 - [ ] **Digital Signatures** - DocuSign/Adobe Sign integration
 - [ ] **Background Checks** - Tenant screening integration
 - [ ] **Insurance Integration** - Property/tenant insurance
-- [ ] **Multi-Language** - Swahili, English support
+- [x] **Multi-Language** - Swahili, English support
 
 ---
 

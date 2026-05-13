@@ -17,6 +17,7 @@ export interface Database {
           phone: string | null
           currency_preference: string
           dashboard_hidden_property_ids: Json
+          language_preference: 'en' | 'sw'
           late_fee_rate: number
           created_at: string
           updated_at: string
@@ -28,6 +29,7 @@ export interface Database {
           phone?: string | null
           currency_preference?: string
           dashboard_hidden_property_ids?: Json
+          language_preference?: 'en' | 'sw'
           late_fee_rate?: number
           created_at?: string
           updated_at?: string
@@ -39,6 +41,7 @@ export interface Database {
           phone?: string | null
           currency_preference?: string
           dashboard_hidden_property_ids?: Json
+          language_preference?: 'en' | 'sw'
           late_fee_rate?: number
           created_at?: string
           updated_at?: string
@@ -574,6 +577,58 @@ export interface Database {
           created_at?: string
         }
       }
+      utility_meter_readings: {
+        Row: {
+          id: string
+          user_id: string
+          property_id: string
+          unit_id: string | null
+          utility_type: 'water' | 'electricity'
+          previous_reading: number
+          current_reading: number
+          usage_amount: number
+          rate_per_unit: number
+          total_amount: number
+          reading_date: string
+          billing_month: number
+          billing_year: number
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          property_id: string
+          unit_id?: string | null
+          utility_type: 'water' | 'electricity'
+          previous_reading?: number
+          current_reading: number
+          rate_per_unit?: number
+          reading_date: string
+          billing_month: number
+          billing_year: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          property_id?: string
+          unit_id?: string | null
+          utility_type?: 'water' | 'electricity'
+          previous_reading?: number
+          current_reading?: number
+          rate_per_unit?: number
+          reading_date?: string
+          billing_month?: number
+          billing_year?: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -586,3 +641,4 @@ export interface Database {
     }
   }
 }
+
