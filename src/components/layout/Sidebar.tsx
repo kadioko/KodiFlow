@@ -15,6 +15,7 @@ import {
   Wallet,
   FileStack,
   BarChart3,
+  UserRound,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Expenses', href: '/expenses', icon: Wallet },
   { name: 'Documents', href: '/documents', icon: FileStack },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Tenant Portal', href: '/tenant-portal', icon: UserRound },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
