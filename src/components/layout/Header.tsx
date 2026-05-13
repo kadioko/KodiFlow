@@ -22,18 +22,18 @@ export function Header({ user }: HeaderProps) {
   }
 
   return (
-    <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header className="h-16 border-b border-white/70 bg-white/85 backdrop-blur-xl flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-sm">
       <div className="flex items-center flex-1">
-        <form action="/search" className="max-w-lg w-full lg:max-w-xs">
+        <form action="/search" className="max-w-xl w-full lg:max-w-md">
           <label htmlFor="search" className="sr-only">Search</label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-slate-400" />
             </div>
             <input
               id="search"
               name="q"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+              className="block w-full rounded-2xl border border-slate-200 bg-slate-50/80 py-2.5 pl-11 pr-4 text-sm leading-5 text-slate-800 shadow-inner placeholder:text-slate-400 outline-none transition-all focus:border-primary-300 focus:bg-white focus:ring-4 focus:ring-primary-100"
               placeholder="Search properties, tenants..."
               type="search"
             />
@@ -44,11 +44,11 @@ export function Header({ user }: HeaderProps) {
       <div className="flex items-center space-x-4">
         <NotificationManager />
 
-        <div className="h-6 w-px bg-gray-200"></div>
+        <div className="h-6 w-px bg-slate-200"></div>
 
         <button
           onClick={handleLogout}
-          className="flex items-center text-sm text-gray-500 hover:text-gray-700"
+          className="flex items-center rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
         >
           <LogOut className="h-5 w-5 mr-1" />
           <span className="hidden sm:inline">Logout</span>

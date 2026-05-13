@@ -134,10 +134,30 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="text-gray-500">Overview for {metrics.month} {metrics.year}</p>
+      <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-2xl shadow-slate-950/20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.35),transparent_28rem)]"></div>
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary-200">Property command center</p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Dashboard</h1>
+            <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">
+              Overview for {metrics.month} {metrics.year}. Track collections, occupancy, overdue invoices, and upcoming lease events.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+            <div className="px-3 py-2">
+              <p className="text-xs text-slate-300">Collection</p>
+              <p className="text-2xl font-black">{metrics.collectionRate}%</p>
+            </div>
+            <div className="px-3 py-2">
+              <p className="text-xs text-slate-300">Occupancy</p>
+              <p className="text-2xl font-black">{metrics.occupancyRate}%</p>
+            </div>
+            <div className="px-3 py-2">
+              <p className="text-xs text-slate-300">Alerts</p>
+              <p className="text-2xl font-black">{metrics.overdueTenantsCount + metrics.leasesEndingSoonCount}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -146,7 +166,7 @@ export default async function DashboardPage() {
         {/* Expected Revenue */}
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-primary-100">
+            <div className="rounded-2xl bg-primary-100 p-3 ring-8 ring-primary-50">
               <Wallet className="h-6 w-6 text-primary-600" />
             </div>
           </div>
@@ -157,7 +177,7 @@ export default async function DashboardPage() {
         {/* Collected Revenue */}
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-success-100">
+            <div className="rounded-2xl bg-success-100 p-3 ring-8 ring-success-50">
               <TrendingUp className="h-6 w-6 text-success-600" />
             </div>
           </div>
@@ -171,7 +191,7 @@ export default async function DashboardPage() {
         {/* Outstanding Balance */}
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-warning-100">
+            <div className="rounded-2xl bg-warning-100 p-3 ring-8 ring-warning-50">
               <TrendingDown className="h-6 w-6 text-warning-600" />
             </div>
           </div>
@@ -182,7 +202,7 @@ export default async function DashboardPage() {
         {/* Overdue Amount */}
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-danger-100">
+            <div className="rounded-2xl bg-danger-100 p-3 ring-8 ring-danger-50">
               <AlertCircle className="h-6 w-6 text-danger-600" />
             </div>
           </div>
@@ -196,7 +216,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-blue-100">
+            <div className="rounded-2xl bg-blue-100 p-3 ring-8 ring-blue-50">
               <Building2 className="h-6 w-6 text-blue-600" />
             </div>
           </div>
@@ -210,7 +230,7 @@ export default async function DashboardPage() {
 
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-purple-100">
+            <div className="rounded-2xl bg-purple-100 p-3 ring-8 ring-purple-50">
               <DoorOpen className="h-6 w-6 text-purple-600" />
             </div>
           </div>
@@ -225,7 +245,7 @@ export default async function DashboardPage() {
 
         <div className="stat-card">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-green-100">
+            <div className="rounded-2xl bg-green-100 p-3 ring-8 ring-green-50">
               <Users className="h-6 w-6 text-green-600" />
             </div>
           </div>
@@ -242,7 +262,7 @@ export default async function DashboardPage() {
       {/* Quick Actions */}
       <div className="card">
         <div className="card-header">
-          <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+          <h3 className="text-lg font-bold text-slate-900">Quick Actions</h3>
         </div>
         <div className="card-body">
           <div className="flex flex-wrap gap-3">
@@ -267,8 +287,8 @@ export default async function DashboardPage() {
 
       {/* Alerts Section */}
       {(metrics.overdueTenantsCount > 0 || metrics.leasesEndingSoonCount > 0 || metrics.vacantUnits > 0) && (
-        <div className="card border-warning-200">
-          <div className="card-header bg-warning-50">
+        <div className="card border-warning-200 bg-warning-50/50">
+          <div className="card-header bg-warning-50/80">
             <h3 className="text-lg font-semibold text-warning-800 flex items-center">
               <AlertCircle className="h-5 w-5 mr-2" />
               Attention Required
@@ -277,7 +297,7 @@ export default async function DashboardPage() {
           <div className="card-body">
             <div className="space-y-2">
               {metrics.overdueTenantsCount > 0 && (
-                <div className="flex items-center justify-between p-3 bg-danger-50 rounded-lg">
+                <div className="flex items-center justify-between rounded-2xl border border-danger-100 bg-danger-50 p-4">
                   <span className="text-danger-700">
                     {metrics.overdueTenantsCount} tenant(s) with overdue payments
                   </span>
@@ -287,7 +307,7 @@ export default async function DashboardPage() {
                 </div>
               )}
               {metrics.leasesEndingSoonCount > 0 && (
-                <div className="flex items-center justify-between p-3 bg-warning-50 rounded-lg">
+                <div className="flex items-center justify-between rounded-2xl border border-warning-100 bg-warning-50 p-4">
                   <span className="text-warning-700">
                     {metrics.leasesEndingSoonCount} lease(s) ending within 90 days
                   </span>
@@ -297,7 +317,7 @@ export default async function DashboardPage() {
                 </div>
               )}
               {metrics.vacantUnits > 0 && (
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 p-4">
                   <span className="text-blue-700">
                     {metrics.vacantUnits} vacant unit(s) available
                   </span>
