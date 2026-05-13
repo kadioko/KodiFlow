@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { Building2, Users, Receipt, TrendingUp, CheckCircle, ArrowRight } from 'lucide-react'
 
 export default function LandingPage() {
+  const currentYear = new Date().getFullYear()
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -157,7 +159,7 @@ export default function LandingPage() {
               <span className="ml-2 text-xl font-bold text-white">KodiFlow</span>
             </div>
             <p className="text-gray-400 text-sm">
-              © 2024 KodiFlow. All rights reserved.
+              © {currentYear} KodiFlow. All rights reserved.
             </p>
           </div>
         </div>

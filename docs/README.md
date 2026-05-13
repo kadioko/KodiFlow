@@ -1,82 +1,45 @@
 # KodiFlow Documentation
 
-Welcome to the KodiFlow documentation. This folder contains comprehensive documentation for developers, users, and deployment.
+KodiFlow is a property management system for residential and commercial rental operations, built with Next.js, TypeScript, Tailwind CSS, Supabase, and Vercel.
 
-## Documentation Structure
+## Current documentation
 
-```
+```text
 docs/
-├── README.md                 # This file
-├── architecture/             # System architecture docs
-│   ├── database-schema.md
-│   ├── tech-stack.md
-│   └── security.md
-├── api/                      # API documentation
-│   ├── supabase-client.md
-│   └── database-functions.md
-├── deployment/               # Deployment guides
-│   ├── vercel-deployment.md
+├── README.md
+├── PROJECT_AUDIT.md
+├── architecture/
+│   └── tech-stack.md
+├── deployment/
+│   ├── supabase-cli.md
 │   ├── supabase-setup.md
-│   └── environment-variables.md
-├── user-guides/              # End-user documentation
-│   ├── getting-started.md
-│   ├── managing-properties.md
-│   ├── tenant-management.md
-│   └── financial-workflows.md
-└── development/              # Developer docs
-    ├── local-setup.md
-    ├── contributing.md
-    └── code-style.md
+│   └── vercel-deployment.md
+└── development/
+    └── local-setup.md
 ```
 
-## Quick Links
+## Quick links
 
-### For Developers
-- [Local Setup Guide](development/local-setup.md)
-- [Architecture Overview](architecture/tech-stack.md)
-- [Database Schema](architecture/database-schema.md)
+### Product and architecture
 
-### For Deployment
-- [Vercel Deployment](deployment/vercel-deployment.md)
-- [Supabase Setup](deployment/supabase-setup.md)
-- [Environment Variables](deployment/environment-variables.md)
+- **Project overview**: [../README.md](../README.md)
+- **Project audit and improvement backlog**: [PROJECT_AUDIT.md](PROJECT_AUDIT.md)
+- **Tech stack**: [architecture/tech-stack.md](architecture/tech-stack.md)
+- **Roadmap**: [../ROADMAP.md](../ROADMAP.md)
 
-### For Users
-- [Getting Started](user-guides/getting-started.md)
-- [Managing Properties](user-guides/managing-properties.md)
+### Development
 
-## Project Overview
+- **Local setup**: [development/local-setup.md](development/local-setup.md)
+- **Supabase CLI setup**: [deployment/supabase-cli.md](deployment/supabase-cli.md)
 
-**KodiFlow** is a modern property management system built for property managers handling residential and commercial rental properties in Tanzania (TZS currency).
+### Deployment
 
-### Key Features
-- Property, Section, and Unit management
-- Tenant management (Individual & Business)
-- Lease tracking with automatic status updates
-- Invoice generation with multi-line items
-- Payment recording and balance tracking
-- Financial dashboard with metrics
+- **Supabase setup**: [deployment/supabase-setup.md](deployment/supabase-setup.md)
+- **Vercel deployment**: [deployment/vercel-deployment.md](deployment/vercel-deployment.md)
 
-### Tech Stack
-- **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **Deployment**: Vercel (Frontend) + Supabase (Backend)
-- **Icons**: Lucide React
+## Documentation maintenance rules
 
-## Getting Started
-
-1. Read the [Local Setup Guide](development/local-setup.md)
-2. Set up your [Supabase project](deployment/supabase-setup.md)
-3. Configure [environment variables](deployment/environment-variables.md)
-4. Run the development server
-
-## Support
-
-For issues or questions:
-- Check the [ROADMAP.md](../ROADMAP.md) for planned features
-- Review [architecture documentation](architecture/)
-- Check Supabase and Next.js documentation
-
-## License
-
-MIT License - See main README.md
+- Keep this index aligned with files that actually exist.
+- Add new docs only when they contain maintained, actionable information.
+- Remove links to deleted or planned-only docs.
+- Keep secrets out of documentation and use environment variable names instead.

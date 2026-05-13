@@ -214,7 +214,7 @@ Supabase handles backups automatically:
 ## Next Steps
 
 1. [Set up monitoring](#monitoring)
-2. [Configure custom domain](#custom-domain-optional)
+2. [Configure custom domain](#6-custom-domain-optional)
 3. [Add team members](https://vercel.com/docs/teams)
 4. [Review security checklist](#security-checklist)
 

@@ -36,6 +36,9 @@ interface PropertyReport {
   outstanding: number
 }
 
+const currentYear = new Date().getFullYear()
+const reportYears = Array.from({ length: 7 }, (_, index) => currentYear - 3 + index)
+
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -219,7 +222,7 @@ export default function ReportsPage() {
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             className="input w-32"
           >
-            {[2024, 2025, 2026].map((y) => (
+            {reportYears.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
