@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -22,7 +22,7 @@ interface Unit {
   usage_type: string
 }
 
-export default function NewLeasePage() {
+function NewLeasePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedUnitId = searchParams.get('unit')
@@ -458,5 +458,13 @@ export default function NewLeasePage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function NewLeasePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <NewLeasePageContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -20,7 +20,7 @@ interface Invoice {
   due_date: string
 }
 
-export default function NewPaymentPage() {
+function NewPaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedInvoiceId = searchParams.get('invoice')
@@ -374,5 +374,13 @@ export default function NewPaymentPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function NewPaymentPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <NewPaymentPageContent />
+    </Suspense>
   )
 }

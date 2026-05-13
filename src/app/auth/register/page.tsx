@@ -48,11 +48,13 @@ export default function RegisterPage() {
     } else {
       // Create profile
       if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
+        const profile = {
           id: data.user.id,
           full_name: fullName,
           currency_preference: 'TZS',
-        })
+        }
+
+        const { error: profileError } = await supabase.from('profiles').insert(profile)
 
         if (profileError) {
           console.error('Profile creation error:', profileError)

@@ -39,7 +39,7 @@ async function getDashboardMetrics() {
   // Get current month invoices
   const { data: invoices } = await supabase
     .from('rent_invoices')
-    .select('subtotal, amount_paid, balance, status, billing_month, billing_year')
+    .select('id, subtotal, amount_paid, balance, status, billing_month, billing_year')
     .eq('user_id', user.id)
     .eq('billing_month', month)
     .eq('billing_year', year)

@@ -20,6 +20,8 @@ async function getUnits() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
+  const getFirst = <T,>(value: T | T[] | null | undefined) => Array.isArray(value) ? value[0] : value
+
   if (error) {
     console.error('Error fetching units:', error)
     return []
@@ -35,11 +37,15 @@ async function getUnits() {
         .eq('status', 'active')
         .single()
 
+      const property = getFirst(unit.properties)
+      const section = getFirst(unit.property_sections)
+      const tenant = getFirst(lease?.tenants)
+
       return {
         ...unit,
-        property_name: unit.properties?.name,
-        section_name: unit.property_sections?.name,
-        current_tenant_name: lease?.tenants?.full_name || lease?.tenants?.business_name || null,
+        property_name: property?.name,
+        section_name: section?.name,
+        current_tenant_name: tenant?.full_name || tenant?.business_name || null,
         lease_end_date: lease?.end_date || null,
       }
     })
