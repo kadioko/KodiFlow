@@ -45,6 +45,9 @@ A modern, full-stack property management web application for managing residentia
 - **Financial Reports**: Monthly collection, property income, expense reports
 - **Tenant Mix Reporting**: Analyze tenant composition by tenant type
 - **Language Preference**: English and Swahili preference foundation
+- **Progressive Web App**: Installable app shell with basic offline caching
+- **Browser Notifications**: Notification permission flow for overdue invoice and lease event alerts
+- **Camera Capture**: Capture photos from supported mobile browsers for document uploads
 
 ### Security
 

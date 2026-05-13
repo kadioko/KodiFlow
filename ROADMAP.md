@@ -121,9 +121,9 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ### Phase 11: Mobile and PWA
 
-- [ ] **Progressive Web App** - Installable app and basic offline support
-- [ ] **Push Notifications** - Real-time alerts for overdue invoices and lease events
-- [ ] **Camera Integration** - Photo capture for inspections, documents, and maintenance
+- [x] **Progressive Web App** - Installable app and basic offline support
+- [x] **Push Notifications** - Real-time alerts for overdue invoices and lease events
+- [x] **Camera Integration** - Photo capture for inspections, documents, and maintenance
 - [ ] **Mobile App** - React Native or Flutter app after PWA validation
 
 ### Phase 12: Advanced Platform Features

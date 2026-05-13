@@ -1,10 +1,11 @@
 'use client'
 
 import { User } from '@supabase/supabase-js'
-import { Bell, Search, LogOut } from 'lucide-react'
+import { Search, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { NotificationManager } from '@/components/notifications/NotificationManager'
 
 interface HeaderProps {
   user: User
@@ -41,10 +42,7 @@ export function Header({ user }: HeaderProps) {
       </div>
 
       <div className="flex items-center space-x-4">
-        <button className="p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative">
-          <Bell className="h-6 w-6" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-danger-500 rounded-full"></span>
-        </button>
+        <NotificationManager />
 
         <div className="h-6 w-px bg-gray-200"></div>
 

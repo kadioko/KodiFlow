@@ -1,0 +1,19 @@
+{
+  "name": "KodiFlow Property Management",
+  "short_name": "KodiFlow",
+  "description": "Property management for residential and commercial rentals",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

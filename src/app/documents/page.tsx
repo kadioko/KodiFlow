@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DOCUMENT_TYPES, getLabelByValue } from '@/utils/constants'
-import { Upload, FileText, Trash2 } from 'lucide-react'
+import { Camera, Upload, FileText, Trash2 } from 'lucide-react'
 
 type DocumentRow = {
   id: string
@@ -125,7 +125,20 @@ export default function DocumentsPage() {
           <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="input">
             {DOCUMENT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
           </select>
-          <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} className="input" />
+          <div className="space-y-2">
+            <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} className="input" />
+            <label className="btn-secondary cursor-pointer w-full">
+              <Camera className="h-5 w-5 mr-2" />
+              Capture Photo
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                className="sr-only"
+              />
+            </label>
+          </div>
           <input value={description} onChange={(event) => setDescription(event.target.value)} className="input" placeholder="Description" />
         </div>
         <button type="submit" disabled={uploading} className="btn-primary">
