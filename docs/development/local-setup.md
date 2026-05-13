@@ -26,6 +26,7 @@ npm install
 ```
 
 This installs:
+
 - Next.js 14
 - React 18
 - TypeScript
@@ -107,6 +108,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 You should see:
+
 - Landing page at `/`
 - Login page at `/auth/login`
 
@@ -163,7 +165,7 @@ To test with sample data:
 
 ## Project Structure for Development
 
-```
+```text
 src/
 ├── app/                    # Pages (Next.js App Router)
 │   ├── page.tsx           # Landing page
@@ -211,6 +213,8 @@ export default function NewPage() {
 
 3. Access at `http://localhost:3000/new-page`
 
+<!-- markdownlint-disable MD029 -->
+
 ### Add a New Database Table
 
 1. Write SQL in Supabase SQL Editor
@@ -234,6 +238,8 @@ export function MyComponent() {
 
 3. Import and use in pages
 
+<!-- markdownlint-enable MD029 -->
+
 ## Troubleshooting
 
 ### Port Already in Use
@@ -247,6 +253,7 @@ npm run dev -- --port 3001
 ### Type Errors
 
 Run type checker:
+
 ```bash
 npm run type-check
 ```
@@ -254,6 +261,7 @@ npm run type-check
 ### Module Not Found
 
 Reinstall dependencies:
+
 ```bash
 rm -rf node_modules package-lock.json
 npm install
@@ -274,17 +282,20 @@ npm install
 ## Best Practices
 
 ### Code Style
+
 - Use TypeScript for everything
 - Follow existing file naming conventions
 - Use Tailwind utility classes
 - Extract reusable components
 
 ### Git
+
 - Commit often with descriptive messages
 - Create feature branches: `git checkout -b feature/name`
 - Pull before pushing to avoid conflicts
 
 ### Testing
+
 - Test on mobile viewport
 - Test with different users/permissions
 - Verify database operations work

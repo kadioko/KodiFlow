@@ -90,6 +90,7 @@ NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
 ## 7. Test Connection
 
 1. Start your dev server:
+
    ```bash
    npm run dev
    ```
@@ -148,13 +149,13 @@ ALTER TABLE properties ADD COLUMN new_field TEXT;
 
 ### Database Stats
 
-- Go to **Database** → **Statistics`
+- Go to **Database** → **Statistics**
 - Monitor connection usage
 - Check slow queries
 
 ### Authentication Stats
 
-- Go to **Authentication` → **Users`
+- Go to **Authentication** → **Users**
 - See sign-up rates
 - Monitor failed logins
 

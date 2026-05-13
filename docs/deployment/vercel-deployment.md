@@ -163,6 +163,7 @@ Configure in `next.config.js` and environment variables.
 ### Rollback
 
 Vercel keeps previous deployments:
+
 1. Go to Deployments tab
 2. Click on previous deployment
 3. Click **Promote to Production**
@@ -170,6 +171,7 @@ Vercel keeps previous deployments:
 ### Database
 
 Supabase handles backups automatically:
+
 - Daily backups on free tier
 - Point-in-time recovery on Pro
 
@@ -184,21 +186,25 @@ Supabase handles backups automatically:
 ## Cost Estimates
 
 ### Vercel Free Tier
+
 - 100GB bandwidth
 - 6,000 build minutes/month
 - Perfect for MVP and small usage
 
 ### Vercel Pro ($20/month)
+
 - 1TB bandwidth
 - 14,000 build minutes
 - Email support
 
 ### Supabase Free Tier
+
 - 500MB database
 - 2GB storage
 - 2M Edge Function invocations
 
 ### Supabase Pro ($25/month)
+
 - 8GB database
 - 100GB storage
 - Priority support
@@ -214,9 +220,9 @@ Supabase handles backups automatically:
 
 ## Support
 
-- Vercel Docs: https://vercel.com/docs
-- Next.js on Vercel: https://nextjs.org/docs/deployment
-- Supabase + Vercel: https://supabase.com/docs/guides/integrations/vercel
+- Vercel Docs: <https://vercel.com/docs>
+- Next.js on Vercel: <https://nextjs.org/docs/deployment>
+- Supabase + Vercel: <https://supabase.com/docs/guides/integrations/vercel>
 
 ---
 
