@@ -51,8 +51,13 @@ Property Management System - A modern web application for managing residential a
 ## In Progress 🚧
 
 ### Phase 5: Enhanced Features
-- [ ] **Invoice Generation Page** - Bulk generate invoices for all active leases
-- [ ] **Payment Recording Form** - Full payment creation with invoice selection
+- [x] **Invoice Generation Page** - Bulk generate invoices for all active leases
+- [x] **Payment Recording Form** - Full payment creation with invoice selection
+- [x] **Six-Month Billing** - Semi-annual lease billing and invoice calculations
+- [x] **Header Search** - Global search across properties, tenants, units, and invoices
+- [x] **List Filters & Pagination** - Filter and paginate tenants, units, invoices, payments, and leases
+- [x] **Dashboard Preferences** - Persist dashboard property visibility preferences
+- [x] **Automated Test Foundation** - Billing, registration payload, and payment helper tests
 - [ ] **Document Upload** - File storage for leases, IDs, receipts
 - [ ] **Reports Page** - Financial reports with charts
 
@@ -65,8 +70,8 @@ Property Management System - A modern web application for managing residential a
 - [ ] **Lease Renewal Workflow** - Automated renewal with rent escalation
 - [ ] **Bulk Invoice Generation** - Generate all monthly invoices with one click
 - [ ] **Payment Reminders** - Email/SMS notifications for overdue payments
-- [ ] **Advanced Search** - Full-text search across tenants, properties, units
-- [ ] **Filters & Sorting** - Advanced filtering on all list pages
+- [x] **Advanced Search** - Search across tenants, properties, units, and invoices
+- [x] **Filters & Sorting** - Filtering and pagination on primary list pages
 
 ### Phase 7: Financial Enhancements (High Priority)
 - [ ] **Multi-Currency Support** - USD, EUR, GBP alongside TZS

@@ -16,6 +16,7 @@ export interface Database {
           company_name: string | null
           phone: string | null
           currency_preference: string
+          dashboard_hidden_property_ids: Json
           created_at: string
           updated_at: string
         }
@@ -25,6 +26,7 @@ export interface Database {
           company_name?: string | null
           phone?: string | null
           currency_preference?: string
+          dashboard_hidden_property_ids?: Json
           created_at?: string
           updated_at?: string
         }
@@ -34,6 +36,7 @@ export interface Database {
           company_name?: string | null
           phone?: string | null
           currency_preference?: string
+          dashboard_hidden_property_ids?: Json
           created_at?: string
           updated_at?: string
         }
@@ -224,7 +227,7 @@ export interface Database {
           deposit_amount: number
           rent_due_day: number
           lease_type: 'residential' | 'commercial'
-          billing_frequency: 'monthly' | 'quarterly' | 'annually'
+          billing_frequency: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
           rent_escalation_type: 'none' | 'percentage' | 'fixed_amount'
           rent_escalation_value: number | null
           rent_escalation_frequency: 'none' | 'annually' | 'custom'

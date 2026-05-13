@@ -13,6 +13,7 @@ CREATE TABLE profiles (
   company_name TEXT,
   phone TEXT,
   currency_preference TEXT DEFAULT 'TZS',
+  dashboard_hidden_property_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -103,7 +104,7 @@ CREATE TABLE leases (
   deposit_amount DECIMAL(12, 2) DEFAULT 0,
   rent_due_day INTEGER DEFAULT 1 CHECK (rent_due_day BETWEEN 1 AND 31),
   lease_type TEXT NOT NULL CHECK (lease_type IN ('residential', 'commercial')),
-  billing_frequency TEXT DEFAULT 'monthly' CHECK (billing_frequency IN ('monthly', 'quarterly', 'annually')),
+  billing_frequency TEXT DEFAULT 'monthly' CHECK (billing_frequency IN ('monthly', 'quarterly', 'semi_annually', 'annually')),
   rent_escalation_type TEXT DEFAULT 'none' CHECK (rent_escalation_type IN ('none', 'percentage', 'fixed_amount')),
   rent_escalation_value DECIMAL(10, 2),
   rent_escalation_frequency TEXT DEFAULT 'none' CHECK (rent_escalation_frequency IN ('none', 'annually', 'custom')),

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
 import { formatCurrency } from '@/utils/currency'
+import { createClient } from '@/lib/supabase/client'
 
 type DashboardProperty = {
   id: string
@@ -17,26 +18,48 @@ type DashboardProperty = {
 
 type DashboardPropertyVisibilityProps = {
   properties: DashboardProperty[]
+  initialHiddenIds: string[]
 }
 
 const storageKey = 'kodiflow-dashboard-hidden-properties'
 
-export default function DashboardPropertyVisibility({ properties }: DashboardPropertyVisibilityProps) {
-  const [hiddenIds, setHiddenIds] = useState<string[]>([])
+export default function DashboardPropertyVisibility({ properties, initialHiddenIds }: DashboardPropertyVisibilityProps) {
+  const [hiddenIds, setHiddenIds] = useState<string[]>(initialHiddenIds)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (initialHiddenIds.length > 0) {
+      setLoaded(true)
+      return
+    }
+
     const saved = window.localStorage.getItem(storageKey)
     if (saved) {
       setHiddenIds(JSON.parse(saved))
     }
     setLoaded(true)
-  }, [])
+  }, [initialHiddenIds])
 
   useEffect(() => {
-    if (loaded) {
-      window.localStorage.setItem(storageKey, JSON.stringify(hiddenIds))
+    if (!loaded) {
+      return
     }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(hiddenIds))
+
+    const savePreference = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ dashboard_hidden_property_ids: hiddenIds })
+          .eq('id', user.id)
+      }
+    }
+
+    savePreference()
   }, [hiddenIds, loaded])
 
   const visibleProperties = useMemo(

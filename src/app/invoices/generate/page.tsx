@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Receipt, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import { calculateInvoiceTotal as calculateBillingInvoiceTotal, getBillingPeriod } from '@/utils/billing'
 
 interface Lease {
   id: string
@@ -135,14 +136,12 @@ export default function GenerateInvoicesPage() {
   }
 
   const calculateInvoiceTotal = (lease: Lease) => {
-    let total = lease.monthly_rent
     const leaseCharges = charges[lease.id] || []
-    leaseCharges.forEach(charge => {
-      if (charge.charge_type !== 'rent') {
-        total += charge.amount
-      }
-    })
-    return total
+    return calculateBillingInvoiceTotal(
+      lease.monthly_rent,
+      leaseCharges.filter(charge => charge.charge_type !== 'rent').map(charge => charge.amount),
+      lease.billing_frequency
+    )
   }
 
   const generateInvoices = async () => {
@@ -190,8 +189,7 @@ export default function GenerateInvoicesPage() {
       }
 
       // Calculate billing period
-      const periodStart = new Date(billingYear, billingMonth - 1, 1)
-      const periodEnd = new Date(billingYear, billingMonth, 0)
+      const { months, periodStart, periodEnd } = getBillingPeriod(billingYear, billingMonth, lease.billing_frequency)
       const dueDate = new Date(billingYear, billingMonth - 1, dueDay)
 
       // Calculate subtotal
@@ -231,9 +229,9 @@ export default function GenerateInvoicesPage() {
       invoiceItems.push({
         user_id: user.id,
         invoice_id: invoice.id,
-        item_name: `${getMonthName(billingMonth)} ${billingYear} Rent`,
+        item_name: `${months === 1 ? getMonthName(billingMonth) : `${months}-Month`} ${billingYear} Rent`,
         item_type: 'rent',
-        amount: lease.monthly_rent,
+        amount: lease.monthly_rent * months,
       })
 
       // Additional charges
@@ -245,7 +243,7 @@ export default function GenerateInvoicesPage() {
             invoice_id: invoice.id,
             item_name: charge.charge_name,
             item_type: charge.charge_type,
-            amount: charge.amount,
+            amount: charge.amount * months,
             notes: charge.notes,
           })
         }

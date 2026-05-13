@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Plus, FileText, Calendar, User, AlertCircle, CheckCircle } from 'lucide-react'
 import { getLabelByValue, getColorByValue, LEASE_TYPES, LEASE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
+import ListControls from '@/components/ui/ListControls'
 
 async function getLeases() {
   const supabase = createClient()
@@ -91,6 +92,14 @@ export default async function LeasesPage() {
           </Link>
         </div>
       ) : (
+        <ListControls
+          items={leases}
+          searchPlaceholder="Search leases by tenant, property, or unit..."
+          searchValue={(lease: any) => `${lease.tenant_name || ''} ${lease.property_name || ''} ${lease.unit_name || ''}`}
+          filterValue={(lease: any) => lease.is_expiring_soon ? 'ending_soon' : lease.status}
+          filterOptions={[...LEASE_STATUSES.map((status) => ({ label: status.label, value: status.value })), { label: 'Ending Soon', value: 'ending_soon' }]}
+        >
+          {(visibleLeases) => (
         <div className="card">
           <div className="table-container">
             <table className="table">
@@ -107,7 +116,7 @@ export default async function LeasesPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {leases.map((lease: any) => (
+                {visibleLeases.map((lease: any) => (
                   <tr key={lease.id} className="hover:bg-gray-50">
                     <td className="table-cell">
                       <div className="flex items-center">
@@ -164,6 +173,8 @@ export default async function LeasesPage() {
             </table>
           </div>
         </div>
+          )}
+        </ListControls>
       )}
     </div>
   )

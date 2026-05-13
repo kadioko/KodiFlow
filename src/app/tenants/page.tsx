@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Plus, Users, Phone, Building2, User } from 'lucide-react'
 import { getLabelByValue, TENANT_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
+import ListControls from '@/components/ui/ListControls'
 
 async function getTenants() {
   const supabase = createClient()
@@ -80,6 +81,14 @@ export default async function TenantsPage() {
           </Link>
         </div>
       ) : (
+        <ListControls
+          items={tenants}
+          searchPlaceholder="Search tenants by name, phone, or email..."
+          searchValue={(tenant) => `${tenant.display_name || ''} ${tenant.phone || ''} ${tenant.email || ''}`}
+          filterValue={(tenant) => tenant.tenant_type}
+          filterOptions={TENANT_TYPES.map((type) => ({ label: type.label, value: type.value }))}
+        >
+          {(visibleTenants) => (
         <div className="card">
           <div className="table-container">
             <table className="table">
@@ -94,7 +103,7 @@ export default async function TenantsPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {tenants.map((tenant) => (
+                {visibleTenants.map((tenant) => (
                   <tr key={tenant.id} className="hover:bg-gray-50">
                     <td className="table-cell">
                       <div className="flex items-center">
@@ -151,6 +160,8 @@ export default async function TenantsPage() {
             </table>
           </div>
         </div>
+          )}
+        </ListControls>
       )}
     </div>
   )

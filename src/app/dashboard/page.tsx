@@ -21,6 +21,12 @@ async function getDashboardMetrics() {
 
   const { month, year } = getCurrentMonthYear()
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('dashboard_hidden_property_ids')
+    .eq('id', user.id)
+    .single()
+
   // Get counts
   const { data: properties } = await supabase
     .from('properties')
@@ -115,6 +121,7 @@ async function getDashboardMetrics() {
     commercialUnits,
     mixedUnits,
     propertySummaries,
+    hiddenPropertyIds: Array.isArray(profile?.dashboard_hidden_property_ids) ? profile.dashboard_hidden_property_ids : [],
   }
 }
 
@@ -230,7 +237,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <DashboardPropertyVisibility properties={metrics.propertySummaries} />
+      <DashboardPropertyVisibility properties={metrics.propertySummaries} initialHiddenIds={metrics.hiddenPropertyIds} />
 
       {/* Quick Actions */}
       <div className="card">
