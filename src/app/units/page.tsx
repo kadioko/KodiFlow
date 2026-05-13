@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Plus, DoorOpen, MapPin, Users, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
 import { getLabelByValue, getColorByValue, UNIT_TYPES, UNIT_STATUSES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
-import ListControls from '@/components/ui/ListControls'
 
 const floorSortOrder: Record<string, number> = {
   basement: 0,
@@ -128,14 +127,6 @@ export default async function UnitsPage() {
           </Link>
         </div>
       ) : (
-        <ListControls
-          items={units}
-          searchPlaceholder="Search units by name, property, floor, or tenant..."
-          searchValue={(unit) => `${unit.unit_name || ''} ${unit.property_name || ''} ${unit.section_name || ''} ${unit.current_tenant_name || ''}`}
-          filterValue={(unit) => unit.status}
-          filterOptions={UNIT_STATUSES.map((status) => ({ label: status.label, value: status.value }))}
-        >
-          {(visibleUnits) => (
         <div className="card">
           <div className="table-container">
             <table className="table">
@@ -151,7 +142,7 @@ export default async function UnitsPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {visibleUnits.map((unit) => (
+                {units.map((unit) => (
                   <tr key={unit.id} className="hover:bg-gray-50">
                     <td className="table-cell">
                       <div className="flex items-center">
@@ -210,8 +201,6 @@ export default async function UnitsPage() {
             </table>
           </div>
         </div>
-          )}
-        </ListControls>
       )}
     </div>
   )

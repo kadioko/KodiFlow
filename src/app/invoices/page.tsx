@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'lucide-react'
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
-import ListControls from '@/components/ui/ListControls'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
 function firstRelation<T>(value: T | T[] | null | undefined) {
@@ -126,14 +125,6 @@ export default async function InvoicesPage() {
           </Link>
         </div>
       ) : (
-        <ListControls
-          items={invoices}
-          searchPlaceholder="Search invoices by number, tenant, property, or unit..."
-          searchValue={(invoice: any) => `${invoice.invoice_number || ''} ${invoice.tenant_name || ''} ${invoice.property_name || ''} ${invoice.unit_name || ''}`}
-          filterValue={(invoice: any) => invoice.status}
-          filterOptions={INVOICE_STATUSES.map((status) => ({ label: status.label, value: status.value }))}
-        >
-          {(visibleInvoices) => (
         <div className="card">
           <div className="table-container">
             <table className="table">
@@ -151,7 +142,7 @@ export default async function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {visibleInvoices.map((invoice: any) => (
+                {invoices.map((invoice: any) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{invoice.invoice_number}</td>
                     <td className="table-cell">{invoice.tenant_name}</td>
@@ -204,8 +195,6 @@ export default async function InvoicesPage() {
             </table>
           </div>
         </div>
-          )}
-        </ListControls>
       )}
     </div>
   )
