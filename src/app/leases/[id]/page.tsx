@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import { 
   ArrowLeft, 
   FileText, 
-  Edit2, 
   XCircle, 
   RefreshCw,
   CheckCircle,
@@ -290,10 +289,6 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
           </div>
         </div>
         <div className="flex space-x-3">
-          <Link href={`/leases/${params.id}/edit`} className="btn-secondary">
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </Link>
           {isActive && (
             <>
               <button 

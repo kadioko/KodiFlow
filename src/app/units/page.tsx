@@ -188,12 +188,20 @@ export default async function UnitsPage() {
                       )}
                     </td>
                     <td className="table-cell">
+                      <div className="flex items-center gap-3">
                       <Link 
                         href={`/units/${unit.id}`}
                         className="text-primary-600 hover:text-primary-900 font-medium"
                       >
                         View
                       </Link>
+                      <Link 
+                        href={`/units/${unit.id}/edit`}
+                        className="text-slate-600 hover:text-slate-900 font-medium"
+                      >
+                        Edit
+                      </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
