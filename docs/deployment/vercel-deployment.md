@@ -37,7 +37,7 @@ git push -u origin master
 
 In Vercel project settings, add these environment variables:
 
-```
+```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
@@ -50,6 +50,7 @@ NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
 ### 4. Deploy
 
 Click **Deploy**. Vercel will:
+
 1. Install dependencies (`npm install`)
 2. Build the project (`npm run build`)
 3. Deploy to global CDN
@@ -61,6 +62,7 @@ After deployment, update Supabase with your production URL:
 1. Go to Supabase Dashboard → Authentication → URL Configuration
 2. Set **Site URL**: `https://your-domain.vercel.app`
 3. Add to **Redirect URLs**:
+
    - `https://your-domain.vercel.app/auth/callback`
 
 ### 6. Custom Domain (Optional)
