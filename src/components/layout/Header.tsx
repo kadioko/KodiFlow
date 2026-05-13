@@ -1,7 +1,7 @@
 'use client'
 
 import { User } from '@supabase/supabase-js'
-import { Search, LogOut } from 'lucide-react'
+import { Search, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -9,9 +9,11 @@ import { NotificationManager } from '@/components/notifications/NotificationMana
 
 interface HeaderProps {
   user: User
+  dashboardVisible?: boolean
+  onToggleDashboard?: () => void
 }
 
-export function Header({ user }: HeaderProps) {
+export function Header({ user, dashboardVisible = true, onToggleDashboard }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -23,7 +25,18 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="h-16 border-b border-white/70 bg-white/85 backdrop-blur-xl flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-sm">
-      <div className="flex items-center flex-1">
+      <div className="flex items-center flex-1 gap-3">
+        {onToggleDashboard && (
+          <button
+            type="button"
+            onClick={onToggleDashboard}
+            className="flex items-center rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            title={dashboardVisible ? 'Hide dashboard navigation' : 'Show dashboard navigation'}
+          >
+            {dashboardVisible ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+            <span className="ml-2 hidden xl:inline">{dashboardVisible ? 'Hide dashboard' : 'Show dashboard'}</span>
+          </button>
+        )}
         <form action="/search" className="max-w-xl w-full lg:max-w-md">
           <label htmlFor="search" className="sr-only">Search</label>
           <div className="relative">

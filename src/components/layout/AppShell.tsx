@@ -1,0 +1,65 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { Header } from '@/components/layout/Header'
+
+interface AppShellProps {
+  children: React.ReactNode
+}
+
+const publicPrefixes = ['/auth']
+
+export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const isPublicPage = pathname === '/' || publicPrefixes.some((prefix) => pathname.startsWith(prefix))
+
+  useEffect(() => {
+    let mounted = true
+    const supabase = createClient()
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mounted) return
+      setUser(data.user)
+      setLoading(false)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  if (isPublicPage) {
+    return <>{children}</>
+  }
+
+  if (loading || !user) {
+    return <>{children}</>
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar user={user} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header user={user} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            {children}
+          </main>
+        </div>
+      </div>
+    </div>
+  )
+}
