@@ -4,7 +4,27 @@ import { Plus, Users, Phone, Building2, User } from 'lucide-react'
 import { getLabelByValue, TENANT_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
-async function getTenants() {
+type TenantRow = {
+  id: string
+  tenant_type: 'individual' | 'business' | 'organization'
+  full_name: string | null
+  business_name: string | null
+  contact_person_name: string | null
+  phone: string
+  email: string | null
+}
+
+type TenantListItem = TenantRow & {
+  total_balance: number
+  active_leases_count: number
+  display_name: string | null
+}
+
+type InvoiceBalance = {
+  balance: number | null
+}
+
+async function getTenants(): Promise<TenantListItem[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -23,14 +43,14 @@ async function getTenants() {
 
   // Get balance for each tenant
   const tenantsWithBalance = await Promise.all(
-    (tenants || []).map(async (tenant) => {
+    ((tenants || []) as TenantRow[]).map(async (tenant) => {
       const { data: invoices } = await supabase
         .from('rent_invoices')
         .select('balance')
         .eq('tenant_id', tenant.id)
         .eq('user_id', user.id)
       
-      const totalBalance = invoices?.reduce((sum: number, inv: { balance: number }) => sum + (inv.balance || 0), 0) || 0
+      const totalBalance = ((invoices || []) as InvoiceBalance[]).reduce((sum, inv) => sum + (inv.balance || 0), 0)
 
       // Get active leases count
       const { count: activeLeases } = await supabase
@@ -43,8 +63,8 @@ async function getTenants() {
         ...tenant,
         total_balance: totalBalance,
         active_leases_count: activeLeases || 0,
-        display_name: tenant.tenant_type === 'individual' 
-          ? tenant.full_name 
+        display_name: tenant.tenant_type === 'individual'
+          ? tenant.full_name
           : tenant.business_name,
       }
     })
