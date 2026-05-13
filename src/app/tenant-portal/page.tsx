@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import Link from 'next/link'
-import { FileText, Home, Receipt } from 'lucide-react'
+import { Calendar, FileText, Home, Receipt } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
 function relationName(value: any, key: string) {
@@ -18,8 +17,8 @@ export default async function TenantPortalPage() {
 
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('id, full_name, business_name, email, phone')
-    .eq('email', user.email)
+    .select('id, full_name, business_name, email, phone, tenant_type')
+    .ilike('email', user.email)
     .maybeSingle()
 
   if (!tenant) {
@@ -46,7 +45,7 @@ export default async function TenantPortalPage() {
       .order('created_at', { ascending: false }),
     supabase
       .from('rent_invoices')
-      .select('id, invoice_number, subtotal, amount_paid, balance, due_date, status, properties(name), units(unit_name)')
+      .select('id, invoice_number, subtotal, amount_paid, balance, due_date, status, billing_month, billing_year, properties(name), units(unit_name)')
       .eq('tenant_id', tenant.id)
       .order('due_date', { ascending: false }),
   ])
@@ -84,6 +83,7 @@ export default async function TenantPortalPage() {
       <div className="card">
         <div className="card-header">
           <h2 className="text-lg font-semibold text-gray-900">My Invoices</h2>
+          <p className="text-sm text-gray-500">Only invoices linked to your tenant profile are shown here.</p>
         </div>
         <div className="table-container">
           <table className="table">
@@ -91,10 +91,11 @@ export default async function TenantPortalPage() {
               <tr>
                 <th className="table-header-cell">Invoice</th>
                 <th className="table-header-cell">Property/Unit</th>
+                <th className="table-header-cell">Billing</th>
                 <th className="table-header-cell">Due Date</th>
+                <th className="table-header-cell">Paid</th>
                 <th className="table-header-cell">Balance</th>
                 <th className="table-header-cell">Status</th>
-                <th className="table-header-cell">Action</th>
               </tr>
             </thead>
             <tbody className="table-body">
@@ -102,16 +103,40 @@ export default async function TenantPortalPage() {
                 <tr key={invoice.id}>
                   <td className="table-cell font-medium">{invoice.invoice_number}</td>
                   <td className="table-cell">{relationName(invoice.properties, 'name')} / {relationName(invoice.units, 'unit_name')}</td>
+                  <td className="table-cell">{invoice.billing_month}/{invoice.billing_year}</td>
                   <td className="table-cell">{formatDate(invoice.due_date)}</td>
+                  <td className="table-cell text-success-600">{formatCurrency(invoice.amount_paid)}</td>
                   <td className="table-cell font-medium">{formatCurrency(invoice.balance)}</td>
                   <td className="table-cell capitalize">{invoice.status.replace('_', ' ')}</td>
-                  <td className="table-cell">
-                    <Link href={`/invoices/${invoice.id}`} className="text-primary-600 hover:underline">View</Link>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-lg font-semibold text-gray-900">My Leases</h2>
+          <p className="text-sm text-gray-500">Lease information relevant to your occupied units.</p>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {(leases || []).map((lease: any) => (
+            <div key={lease.id} className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold text-gray-900">{relationName(lease.properties, 'name')} / {relationName(lease.units, 'unit_name')}</p>
+                <p className="text-sm text-gray-500 flex items-center mt-1">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  {formatDate(lease.start_date)} - {formatDate(lease.end_date)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-900">{formatCurrency(lease.monthly_rent)}</p>
+                <p className="text-sm capitalize text-gray-500">{lease.status}</p>
+              </div>
+            </div>
+          ))}
+          {(leases || []).length === 0 && <div className="p-6 text-gray-500">No leases are linked to your tenant profile.</div>}
         </div>
       </div>
     </div>

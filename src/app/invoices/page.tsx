@@ -6,6 +6,10 @@ import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@
 import ListControls from '@/components/ui/ListControls'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
 async function getInvoices() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -32,12 +36,18 @@ async function getInvoices() {
     return []
   }
 
-  return (invoices || []).map((invoice: any) => ({
-    ...invoice,
-    tenant_name: invoice.tenants?.full_name || invoice.tenants?.business_name,
-    unit_name: invoice.units?.unit_name,
-    property_name: invoice.properties?.name,
-  }))
+  return (invoices || []).map((invoice: any) => {
+    const tenant = firstRelation(invoice.tenants)
+    const unit = firstRelation(invoice.units)
+    const property = firstRelation(invoice.properties)
+
+    return {
+      ...invoice,
+      tenant_name: tenant?.full_name || tenant?.business_name,
+      unit_name: unit?.unit_name,
+      property_name: property?.name,
+    }
+  })
 }
 
 export default async function InvoicesPage() {

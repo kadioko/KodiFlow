@@ -167,7 +167,7 @@ export default function ReportsPage() {
       .select('id, tenant_type', { count: 'exact' })
       .eq('user_id', user.id)
 
-    const { data: utilities } = await supabase
+    const { data: utilities, error: utilitiesError } = await supabase
       .from('utility_meter_readings')
       .select('*')
       .eq('user_id', user.id)
@@ -238,6 +238,10 @@ export default function ReportsPage() {
     setTenantMix(Array.from(tenantMixMap.entries()).map(([tenant_type, count]) => ({ tenant_type, count })))
 
     const utilityMap = new Map<string, UtilityReport>()
+    if (utilitiesError) {
+      setUtilityReports([])
+    }
+
     utilities?.forEach((utility: any) => {
       const current = utilityMap.get(utility.utility_type) || {
         utility_type: utility.utility_type,

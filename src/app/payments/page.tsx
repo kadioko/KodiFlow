@@ -4,6 +4,10 @@ import { Plus, CreditCard, Calendar, User, Building } from 'lucide-react'
 import { getLabelByValue, PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
 async function getPayments() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,13 +32,20 @@ async function getPayments() {
     return []
   }
 
-  return (payments || []).map((payment: any) => ({
-    ...payment,
-    tenant_name: payment.tenants?.full_name || payment.tenants?.business_name,
-    unit_name: payment.units?.unit_name,
-    property_name: payment.properties?.name,
-    invoice_number: payment.rent_invoices?.invoice_number,
-  }))
+  return (payments || []).map((payment: any) => {
+    const tenant = firstRelation(payment.tenants)
+    const unit = firstRelation(payment.units)
+    const property = firstRelation(payment.properties)
+    const invoice = firstRelation(payment.rent_invoices)
+
+    return {
+      ...payment,
+      tenant_name: tenant?.full_name || tenant?.business_name,
+      unit_name: unit?.unit_name,
+      property_name: property?.name,
+      invoice_number: invoice?.invoice_number,
+    }
+  })
 }
 
 export default async function PaymentsPage() {
