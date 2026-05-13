@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.cjs";
 
 :root {
   --foreground-rgb: 0, 0, 0;
@@ -24,19 +23,19 @@
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
 
   .btn-secondary {
-    @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500;
   }
 
   .btn-danger {
-    @apply btn bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
   }
 
   .btn-success {
-    @apply btn bg-success-600 text-white hover:bg-success-700 focus:ring-success-500;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-success-600 text-white hover:bg-success-700 focus:ring-success-500;
   }
 
   .input {
@@ -92,11 +91,11 @@
   }
 
   .sidebar-link-active {
-    @apply sidebar-link bg-primary-50 text-primary-700;
+    @apply flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors bg-primary-50 text-primary-700;
   }
 
   .sidebar-link-inactive {
-    @apply sidebar-link text-gray-600 hover:bg-gray-50 hover:text-gray-900;
+    @apply flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900;
   }
 
   .form-group {
@@ -116,7 +115,7 @@
   }
 
   .stat-card {
-    @apply card p-6;
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6;
   }
 
   .stat-label {
@@ -132,11 +131,11 @@
   }
 
   .stat-change-positive {
-    @apply stat-change text-success-600;
+    @apply mt-1 text-sm text-success-600;
   }
 
   .stat-change-negative {
-    @apply stat-change text-danger-600;
+    @apply mt-1 text-sm text-danger-600;
   }
 }
 
