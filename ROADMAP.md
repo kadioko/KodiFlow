@@ -58,18 +58,18 @@ Property Management System - A modern web application for managing residential a
 - [x] **List Filters & Pagination** - Filter and paginate tenants, units, invoices, payments, and leases
 - [x] **Dashboard Preferences** - Persist dashboard property visibility preferences
 - [x] **Automated Test Foundation** - Billing, registration payload, and payment helper tests
-- [ ] **Document Upload** - File storage for leases, IDs, receipts
-- [ ] **Reports Page** - Financial reports with charts
+- [x] **Document Upload** - File storage for leases, IDs, receipts
+- [x] **Reports Page** - Financial reports with charts
 
 ---
 
 ## Planned Features 📋
 
 ### Phase 6: Advanced Functionality (High Priority)
-- [ ] **Tenant Portal** - Separate login for tenants to view/pay invoices
-- [ ] **Lease Renewal Workflow** - Automated renewal with rent escalation
-- [ ] **Bulk Invoice Generation** - Generate all monthly invoices with one click
-- [ ] **Payment Reminders** - Email/SMS notifications for overdue payments
+- [x] **Tenant Portal** - Separate login for tenants to view/pay invoices
+- [x] **Lease Renewal Workflow** - Automated renewal with rent escalation
+- [x] **Bulk Invoice Generation** - Generate all monthly invoices with one click
+- [x] **Payment Reminders** - Email/SMS notifications for overdue payments
 - [x] **Advanced Search** - Search across tenants, properties, units, and invoices
 - [x] **Filters & Sorting** - Filtering and pagination on primary list pages
 

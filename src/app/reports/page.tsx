@@ -14,6 +14,16 @@ import {
   Filter
 } from 'lucide-react'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 interface MonthlyData {
   month: number
@@ -325,6 +335,43 @@ export default function ReportsPage() {
           </div>
           <div className="text-sm text-gray-500">
             {summary.overdueCount} overdue invoices
+          </div>
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Property Collection Performance</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={propertyReports}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="property_name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Legend />
+                <Bar dataKey="total_invoiced" name="Invoiced" fill="#3b82f6" />
+                <Bar dataKey="total_collected" name="Collected" fill="#22c55e" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Occupancy by Property</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={propertyReports}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="property_name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="occupied_units" name="Occupied" fill="#8b5cf6" />
+                <Bar dataKey="vacant_units" name="Vacant" fill="#f59e0b" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

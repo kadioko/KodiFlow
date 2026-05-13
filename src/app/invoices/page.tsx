@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'lucide-react'
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import ListControls from '@/components/ui/ListControls'
+import { createPaymentReminderMessage } from '@/utils/reminders'
 
 async function getInvoices() {
   const supabase = createClient()
@@ -114,6 +116,14 @@ export default async function InvoicesPage() {
           </Link>
         </div>
       ) : (
+        <ListControls
+          items={invoices}
+          searchPlaceholder="Search invoices by number, tenant, property, or unit..."
+          searchValue={(invoice: any) => `${invoice.invoice_number || ''} ${invoice.tenant_name || ''} ${invoice.property_name || ''} ${invoice.unit_name || ''}`}
+          filterValue={(invoice: any) => invoice.status}
+          filterOptions={INVOICE_STATUSES.map((status) => ({ label: status.label, value: status.value }))}
+        >
+          {(visibleInvoices) => (
         <div className="card">
           <div className="table-container">
             <table className="table">
@@ -131,7 +141,7 @@ export default async function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {invoices.map((invoice: any) => (
+                {visibleInvoices.map((invoice: any) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{invoice.invoice_number}</td>
                     <td className="table-cell">{invoice.tenant_name}</td>
@@ -151,12 +161,32 @@ export default async function InvoicesPage() {
                       </span>
                     </td>
                     <td className="table-cell">
+                      <div className="flex items-center gap-3">
                       <Link 
                         href={`/invoices/${invoice.id}`}
                         className="text-primary-600 hover:text-primary-900 font-medium"
                       >
                         View
                       </Link>
+                      {invoice.balance > 0 && (
+                        <>
+                          <a
+                            href={`sms:?&body=${encodeURIComponent(createPaymentReminderMessage({
+                              tenantName: invoice.tenant_name || 'Tenant',
+                              invoiceNumber: invoice.invoice_number || 'invoice',
+                              balance: invoice.balance,
+                              dueDate: invoice.due_date,
+                            }))}`}
+                            className="text-warning-600 hover:text-warning-800 font-medium"
+                          >
+                            Remind
+                          </a>
+                          <Link href={`/payments/new?invoice=${invoice.id}`} className="text-success-600 hover:text-success-800 font-medium">
+                            Pay
+                          </Link>
+                        </>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -164,6 +194,8 @@ export default async function InvoicesPage() {
             </table>
           </div>
         </div>
+          )}
+        </ListControls>
       )}
     </div>
   )
