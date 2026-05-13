@@ -16,7 +16,7 @@ A modern, full-stack property management web application for managing residentia
 - **Tenant Types**: Individual, business, and organization tenants
 - **Commercial Features**: Business name, TIN, business license, contact person
 - **Residential Features**: Full name, ID number, emergency contact
-- **Tenant Portal**: View all tenant information in one place
+- **Tenant Portal**: Tenant-linked accounts can view only their own leases and invoices
 
 ### Lease Management
 
@@ -32,7 +32,8 @@ A modern, full-stack property management web application for managing residentia
 - **Charge Types**: Rent, service charge, security, water, electricity, garbage, maintenance, parking, tax, penalty
 - **Payment Recording**: Full and partial payment support
 - **Expense Tracking**: Track property expenses by category
-- **Utility Tracking**: Water and electricity meter readings with usage and amount calculations
+- **Utility Tracking**: Water and electricity meter readings with auto usage and charge calculations
+- **Document Management**: Compact PDF/image uploads with file-size limits, metadata editing, camera capture, and Supabase Storage cleanup
 - **Currency**: TZS (Tanzanian Shilling) as default, with USD, EUR, and GBP support
 - **Deposit and Late Fees**: Security deposit tracking and late-fee estimates
 
@@ -57,9 +58,9 @@ A modern, full-stack property management web application for managing residentia
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16 (App Router + Turbopack build)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS 4
 - **Database**: PostgreSQL (Supabase)
 - **Authentication**: Supabase Auth
 - **Icons**: Lucide React
@@ -68,7 +69,7 @@ A modern, full-stack property management web application for managing residentia
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+ recommended
 - npm or yarn
 - Supabase account (free tier works)
 - Supabase CLI for project linking and schema management
@@ -83,7 +84,7 @@ npm install
 
 1. Create a new project on [Supabase](https://supabase.com)
 2. Install and link the Supabase CLI by following [docs/deployment/supabase-cli.md](docs/deployment/supabase-cli.md)
-3. Apply `supabase/schema.sql` to the project
+3. Apply `supabase/schema.sql` to a new project, or apply all files in `supabase/migrations/` to an existing project
 4. Go to Project Settings → API and copy:
    - Project URL (for `NEXT_PUBLIC_SUPABASE_URL`)
    - `anon` public key (for `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
@@ -96,9 +97,12 @@ Create a `.env.local` file in the root directory:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
 NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
 ```
+
+For Vercel production, make sure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set in the **Production** environment and redeploy after changes. An invalid anon key causes Supabase login errors such as `Invalid API key`.
 
 ### 4. Run the Development Server
 
@@ -153,7 +157,9 @@ kodiflow/
 │   │   ├── units/          # Unit management
 │   │   ├── leases/         # Lease management
 │   │   ├── invoices/       # Invoice management
-│   │   ├── payments/       # Payment recording
+│   │   ├── payments/       # Payment recording and payment details
+│   │   ├── documents/      # Storage-backed document uploads
+│   │   ├── utilities/      # Utility meter readings
 │   │   └── reports/        # Reports
 │   ├── components/
 │   │   ├── dashboard/      # Dashboard client widgets
@@ -166,7 +172,8 @@ kodiflow/
 │       ├── constants.ts    # Application constants
 │       └── currency.ts     # Currency formatting
 ├── supabase/
-│   ├── schema.sql          # Database schema
+│   ├── schema.sql          # Full database schema for new projects
+│   ├── migrations/         # Incremental database migrations
 │   └── seed.sql            # Demo data
 ├── docs/                   # Maintained setup, deployment, and architecture docs
 └── README.md
@@ -188,6 +195,10 @@ kodiflow/
 | `/invoices` | Invoice management |
 | `/invoices/[id]` | Invoice details, line items, and payments |
 | `/payments` | Payment recording |
+| `/payments/[id]` | Payment details |
+| `/documents` | Document upload, metadata editing, and deletion |
+| `/utilities` | Water/electricity meter readings |
+| `/tenant-portal` | Tenant self-service portal scoped to the logged-in tenant email |
 | `/reports` | Financial reports |
 
 ## Default Credentials
@@ -241,10 +252,4 @@ For issues or questions:
 
 ## Roadmap
 
-- [ ] Mobile app (React Native)
-- [ ] Tenant portal for online payments
-- [ ] Multi-currency support
-- [ ] Advanced reporting with charts
-- [ ] SMS notifications
-- [ ] Document templates
-- [ ] Lease renewal automation
+See [ROADMAP.md](ROADMAP.md) for the maintained roadmap. Current next priorities include maintenance requests, vendor management, inspection scheduling, SMS gateway delivery, and production migration automation.

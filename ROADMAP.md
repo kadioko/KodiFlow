@@ -4,8 +4,8 @@
 
 KodiFlow is a modern property management system for residential and commercial rental operations.
 
-**Current Status**: v0.4.0 - Core platform, financial workflows, reporting, utilities, and tenant self-service foundation complete  
-**Stack**: Next.js 14 + TypeScript + Tailwind CSS + Supabase PostgreSQL/Auth/Storage
+**Current Status**: v0.5.0 - Core platform, financial workflows, reporting, utilities, documents, PWA, and tenant self-service foundation complete  
+**Stack**: Next.js 16 + React 19 + TypeScript 6 + Tailwind CSS 4 + Supabase PostgreSQL/Auth/Storage
 
 ---
 
@@ -13,7 +13,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ### Foundation and Platform
 
-- [x] Next.js 14 App Router project setup
+- [x] Next.js 16 App Router project setup
 - [x] TypeScript and Tailwind CSS setup
 - [x] Supabase client/server/middleware integration
 - [x] Supabase Auth login, registration, and forgot password flows
@@ -76,8 +76,10 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Search across properties, tenants, units, and invoices
 - [x] List filtering and pagination for tenants, units, invoices, payments, and leases
 - [x] Document upload backed by Supabase Storage
-- [x] Document metadata listing and deletion
-- [x] Utility management for water and electricity meter readings
+- [x] Document metadata listing, editing, download, deletion, and storage cleanup
+- [x] Document upload limits for compact PDFs and images
+- [x] Utility management for water and electricity meter readings with charge previews
+- [x] Core menu route stabilization for sections, expenses, payments, units, and tenants
 
 ### Internationalization Foundation
 
@@ -160,7 +162,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ### Database and DevOps
 
-- [ ] Apply all pending Supabase migrations to production
+- [ ] Apply all pending Supabase migrations to production, especially `202605140025_ensure_utility_meter_readings.sql`
 - [ ] Automate `database.types.ts` regeneration after schema changes
 - [ ] Staging Supabase project and staging Vercel environment
 - [ ] Backup verification workflow
@@ -191,8 +193,8 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ### Frontend
 
-- **Framework**: Next.js 14 with App Router
-- **Styling**: Tailwind CSS with custom utility classes
+- **Framework**: Next.js 16 with App Router
+- **Styling**: Tailwind CSS 4 with custom utility classes
 - **State**: Server Components for data-heavy pages, Client Components for forms and interactions
 - **Charts**: Recharts
 - **Validation**: TypeScript-first with targeted helper tests; form validation should be expanded with Zod where needed
@@ -231,6 +233,7 @@ KodiFlow is a modern property management system for residential and commercial r
 - Language foundation: English and Swahili preferences are stored; full UI translation rollout remains iterative.
 - Billing frequencies: monthly, quarterly, semi-annually, and annually.
 - Migrations should be applied before relying on newly added schema fields in production.
+- If production shows `Could not find the table ... in the schema cache`, apply the relevant migration and run `NOTIFY pgrst, 'reload schema';`.
 - `database.types.ts` should be regenerated after every schema migration.
 
 **Last Updated**: May 2026

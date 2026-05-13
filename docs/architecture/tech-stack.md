@@ -21,7 +21,7 @@ KodiFlow follows a modern serverless architecture with separation between fronte
 │                     FRONTEND LAYER                           │
 │                    Vercel Edge Network                       │
 │  ┌─────────────────────────────────────────────────────────┐ │
-│  │              Next.js 14 Application                    │ │
+│  │              Next.js 16 Application                    │ │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │ │
 │  │  │  App Router  │  │ Server Comp. │  │ Client Comp. │  │ │
 │  │  │   (Pages)    │  │   (Data)     │  │  (Interact)  │  │ │
@@ -58,9 +58,9 @@ KodiFlow follows a modern serverless architecture with separation between fronte
 
 ### Frontend
 
-#### Next.js 14 (App Router)
-- **Why**: Server-side rendering, API routes, file-based routing
-- **Benefits**: SEO, performance, simplified data fetching
+#### Next.js 16 (App Router)
+- **Why**: Server rendering, file-based routing, Turbopack production builds, and strong React Server Component support
+- **Benefits**: Performance, simplified data fetching, modern deployment workflow
 - **Pattern**: Server Components for data, Client Components for interactivity
 
 #### TypeScript
@@ -69,6 +69,7 @@ KodiFlow follows a modern serverless architecture with separation between fronte
 
 #### Tailwind CSS
 - **Why**: Utility-first, rapid development, consistent design
+- **Version**: Tailwind CSS 4 via `@tailwindcss/postcss`
 - **Custom Config**: Extended with brand colors (primary, success, warning, danger)
 
 #### Lucide React
@@ -83,7 +84,7 @@ KodiFlow follows a modern serverless architecture with separation between fronte
   - Database with RLS
   - Authentication
   - Storage (for documents)
-  - Realtime (future use)
+  - PostgREST schema cache reloads after migrations
 
 #### PostgreSQL
 - **Why**: Relational data with complex relationships
@@ -136,8 +137,11 @@ src/
 │   ├── units/             # Unit pages
 │   ├── leases/            # Lease pages
 │   ├── invoices/          # Invoice pages
-│   ├── payments/          # Payment pages
-│   └── api/               # API routes (if needed)
+│   ├── payments/          # Payment pages and payment details
+│   ├── documents/         # Supabase Storage-backed documents
+│   ├── utilities/         # Utility meter readings
+│   ├── tenant-portal/     # Tenant-scoped self-service portal
+│   └── reports/           # Financial and operational reports
 ├── components/
 │   ├── layout/            # Layout components
 │   │   ├── Sidebar.tsx
@@ -242,13 +246,13 @@ src/
 
 3. **Deployment**
    - Push to GitHub
-   - GitHub Actions runs checks
+   - Run checks locally or in CI
    - Auto-deploy to Vercel
 
 4. **Database Changes**
-   - Schema changes via SQL Editor
-   - Documented in migrations
-   - Seed data for development
+   - Schema changes committed under `supabase/migrations`
+   - Apply migrations before deploying features that depend on new tables/columns
+   - Regenerate `src/lib/supabase/database.types.ts` after schema changes
 
 ## Technology Trade-offs
 
