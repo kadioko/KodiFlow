@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 async function getDashboardMetrics() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return null
@@ -313,3 +313,4 @@ export default async function DashboardPage() {
     </div>
   )
 }
+

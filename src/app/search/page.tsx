@@ -10,7 +10,7 @@ type SearchPageProps = {
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const query = (searchParams.q || '').trim()
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -130,3 +130,4 @@ function SearchSection({ title, items }: { title: string; items: { href: string;
     </div>
   )
 }
+

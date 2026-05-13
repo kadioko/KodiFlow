@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from '@/utils/currency'
 import ListControls from '@/components/ui/ListControls'
 
 async function getLeases() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -179,3 +179,4 @@ export default async function LeasesPage() {
     </div>
   )
 }
+

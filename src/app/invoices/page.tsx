@@ -7,7 +7,7 @@ import ListControls from '@/components/ui/ListControls'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
 async function getInvoices() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -200,3 +200,4 @@ export default async function InvoicesPage() {
     </div>
   )
 }
+

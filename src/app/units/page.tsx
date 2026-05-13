@@ -16,7 +16,7 @@ const floorSortOrder: Record<string, number> = {
 }
 
 async function getUnits() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -216,3 +216,4 @@ export default async function UnitsPage() {
     </div>
   )
 }
+

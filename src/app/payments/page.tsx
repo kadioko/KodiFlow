@@ -5,7 +5,7 @@ import { getLabelByValue, PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
 async function getPayments() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -138,3 +138,4 @@ export default async function PaymentsPage() {
     </div>
   )
 }
+

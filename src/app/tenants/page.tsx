@@ -6,7 +6,7 @@ import { formatCurrency } from '@/utils/currency'
 import ListControls from '@/components/ui/ListControls'
 
 async function getTenants() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -166,3 +166,4 @@ export default async function TenantsPage() {
     </div>
   )
 }
+

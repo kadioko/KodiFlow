@@ -4,7 +4,7 @@ import { Plus, Building2, MapPin, ChevronRight } from 'lucide-react'
 import { getLabelByValue, getColorByValue, PROPERTY_TYPES } from '@/utils/constants'
 
 async function getProperties() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return []
@@ -151,3 +151,4 @@ export default async function PropertiesPage() {
     </div>
   )
 }
+

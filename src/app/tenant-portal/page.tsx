@@ -9,7 +9,7 @@ function relationName(value: any, key: string) {
 }
 
 export default async function TenantPortalPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user?.email) {
@@ -117,3 +117,4 @@ export default async function TenantPortalPage() {
     </div>
   )
 }
+
