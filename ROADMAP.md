@@ -1,239 +1,236 @@
 # KodiFlow Roadmap
 
 ## Overview
-Property Management System - A modern web application for managing residential and commercial rental properties.
 
-**Current Status**: v0.1.0 - MVP Core Features Complete  
-**Stack**: Next.js 14 + TypeScript + Tailwind CSS + Supabase (PostgreSQL + Auth)
+KodiFlow is a modern property management system for residential and commercial rental operations.
+
+**Current Status**: v0.4.0 - Core platform, financial workflows, reporting, utilities, and tenant self-service foundation complete  
+**Stack**: Next.js 14 + TypeScript + Tailwind CSS + Supabase PostgreSQL/Auth/Storage
 
 ---
 
 ## Completed Features ✅
 
-### Phase 1: Foundation (COMPLETE)
-- [x] Project setup with Next.js 14, TypeScript, Tailwind CSS
-- [x] Supabase integration (client, server, middleware)
-- [x] Database schema with 12 tables
-- [x] Row Level Security (RLS) policies
-- [x] TypeScript types and interfaces
-- [x] Authentication system (login, register, forgot password)
-- [x] Dashboard layout with sidebar navigation
+### Foundation and Platform
 
-### Phase 2: Core CRUD (COMPLETE)
-- [x] Property management (create, read, update, delete)
-- [x] Property sections (floors, blocks, wings, etc.)
-- [x] Units/spaces management
-- [x] Tenant management (individual & business)
-- [x] Lease agreements with date tracking
-- [x] Basic invoice generation
-- [x] Payment recording
+- [x] Next.js 14 App Router project setup
+- [x] TypeScript and Tailwind CSS setup
+- [x] Supabase client/server/middleware integration
+- [x] Supabase Auth login, registration, and forgot password flows
+- [x] PostgreSQL schema with RLS policies
+- [x] Generated database types workflow
+- [x] Sidebar dashboard layout
+- [x] Responsive UI foundation
+- [x] GitHub and Vercel deployment foundation
 
-### Phase 3: Financial System (COMPLETE)
-- [x] Invoice generation with auto-numbering
-- [x] Invoice items (multi-line support)
-- [x] Payment allocation to invoices
-- [x] Automatic balance calculations
-- [x] Status tracking (unpaid, partially paid, paid, overdue)
+### Property and Tenant Management
+
+- [x] Property CRUD for residential, commercial, and mixed-use properties
+- [x] Property sections for floors, blocks, wings, areas, compounds, market zones, and parking areas
+- [x] Unit management with unit type, usage type, status, rent, size, and section support
+- [x] Tenant management for individuals, businesses, and organizations
+- [x] Tenant portal foundation for tenant-linked accounts
+- [x] Dashboard property visibility controls persisted to user profile
+
+### Lease Management
+
+- [x] Lease creation and detail pages
+- [x] Active, expired, terminated, renewed, and pending lease statuses
+- [x] Lease expiry warnings
+- [x] Lease renewal workflow
+- [x] Rent escalation fields and renewal support
+- [x] Monthly, quarterly, six-month, and annual billing frequencies
+- [x] Security deposit tracking fields and reporting summaries
+
+### Invoices, Payments, and Billing
+
+- [x] Invoice generation page for active leases
+- [x] Bulk invoice generation
+- [x] Invoice auto-numbering
+- [x] Invoice item support
+- [x] Six-month billing invoice calculations
+- [x] Full and partial payment recording
+- [x] Payment prefill from invoice pages
+- [x] Automatic invoice balance calculations
+- [x] Invoice statuses: unpaid, partially paid, paid, overdue, cancelled
+- [x] Payment reminder action links
+- [x] Late-fee rate settings and report estimates
+
+### Financial Management and Reporting
+
 - [x] TZS currency formatting
-- [x] Expense tracking
+- [x] Multi-currency preference foundation for TZS, USD, EUR, and GBP
+- [x] Expense tracking data model and reporting integration
+- [x] Monthly collection reporting
+- [x] Outstanding balances by tenant
+- [x] Property income summaries
+- [x] Expense reports
+- [x] Net income calculations
+- [x] Charts for collection performance and occupancy
+- [x] Tenant mix reporting
+- [x] CSV export for property reports
 
-### Phase 4: Dashboard & UI (COMPLETE)
-- [x] Main dashboard with key metrics
-- [x] Property type breakdown (residential/commercial/mixed)
-- [x] Occupancy statistics
-- [x] Revenue tracking (expected/collected/outstanding)
-- [x] Overdue alerts
-- [x] Lease expiry warnings (30/60/90 days)
-- [x] Responsive design
+### Search, Lists, and Productivity
+
+- [x] Functional header/global search
+- [x] Search across properties, tenants, units, and invoices
+- [x] List filtering and pagination for tenants, units, invoices, payments, and leases
+- [x] Document upload backed by Supabase Storage
+- [x] Document metadata listing and deletion
+- [x] Utility management for water and electricity meter readings
+
+### Internationalization Foundation
+
+- [x] English and Swahili language preference setting
+- [x] Translation helper foundation
+
+### Automated Tests
+
+- [x] Vitest test setup
+- [x] Billing helper tests
+- [x] Registration profile payload test
+- [x] Payment balance helper test
+- [x] Late fee and net income helper tests
 
 ---
 
-## In Progress 🚧
+## Current Priorities 🚧
 
-### Phase 5: Enhanced Features
-- [x] **Invoice Generation Page** - Bulk generate invoices for all active leases
-- [x] **Payment Recording Form** - Full payment creation with invoice selection
-- [x] **Six-Month Billing** - Semi-annual lease billing and invoice calculations
-- [x] **Header Search** - Global search across properties, tenants, units, and invoices
-- [x] **List Filters & Pagination** - Filter and paginate tenants, units, invoices, payments, and leases
-- [x] **Dashboard Preferences** - Persist dashboard property visibility preferences
-- [x] **Automated Test Foundation** - Billing, registration payload, and payment helper tests
-- [x] **Document Upload** - File storage for leases, IDs, receipts
-- [x] **Reports Page** - Financial reports with charts
+### Phase 8: Property Operations
 
----
+- [ ] **Maintenance Requests** - Track repair requests, status, priority, and assignments
+- [ ] **Inspection Scheduling** - Property inspection calendar and inspection records
+- [ ] **Vendor Management** - Track contractors, contacts, categories, and service history
+- [ ] **Inventory Tracking** - Track furniture, fixtures, appliances, and unit assets
 
-## Planned Features 📋
+### Phase 9: Commercial Lease Enhancements
 
-### Phase 6: Advanced Functionality (High Priority)
-- [x] **Tenant Portal** - Separate login for tenants to view/pay invoices
-- [x] **Lease Renewal Workflow** - Automated renewal with rent escalation
-- [x] **Bulk Invoice Generation** - Generate all monthly invoices with one click
-- [x] **Payment Reminders** - Email/SMS notifications for overdue payments
-- [x] **Advanced Search** - Search across tenants, properties, units, and invoices
-- [x] **Filters & Sorting** - Filtering and pagination on primary list pages
+- [ ] **Percentage Rent** - Retail tenant rent based on reported sales
+- [ ] **CAM Charges** - Common Area Maintenance budgets and reconciliations
+- [ ] **Sales Reporting** - Track tenant sales for percentage-rent leases
+- [ ] **Commercial Lease Templates** - Commercial-specific clauses and generated templates
 
-### Phase 7: Financial Enhancements (High Priority)
-- [ ] **Multi-Currency Support** - USD, EUR, GBP alongside TZS
-- [ ] **Tax Management** - VAT/GST calculations
-- [ ] **Deposit Tracking** - Security deposit management
-- [ ] **Late Fee Automation** - Automatic penalty calculations
-- [ ] **Financial Reports**:
-  - [ ] Monthly collection report
-  - [ ] Outstanding balances by tenant
-  - [ ] Property income summary
-  - [ ] Expense reports
-  - [ ] Net income calculations
+### Phase 10: Integrations and Automation
 
-### Phase 8: Property Management (Medium Priority)
--[ ] **Maintenance Requests** - Track repair requests
-- [ ] **Inspection Scheduling** - Property inspection calendar
-- [ ] **Vendor Management** - Track contractors and service providers
-- [ ] **Inventory Tracking** - Furniture/fixtures in units
-- [x] **Utility Management** - Water/electricity meter tracking
+- [ ] **Mobile Money Integration** - M-Pesa, Tigo Pesa, and Airtel Money payment flows
+- [ ] **Bank Integration** - Import statements and reconcile payments
+- [ ] **SMS Gateway** - Twilio or Africa's Talking reminder delivery
+- [ ] **Email Service** - SendGrid, Resend, or AWS SES transactional email
+- [ ] **Calendar Integration** - Google/Outlook sync for inspections and reminders
+- [ ] **Accounting Export** - QuickBooks/Xero-compatible exports
 
-### Phase 9: Commercial Features (Medium Priority)
-- [ ] **Percentage Rent** - For retail tenants with variable rent
-- [ ] **CAM Charges** - Common Area Maintenance calculations
-- [ ] **Sales Reporting** - Track tenant sales (for percentage rent)
-- [ ] **Commercial Lease Templates** - Specialized lease clauses
-- [x] **Tenant Mix Reporting** - Analyze tenant composition
+### Phase 11: Mobile and PWA
 
-### Phase 10: Integrations & API (Medium Priority)
-- [ ] **Mobile Money Integration** - M-Pesa, Tigo Pesa, Airtel Money (TZ)
-- [ ] **Bank Integration** - Import bank statements
-- [ ] **SMS Gateway** - Twilio/Africa's Talking integration
-- [ ] **Email Service** - SendGrid/AWS SES
-- [ ] **Calendar Integration** - Google/Outlook for inspections
-- [ ] **Accounting Export** - QuickBooks/Xero integration
+- [ ] **Progressive Web App** - Installable app and basic offline support
+- [ ] **Push Notifications** - Real-time alerts for overdue invoices and lease events
+- [ ] **Camera Integration** - Photo capture for inspections, documents, and maintenance
+- [ ] **Mobile App** - React Native or Flutter app after PWA validation
 
-### Phase 11: Mobile & PWA (Lower Priority)
-- [ ] **Progressive Web App** - Offline capabilities
-- [ ] **Mobile App** - React Native or Flutter
-- [ ] **Push Notifications** - Real-time alerts
-- [ ] **Camera Integration** - Photo documentation
+### Phase 12: Advanced Platform Features
 
-### Phase 12: Advanced Features (Future)
-- [ ] **AI-Powered Insights** - Predictive analytics for rent optimization
-- [ ] **Chatbot** - Tenant support automation
+- [ ] **Role-Based Access Control** - Admin, manager, accountant, viewer, and tenant roles
+- [ ] **Audit Logging** - Track sensitive financial and data changes
+- [ ] **Two-Factor Authentication** - Stronger account security
+- [ ] **AI-Powered Insights** - Predict rent, churn, occupancy, and collections risk
+- [ ] **Tenant Support Chatbot** - Tenant FAQs and support automation
 - [ ] **Digital Signatures** - DocuSign/Adobe Sign integration
 - [ ] **Background Checks** - Tenant screening integration
-- [ ] **Insurance Integration** - Property/tenant insurance
-- [x] **Multi-Language** - Swahili, English support
+- [ ] **Insurance Integration** - Property and tenant insurance workflows
 
 ---
 
-## Technical Improvements 🔧
+## Technical Backlog 🔧
 
 ### Performance
-- [ ] Database query optimization
-- [ ] Implement caching (Redis)
-- [ ] Image optimization for documents
-- [ ] Lazy loading for large lists
-- [ ] Pagination for all tables
+
+- [ ] Server-side pagination for very large tables
+- [ ] Database query optimization and query plan review
+- [ ] Caching strategy for dashboard and report aggregates
+- [ ] Image optimization and previews for uploaded documents
+- [ ] Lazy loading for heavy report widgets
 
 ### Testing
-- [ ] Unit tests (Jest/Vitest)
-- [ ] Integration tests
-- [ ] E2E tests (Playwright)
-- [ ] Database seeding for tests
 
-### Security
-- [ ] Rate limiting
-- [ ] Audit logging
-- [ ] Two-factor authentication
-- [ ] Role-based access (admin, manager, viewer)
-- [ ] Data encryption at rest
+- [ ] Integration tests for Supabase flows
+- [ ] E2E tests with Playwright
+- [ ] Test database seed/reset workflow
+- [ ] Regression tests for invoice generation and payment allocation
+- [ ] Utility meter reading tests
+- [ ] Tenant portal access tests
 
-### DevOps
-- [x] GitHub Actions CI/CD
-- [x] Vercel deployment config
-- [ ] Staging environment
-- [ ] Automated database migrations
-- [ ] Monitoring (Sentry/Datadog)
-- [ ] Backup automation
+### Database and DevOps
 
----
+- [ ] Apply all pending Supabase migrations to production
+- [ ] Automate `database.types.ts` regeneration after schema changes
+- [ ] Staging Supabase project and staging Vercel environment
+- [ ] Backup verification workflow
+- [ ] Monitoring and error tracking with Sentry or equivalent
+- [ ] CI checks for tests, type-check, lint, and build
 
-## Timeline Estimates
+### Security and Compliance
 
-| Phase | Estimated Time | Priority |
-|-------|---------------|----------|
-| Phase 5 (Enhanced) | 1 week | High |
-| Phase 6 (Advanced) | 2-3 weeks | High |
-| Phase 7 (Financial) | 2 weeks | High |
-| Phase 8 (Property Mgmt) | 2 weeks | Medium |
-| Phase 9 (Commercial) | 2 weeks | Medium |
-| Phase 10 (Integrations) | 3-4 weeks | Medium |
-| Phase 11 (Mobile) | 4-6 weeks | Low |
-| Phase 12 (AI/Advanced) | 4+ weeks | Future |
-
-**Total MVP Completion**: ~4-6 weeks  
-**Full Feature Set**: ~3-4 months
+- [ ] Rate limiting on auth and sensitive form actions
+- [ ] RLS policy audit after every schema change
+- [ ] Storage policy audit for uploaded documents
+- [ ] Data retention and deletion policy
+- [ ] Local compliance review for property and tenant records
 
 ---
 
-## Immediate Next Steps (Priority Order)
+## Recommended Next Sprint 🎯
 
-### 1. This Week
-1. ✅ Create forms for adding tenants, units, leases
-2. ✅ Build invoice generation page
-3. ✅ Build payment recording form
-4. ✅ Add document upload functionality
-
-### 2. Next Week
-1. Create reports page with charts
-2. Add advanced filtering to all list pages
-3. Implement search functionality
-4. Add bulk operations (bulk invoice generation)
-
-### 3. Following Weeks
-1. Set up email notifications
-2. Add mobile money payment integration
-3. Create tenant portal (separate auth)
-4. Implement financial reports
+1. **Maintenance Requests** - Add maintenance request CRUD, status tracking, and dashboard alerts.
+2. **Vendor Management** - Add vendor directory and link vendors to expenses/maintenance.
+3. **Inspection Scheduling** - Add inspection records and calendar-style upcoming inspection list.
+4. **SMS Gateway Integration** - Replace reminder deep links with actual SMS delivery.
+5. **Production Migration Pass** - Apply pending Supabase migrations and regenerate database types from the live schema.
 
 ---
 
 ## Architecture Decisions
 
 ### Frontend
+
 - **Framework**: Next.js 14 with App Router
-- **Styling**: Tailwind CSS with custom design system
-- **State**: Server Components + Client Components pattern
-- **Forms**: React Hook Form (to be added)
-- **Validation**: Zod (to be added)
+- **Styling**: Tailwind CSS with custom utility classes
+- **State**: Server Components for data-heavy pages, Client Components for forms and interactions
+- **Charts**: Recharts
+- **Validation**: TypeScript-first with targeted helper tests; form validation should be expanded with Zod where needed
 
 ### Backend
+
 - **Database**: Supabase PostgreSQL
 - **Auth**: Supabase Auth with JWT
 - **Storage**: Supabase Storage for documents
-- **Realtime**: Supabase Realtime (for future notifications)
+- **Security**: Row Level Security on user-owned tables
+- **Migrations**: SQL migrations under `supabase/migrations`
 
 ### Deployment
-- **Frontend**: Vercel (serverless)
-- **Database**: Supabase (managed PostgreSQL)
-- **CDN**: Vercel Edge Network
-- **CI/CD**: GitHub Actions → Vercel
+
+- **Frontend**: Vercel
+- **Database/Auth/Storage**: Supabase
+- **CI/CD**: GitHub-backed deployment workflow
 
 ---
 
 ## Success Metrics
 
 - [ ] 100+ properties managed
-- [ ] 500+ tenants
+- [ ] 500+ tenants managed
 - [ ] 1000+ monthly invoices generated
+- [ ] 95%+ payment allocation accuracy from reconciled imports
+- [ ] < 2s median dashboard load time
 - [ ] 95% uptime
-- [ ] < 2s page load time
-- [ ] Mobile responsive score > 90
+- [ ] Mobile Lighthouse score > 90
 
 ---
 
 ## Notes
 
-- Currency: TZS (Tanzanian Shilling) default
-- Language: English (Swahili planned)
-- Compliance: GDPR, local data protection laws
-- Backup: Daily automated backups via Supabase
+- Default currency: TZS, with USD/EUR/GBP preference support.
+- Language foundation: English and Swahili preferences are stored; full UI translation rollout remains iterative.
+- Billing frequencies: monthly, quarterly, semi-annually, and annually.
+- Migrations should be applied before relying on newly added schema fields in production.
+- `database.types.ts` should be regenerated after every schema migration.
 
 **Last Updated**: May 2026
