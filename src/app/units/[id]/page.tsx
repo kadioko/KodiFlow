@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -66,8 +66,14 @@ interface Payment {
   tenant_name: string
 }
 
-export default function UnitDetailPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function UnitDetailPage() {
   const router = useRouter()
+  const params = useParams()
+  const unitId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [error, setError] = useState('')
@@ -81,8 +87,14 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
   const [currentLease, setCurrentLease] = useState<Lease | null>(null)
 
   useEffect(() => {
+    if (!unitId) {
+      setError('Unit not found')
+      setLoading(false)
+      return
+    }
+
     fetchUnitData()
-  }, [params.id])
+  }, [unitId])
 
   const fetchUnitData = async () => {
     const supabase = createClient()
@@ -101,7 +113,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
         properties(name),
         property_sections(name)
       `)
-      .eq('id', params.id)
+      .eq('id', unitId)
       .eq('user_id', user.id)
       .single()
 
@@ -124,7 +136,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
         *,
         tenants(full_name, business_name)
       `)
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -144,7 +156,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
     const { data: invoicesData } = await supabase
       .from('rent_invoices')
       .select('*')
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -159,7 +171,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
         *,
         tenants(full_name, business_name)
       `)
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
       .eq('user_id', user.id)
       .order('payment_date', { ascending: false })
 
@@ -185,17 +197,17 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
     const { data: leasesCheck } = await supabase
       .from('leases')
       .select('id', { count: 'exact' })
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
 
     const { data: invoicesCheck } = await supabase
       .from('rent_invoices')
       .select('id', { count: 'exact' })
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
 
     const { data: paymentsCheck } = await supabase
       .from('payments')
       .select('id', { count: 'exact' })
-      .eq('unit_id', params.id)
+      .eq('unit_id', unitId)
 
     if ((leasesCheck && leasesCheck.length > 0) || 
         (invoicesCheck && invoicesCheck.length > 0) ||
@@ -209,7 +221,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
     const { error: deleteError } = await supabase
       .from('units')
       .delete()
-      .eq('id', params.id)
+      .eq('id', unitId)
       .eq('user_id', user.id)
 
     if (deleteError) {
@@ -278,7 +290,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
           </div>
         </div>
         <div className="flex space-x-3">
-          <Link href={`/units/${params.id}/edit`} className="btn-secondary">
+          <Link href={`/units/${unitId}/edit`} className="btn-secondary">
             <Edit2 className="h-4 w-4 mr-2" />
             Edit
           </Link>
@@ -361,7 +373,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
                 <p className="text-sm text-gray-500">Create a lease to assign a tenant</p>
               </div>
             </div>
-            <Link href={`/leases/new?unit=${params.id}`} className="btn-primary">
+            <Link href={`/leases/new?unit=${unitId}`} className="btn-primary">
               Create Lease
             </Link>
           </div>
@@ -453,7 +465,7 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Lease History</h3>
               {unit.status === 'vacant' && (
-                <Link href={`/leases/new?unit=${params.id}`} className="btn-primary">
+                <Link href={`/leases/new?unit=${unitId}`} className="btn-primary">
                   Create Lease
                 </Link>
               )}
@@ -467,12 +479,17 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
                     <th className="table-header-cell">End Date</th>
                     <th className="table-header-cell">Rent</th>
                     <th className="table-header-cell">Status</th>
+                    <th className="table-header-cell">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="table-body">
                   {leases.map((lease) => (
                     <tr key={lease.id} className="hover:bg-gray-50">
-                      <td className="table-cell font-medium">{lease.tenant_name}</td>
+                      <td className="table-cell font-medium">
+                        <Link href={`/tenants/${lease.tenant_id}`} className="text-primary-600 hover:underline">
+                          {lease.tenant_name}
+                        </Link>
+                      </td>
                       <td className="table-cell">{formatDate(lease.start_date)}</td>
                       <td className="table-cell">{formatDate(lease.end_date)}</td>
                       <td className="table-cell">{formatCurrency(lease.monthly_rent)}</td>
@@ -484,6 +501,16 @@ export default function UnitDetailPage({ params }: { params: { id: string } }) {
                         }`}>
                           {lease.status}
                         </span>
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <Link href={`/leases/${lease.id}`} className="text-primary-600 hover:text-primary-900 font-medium">
+                            View
+                          </Link>
+                          <Link href={`/leases/${lease.id}/edit`} className="text-slate-600 hover:text-slate-900 font-medium">
+                            Edit
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

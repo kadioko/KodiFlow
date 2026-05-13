@@ -151,12 +151,20 @@ export default async function LeasesPage() {
                       </span>
                     </td>
                     <td className="table-cell">
-                      <Link 
-                        href={`/leases/${lease.id}`}
-                        className="text-primary-600 hover:text-primary-900 font-medium"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Link 
+                          href={`/leases/${lease.id}`}
+                          className="text-primary-600 hover:text-primary-900 font-medium"
+                        >
+                          View
+                        </Link>
+                        <Link 
+                          href={`/leases/${lease.id}/edit`}
+                          className="text-slate-600 hover:text-slate-900 font-medium"
+                        >
+                          Edit
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -168,4 +176,3 @@ export default async function LeasesPage() {
     </div>
   )
 }
-

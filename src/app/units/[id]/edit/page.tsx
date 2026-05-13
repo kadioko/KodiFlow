@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, DoorOpen, Loader2 } from 'lucide-react'
@@ -18,8 +18,14 @@ interface Section {
   property_id: string
 }
 
-export default function EditUnitPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function EditUnitPage() {
   const router = useRouter()
+  const params = useParams()
+  const unitId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -51,8 +57,14 @@ export default function EditUnitPage({ params }: { params: { id: string } }) {
   })
 
   useEffect(() => {
+    if (!unitId) {
+      setError('Unit not found')
+      setLoading(false)
+      return
+    }
+
     fetchData()
-  }, [params.id])
+  }, [unitId])
 
   // Fetch sections when property changes
   useEffect(() => {
@@ -105,7 +117,7 @@ export default function EditUnitPage({ params }: { params: { id: string } }) {
     const { data: unitData, error: fetchError } = await supabase
       .from('units')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', unitId)
       .eq('user_id', user.id)
       .single()
 
@@ -172,13 +184,13 @@ export default function EditUnitPage({ params }: { params: { id: string } }) {
         notes: formData.notes || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', unitId)
       .eq('user_id', user.id)
 
     if (updateError) {
       setError(updateError.message)
     } else {
-      router.push(`/units/${params.id}`)
+      router.push(`/units/${unitId}`)
       router.refresh()
     }
 
@@ -197,7 +209,7 @@ export default function EditUnitPage({ params }: { params: { id: string } }) {
     <div className="max-w-3xl mx-auto">
       <div className="page-header">
         <div className="flex items-center">
-          <Link href={`/units/${params.id}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
+          <Link href={`/units/${unitId}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="h-5 w-5 text-gray-500" />
           </Link>
           <div>
@@ -397,7 +409,7 @@ export default function EditUnitPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex items-center justify-end space-x-4 pt-4">
-            <Link href={`/units/${params.id}`} className="btn-secondary">
+            <Link href={`/units/${unitId}`} className="btn-secondary">
               Cancel
             </Link>
             <button type="submit" disabled={saving} className="btn-primary">

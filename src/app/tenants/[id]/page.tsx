@@ -499,6 +499,7 @@ export default function TenantDetailPage() {
                     <th className="table-header-cell">End Date</th>
                     <th className="table-header-cell">Rent</th>
                     <th className="table-header-cell">Status</th>
+                    <th className="table-header-cell">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="table-body">
@@ -517,6 +518,16 @@ export default function TenantDetailPage() {
                         }`}>
                           {lease.status}
                         </span>
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <Link href={`/leases/${lease.id}`} className="text-primary-600 hover:text-primary-900 font-medium">
+                            View
+                          </Link>
+                          <Link href={`/leases/${lease.id}/edit`} className="text-slate-600 hover:text-slate-900 font-medium">
+                            Edit
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

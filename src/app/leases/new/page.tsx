@@ -26,6 +26,7 @@ function NewLeasePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedUnitId = searchParams.get('unit')
+  const preselectedTenantId = searchParams.get('tenant')
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -48,7 +49,7 @@ function NewLeasePageContent() {
     rent_escalation_frequency: 'none' | 'annually' | 'custom'
     notes: string
   }>({
-    tenant_id: '',
+    tenant_id: preselectedTenantId || '',
     unit_id: preselectedUnitId || '',
     property_id: '',
     start_date: new Date().toISOString().split('T')[0],
@@ -128,7 +129,7 @@ function NewLeasePageContent() {
       }
     }
     fetchData()
-  }, [preselectedUnitId])
+  }, [preselectedUnitId, preselectedTenantId])
 
   const handleUnitChange = (unitId: string) => {
     const selectedUnit = units.find(u => u.id === unitId)
@@ -181,6 +182,12 @@ function NewLeasePageContent() {
     if (insertError) {
       setError(insertError.message)
     } else {
+      await supabase
+        .from('units')
+        .update({ status: 'occupied', updated_at: new Date().toISOString() })
+        .eq('id', formData.unit_id)
+        .eq('user_id', user.id)
+
       router.push('/leases')
       router.refresh()
     }

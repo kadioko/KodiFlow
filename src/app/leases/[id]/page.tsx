@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -17,7 +17,8 @@ import {
   Building2,
   Calendar,
   DollarSign,
-  CreditCard
+  CreditCard,
+  Edit2
 } from 'lucide-react'
 import { LEASE_TYPES, LEASE_STATUSES, BILLING_FREQUENCIES, getLabelByValue } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
@@ -51,8 +52,14 @@ interface Payment {
   invoice_number: string
 }
 
-export default function LeaseDetailPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function LeaseDetailPage() {
   const router = useRouter()
+  const params = useParams()
+  const leaseId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,8 +75,14 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
   })
 
   useEffect(() => {
+    if (!leaseId) {
+      setError('Lease not found')
+      setLoading(false)
+      return
+    }
+
     fetchLeaseData()
-  }, [params.id])
+  }, [leaseId])
 
   const fetchLeaseData = async () => {
     const supabase = createClient()
@@ -89,7 +102,7 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
         units(unit_name),
         properties(name)
       `)
-      .eq('id', params.id)
+      .eq('id', leaseId)
       .eq('user_id', user.id)
       .single()
 
@@ -123,7 +136,7 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
         *,
         rent_invoices(invoice_number)
       `)
-      .eq('lease_id', params.id)
+      .eq('lease_id', leaseId)
       .eq('user_id', user.id)
       .order('payment_date', { ascending: false })
 
@@ -155,7 +168,7 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
         end_date: today,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', leaseId)
       .eq('user_id', user.id)
 
     if (updateError) {
@@ -193,7 +206,7 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
         status: 'renewed',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', leaseId)
       .eq('user_id', user.id)
 
     if (updateError) {
@@ -218,7 +231,7 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
         lease_type: lease.lease_type,
         billing_frequency: lease.billing_frequency,
         status: 'active',
-        notes: `Renewed from lease ${params.id}`,
+        notes: `Renewed from lease ${leaseId}`,
       })
       .select()
       .single()
@@ -289,6 +302,10 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
           </div>
         </div>
         <div className="flex space-x-3">
+          <Link href={`/leases/${leaseId}/edit`} className="btn-secondary">
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit
+          </Link>
           {isActive && (
             <>
               <button 
@@ -378,6 +395,12 @@ export default function LeaseDetailPage({ params }: { params: { id: string } }) 
               className="text-primary-600 hover:underline text-sm"
             >
               View Property →
+            </Link>
+            <Link 
+              href={`/units/${lease.unit_id}`}
+              className="ml-4 text-primary-600 hover:underline text-sm"
+            >
+              View Unit →
             </Link>
           </div>
         </div>
