@@ -8,6 +8,7 @@ Get KodiFlow running on your local machine for development.
 - npm (comes with Node.js)
 - Git
 - A Supabase account (free tier)
+- Supabase CLI (see step 3 below)
 
 ## Step-by-Step Setup
 
@@ -33,7 +34,38 @@ This installs:
 - Lucide icons
 - Other dependencies
 
-### 3. Set Up Supabase
+### 3. Install Supabase CLI
+
+The Supabase CLI enables local development, database migrations, and project management:
+
+**macOS (Homebrew)**:
+
+```bash
+brew install supabase/tap/supabase
+```
+
+**Windows (Scoop)**:
+
+```powershell
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+```
+
+**Linux / npm**:
+
+```bash
+npm install -g supabase
+```
+
+Verify installation:
+
+```bash
+supabase --version
+```
+
+See [Supabase CLI Guide](../deployment/supabase-cli.md) for complete documentation.
+
+### 4. Set Up Supabase
 
 Follow the [Supabase Setup Guide](../deployment/supabase-setup.md):
 
@@ -41,6 +73,16 @@ Follow the [Supabase Setup Guide](../deployment/supabase-setup.md):
 2. Run the database schema
 3. Get your API keys
 4. Configure authentication
+
+Or use the CLI:
+
+```bash
+# Login to Supabase
+supabase login
+
+# Link to your project
+supabase link --project-ref YOUR_PROJECT_REF
+```
 
 ### 4. Configure Environment Variables
 
@@ -68,14 +110,14 @@ You should see:
 - Landing page at `/`
 - Login page at `/auth/login`
 
-### 6. Create First Account
+### 7. Create First Account
 
 1. Go to `http://localhost:3000/auth/register`
 2. Create your admin account
 3. Verify email (check Supabase Auth logs if emails not configured)
 4. Log in
 
-### 7. Seed Demo Data (Optional)
+### 8. Seed Demo Data (Optional)
 
 To test with sample data:
 

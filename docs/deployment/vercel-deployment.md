@@ -75,22 +75,26 @@ After deployment, update Supabase with your production URL:
 ## Automatic Deployments
 
 Vercel automatically deploys on every push to:
+
 - `main` or `master` branch → Production
 - Other branches → Preview deployments
 
 ## Environment-Specific Configuration
 
 ### Production
+
 - Environment: Production
 - Database: Supabase Production
 - URL: `https://your-domain.com`
 
 ### Preview (Staging)
+
 - Environment: Preview
 - Database: Can use Supabase (same or separate)
 - URL: `https://branch-name-project.vercel.app`
 
 ### Local Development
+
 - Environment: Development
 - Database: Supabase (usually same as production for small teams)
 - URL: `http://localhost:3000`
@@ -98,12 +102,15 @@ Vercel automatically deploys on every push to:
 ## Monitoring
 
 ### Vercel Analytics
+
 1. Enable in Project Settings → Analytics
 2. View performance metrics
 3. Monitor Core Web Vitals
 
 ### Error Tracking (Recommended)
+
 Add Sentry integration:
+
 ```bash
 npm install @sentry/nextjs
 ```
@@ -113,21 +120,25 @@ Configure in `next.config.js` and environment variables.
 ## Troubleshooting
 
 ### Build Errors
+
 - Check build logs in Vercel dashboard
 - Ensure all dependencies are in `package.json`
 - Run `npm run build` locally to test
 
 ### Runtime Errors
+
 - Check function logs in Vercel dashboard
 - Verify environment variables are set correctly
 - Check Supabase connection
 
 ### 404 Errors
+
 - Ensure `next.config.js` has correct settings
 - Check that pages are in correct locations
 - Verify middleware isn't blocking requests
 
 ### Database Connection Issues
+
 - Verify Supabase URL and keys
 - Check if database is paused (free tier)
 - Ensure RLS policies allow access
@@ -135,12 +146,14 @@ Configure in `next.config.js` and environment variables.
 ## Performance Optimization
 
 ### Vercel Settings
+
 1. Enable **Edge Network**
 2. Set **Build Command**: `npm run build`
 3. Set **Output Directory**: `.next`
 4. Enable **Git LFS** for large files (documents)
 
 ### Next.js Optimization
+
 - Use Server Components where possible
 - Implement proper image optimization
 - Enable static generation for public pages
@@ -148,12 +161,14 @@ Configure in `next.config.js` and environment variables.
 ## Backup & Rollback
 
 ### Rollback
+
 Vercel keeps previous deployments:
 1. Go to Deployments tab
 2. Click on previous deployment
 3. Click **Promote to Production**
 
 ### Database
+
 Supabase handles backups automatically:
 - Daily backups on free tier
 - Point-in-time recovery on Pro

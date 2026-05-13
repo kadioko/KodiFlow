@@ -33,6 +33,7 @@ Wait 2-3 minutes for the project to initialize.
 5. Click **Run** (play button)
 
 This will create:
+
 - All 12 tables
 - Indexes for performance
 - Triggers for automation
@@ -55,6 +56,7 @@ This will create:
 1. Go to **Authentication** → **URL Configuration**
 2. Set **Site URL**: Your production URL (e.g., `https://kodiflow.vercel.app`)
 3. Add **Redirect URLs**:
+
    - `http://localhost:3000/auth/callback` (for local dev)
    - `https://yourdomain.com/auth/callback` (for production)
 
@@ -63,6 +65,7 @@ This will create:
 1. Go to **Storage** in the sidebar
 2. Create a new bucket called `documents`
 3. Set bucket permissions:
+
    - Click the bucket → **Policies**
    - Add policies for SELECT, INSERT, DELETE
    - Example policy: `(bucket_id = 'documents' AND auth.uid() = owner)`
@@ -114,6 +117,7 @@ After creating your account:
    - Click **Run**
 
 This will create:
+
 - 3 sample properties (residential, commercial, mixed)
 - 20+ units across sections
 - 10 sample tenants
@@ -125,6 +129,7 @@ This will create:
 When you need to update the schema:
 
 ### Option A: SQL Editor (Simple)
+
 1. Go to **SQL Editor**
 2. Write your ALTER TABLE statements
 3. Run them
@@ -142,16 +147,19 @@ ALTER TABLE properties ADD COLUMN new_field TEXT;
 ## 10. Monitoring
 
 ### Database Stats
-- Go to **Database** → **Statistics**
+
+- Go to **Database** → **Statistics`
 - Monitor connection usage
 - Check slow queries
 
 ### Authentication Stats
-- Go to **Authentication** → **Users**
+
+- Go to **Authentication` → **Users`
 - See sign-up rates
 - Monitor failed logins
 
 ### Logs
+
 - Go to **Logs** → **Postgres**
 - View database queries
 - Debug issues
@@ -159,16 +167,19 @@ ALTER TABLE properties ADD COLUMN new_field TEXT;
 ## Troubleshooting
 
 ### "Failed to fetch" errors
+
 - Check if Supabase URL is correct
 - Ensure you're using the correct key (anon, not service_role)
 - Check browser console for CORS errors
 
 ### RLS Policy Violations
+
 - Check that your user is authenticated
 - Verify RLS policies allow the operation
 - Test with service_role key temporarily to isolate issue
 
 ### Database Connection Errors
+
 - Check if database is paused (free tier pauses after inactivity)
 - Resume from Supabase dashboard
 - Check connection limits
