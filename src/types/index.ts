@@ -15,7 +15,7 @@ export type TenantType = 'individual' | 'business' | 'organization';
 
 export type LeaseType = 'residential' | 'commercial';
 
-export type BillingFrequency = 'monthly' | 'quarterly' | 'annually';
+export type BillingFrequency = 'monthly' | 'quarterly' | 'semi_annually' | 'annually';
 
 export type LeaseStatus = 'active' | 'expired' | 'terminated' | 'renewed' | 'pending';
 

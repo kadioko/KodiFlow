@@ -19,7 +19,7 @@ First, commit and push your code:
 git add .
 
 # Commit
-git commit -m "Initial commit: KodiFlow property management system"
+git commit -m "Deploy KodiFlow"
 
 # Create GitHub repo and push
 git remote add origin https://github.com/YOUR_USERNAME/kodiflow.git
@@ -59,7 +59,7 @@ Click **Deploy**. Vercel will:
 
 After deployment, update Supabase with your production URL:
 
-1. Go to Supabase Dashboard → Authentication → URL Configuration
+1. Go to Supabase Dashboard -> Authentication -> URL Configuration
 2. Set **Site URL**: `https://your-domain.vercel.app`
 3. Add to **Redirect URLs**:
 
@@ -67,7 +67,7 @@ After deployment, update Supabase with your production URL:
 
 ### 6. Custom Domain (Optional)
 
-1. In Vercel, go to Project Settings → Domains
+1. In Vercel, go to Project Settings -> Domains
 2. Add your custom domain
 3. Follow DNS configuration instructions
 4. Update Supabase Auth URLs with new domain
@@ -76,8 +76,8 @@ After deployment, update Supabase with your production URL:
 
 Vercel automatically deploys on every push to:
 
-- `main` or `master` branch → Production
-- Other branches → Preview deployments
+- `main` or `master` branch -> Production
+- Other branches -> Preview deployments
 
 ## Environment-Specific Configuration
 
@@ -103,7 +103,7 @@ Vercel automatically deploys on every push to:
 
 ### Vercel Analytics
 
-1. Enable in Project Settings → Analytics
+1. Enable in Project Settings -> Analytics
 2. View performance metrics
 3. Monitor Core Web Vitals
 
@@ -130,6 +130,7 @@ Configure in `next.config.js` and environment variables.
 - Check function logs in Vercel dashboard
 - Verify environment variables are set correctly
 - Check Supabase connection
+- Redeploy after changing `NEXT_PUBLIC_*` values because they are baked into the frontend build
 
 ### 404 Errors
 
@@ -180,6 +181,8 @@ Supabase handles backups automatically:
 - [ ] Environment variables not in code
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` only on server
 - [ ] RLS policies tested on production data
+- [ ] Tenant, unit, property, lease, invoice, and payment detail pages tested after deploy
+- [ ] Mobile menu, PWA install help, and light/dark mode tested on a phone viewport
 - [ ] Custom domain with HTTPS
 - [ ] Build logs don't expose secrets
 

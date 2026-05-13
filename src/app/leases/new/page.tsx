@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, FileText, Calendar } from 'lucide-react'
 import { LEASE_TYPES, BILLING_FREQUENCIES } from '@/utils/constants'
+import { formatCurrency } from '@/utils/currency'
 
 interface Tenant {
   id: string
@@ -20,6 +21,7 @@ interface Unit {
   property_name: string
   monthly_rent: number
   usage_type: string
+  status: string
 }
 
 function NewLeasePageContent() {
@@ -40,10 +42,11 @@ function NewLeasePageContent() {
     start_date: string
     end_date: string
     monthly_rent: number
+    service_charge: number
     deposit_amount: number
     rent_due_day: number
     lease_type: 'residential' | 'commercial'
-    billing_frequency: 'monthly' | 'quarterly' | 'annually'
+    billing_frequency: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
     rent_escalation_type: 'none' | 'percentage' | 'fixed_amount'
     rent_escalation_value: number | null
     rent_escalation_frequency: 'none' | 'annually' | 'custom'
@@ -55,6 +58,7 @@ function NewLeasePageContent() {
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
     monthly_rent: 0,
+    service_charge: 0,
     deposit_amount: 0,
     rent_due_day: 1,
     lease_type: 'residential',
@@ -87,7 +91,7 @@ function NewLeasePageContent() {
           })))
         }
 
-        // Fetch vacant units
+        // Fetch vacant units, plus a preselected unit when renewing from history.
         const { data: unitsData } = await supabase
           .from('units')
           .select(`
@@ -96,20 +100,23 @@ function NewLeasePageContent() {
             property_id,
             monthly_rent,
             usage_type,
+            status,
             properties(name)
           `)
           .eq('user_id', user.id)
-          .eq('status', 'vacant')
           .order('unit_name')
         
         if (unitsData) {
-          const formattedUnits = unitsData.map((u: any) => ({
+          const formattedUnits = unitsData
+            .filter((u: any) => u.status === 'vacant' || u.id === preselectedUnitId)
+            .map((u: any) => ({
             id: u.id,
             unit_name: u.unit_name,
             property_id: u.property_id,
             property_name: u.properties?.name,
             monthly_rent: u.monthly_rent,
             usage_type: u.usage_type,
+            status: u.status,
           }))
           setUnits(formattedUnits)
           
@@ -158,7 +165,7 @@ function NewLeasePageContent() {
       return
     }
 
-    const { error: insertError } = await supabase
+    const { data: createdLease, error: insertError } = await supabase
       .from('leases')
       .insert({
         user_id: user.id,
@@ -178,10 +185,32 @@ function NewLeasePageContent() {
         status: 'active',
         notes: formData.notes || null,
       })
+      .select('id')
+      .single()
 
-    if (insertError) {
-      setError(insertError.message)
+    if (insertError || !createdLease) {
+      setError(insertError?.message || 'Lease was not created')
     } else {
+      if (formData.service_charge > 0) {
+        const { error: chargeError } = await supabase
+          .from('charges')
+          .insert({
+            user_id: user.id,
+            lease_id: createdLease.id,
+            charge_name: 'Service Charge',
+            charge_type: 'service_charge',
+            amount: formData.service_charge,
+            frequency: 'monthly',
+            is_active: true,
+          })
+
+        if (chargeError) {
+          setError(chargeError.message)
+          setLoading(false)
+          return
+        }
+      }
+
       await supabase
         .from('units')
         .update({ status: 'occupied', updated_at: new Date().toISOString() })
@@ -258,7 +287,7 @@ function NewLeasePageContent() {
               <option value="">Select a vacant unit</option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
-                  {unit.property_name} - {unit.unit_name} ({unit.usage_type}, TZS {unit.monthly_rent.toLocaleString()})
+                  {unit.property_name} - {unit.unit_name} ({unit.usage_type}, {unit.status}, TZS {unit.monthly_rent.toLocaleString()})
                 </option>
               ))}
             </select>
@@ -336,7 +365,7 @@ function NewLeasePageContent() {
             </div>
           </div>
 
-          {/* Rent & Deposit */}
+          {/* Rent, Service Charge & Deposit */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="form-group">
               <label htmlFor="monthly_rent" className="label">
@@ -354,6 +383,21 @@ function NewLeasePageContent() {
             </div>
 
             <div className="form-group">
+              <label htmlFor="service_charge" className="label">
+                Service Charge (TZS)
+              </label>
+              <input
+                id="service_charge"
+                type="number"
+                min="0"
+                value={formData.service_charge}
+                onChange={(e) => setFormData({ ...formData, service_charge: parseFloat(e.target.value) || 0 })}
+                className="input"
+                placeholder="0"
+              />
+            </div>
+
+            <div className="form-group">
               <label htmlFor="deposit_amount" className="label">
                 Deposit (TZS)
               </label>
@@ -366,7 +410,9 @@ function NewLeasePageContent() {
                 className="input"
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="form-group">
               <label htmlFor="rent_due_day" className="label">
                 Rent Due Day <span className="text-danger-500">*</span>
@@ -384,6 +430,24 @@ function NewLeasePageContent() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 md:col-span-2">
+              <p className="text-sm font-semibold text-slate-500">Monthly Charge Preview</p>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-500">Rent</p>
+                  <p className="font-bold text-slate-900">{formatCurrency(formData.monthly_rent)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Service</p>
+                  <p className="font-bold text-slate-900">{formatCurrency(formData.service_charge)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Total</p>
+                  <p className="font-bold text-primary-700">{formatCurrency(formData.monthly_rent + formData.service_charge)}</p>
+                </div>
+              </div>
             </div>
           </div>
 

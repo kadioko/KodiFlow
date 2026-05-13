@@ -21,6 +21,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -28,7 +29,7 @@ interface SidebarProps {
   user: User
 }
 
-const navigation = [
+export const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Properties', href: '/properties', icon: Building2 },
   { name: 'Sections', href: '/sections', icon: Layers },
@@ -105,6 +106,73 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+interface MobileSidebarProps {
+  user: User
+  open: boolean
+  onClose: () => void
+}
+
+export function MobileSidebar({ user, open, onClose }: MobileSidebarProps) {
+  const pathname = usePathname()
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close navigation menu"
+      />
+      <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-slate-950 text-white shadow-2xl">
+        <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
+          <BrandLogo href="/dashboard" size="sm" tone="light" priorityLabel="KodiFlow dashboard" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-2 text-white/75 transition hover:bg-white/10 hover:text-white"
+            aria-label="Close navigation menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {navigation.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={onClose}
+                className={isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}
+              >
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <span className="ml-3">{item.name}</span>
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="border-t border-white/10 p-4">
+          <div className="flex items-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/10">
+              <span className="text-sm font-bold text-white">
+                {user.email?.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="ml-3 min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{user.email}</p>
+              <p className="text-xs text-white/50">Property Manager</p>
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   )
 }

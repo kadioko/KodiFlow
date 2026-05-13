@@ -324,6 +324,12 @@ export default function LeaseDetailPage() {
               </button>
             </>
           )}
+          {!isActive && (
+            <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${lease.unit_id}`} className="btn-primary">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Renew / New Lease
+            </Link>
+          )}
         </div>
       </div>
 

@@ -77,6 +77,7 @@ export const LEASE_STATUSES = [
 export const BILLING_FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
+  { value: 'semi_annually', label: 'Every 6 Months' },
   { value: 'annually', label: 'Annually' },
 ] as const;
 

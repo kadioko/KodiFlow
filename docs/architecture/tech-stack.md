@@ -18,6 +18,7 @@ Next.js 16 App Router
     |-- Client Components for forms and interactions
     |-- Tailwind CSS 4 for styling
     |-- PWA manifest and service worker assets
+    |-- Theme provider for light/dark appearance
     |
     v
 Supabase Platform
@@ -119,11 +120,12 @@ src/
  app/                    # Next.js App Router
     auth/               # Login, registration, forgot password
     dashboard/          # Dashboard metrics and alerts
+    settings/           # Preferences, install help, theme controls
     properties/         # Property CRUD and detail pages
     sections/           # Property section list/create/edit pages
     units/              # Unit list/detail/create/edit pages
     tenants/            # Tenant list/detail/create/edit pages
-    leases/             # Lease list/detail/create pages
+    leases/             # Lease list/detail/create/edit pages
     invoices/           # Invoice list/detail/generation pages
     payments/           # Payment list/detail/record pages
     expenses/           # Expense list page
@@ -132,9 +134,11 @@ src/
     tenant-portal/      # Tenant-scoped self-service portal
     reports/            # Financial and operational reports
  components/
+    brand/              # Shared logo and brand mark
     layout/             # Header and sidebar
     notifications/      # Notification manager
     pwa/                # PWA provider
+    theme/              # Light/dark theme provider
     ui/                 # Reusable UI helpers
  lib/
     supabase/           # Supabase clients and generated types
@@ -148,14 +152,23 @@ src/
 
 - **Properties**: Property cards with sections, units, vacancy, and occupancy summaries.
 - **Sections**: Floors, blocks, wings, areas, compounds, market zones, and parking areas.
-- **Units**: Unit statuses, rent, section, property, and active tenant display.
-- **Tenants**: Tenant contact details, active lease counts, and outstanding balance summaries.
-- **Invoices**: Monthly invoice summaries, status filtering, reminders, and payment links.
-- **Payments**: Payment list, payment details, invoice references, and tenant/property context.
+- **Units**: Unit statuses, rent, section, property, active tenant display, and linked lease history.
+- **Tenants**: Tenant contact details, active lease counts, linked units, invoices, payments, and outstanding balance summaries.
+- **Leases**: Tenant/unit/property links, active status tracking, editing, renewal entry points, rent, deposits, service charges, and billing frequency.
+- **Invoices**: Monthly, quarterly, six-month, and annual invoice summaries, status filtering, reminders, line items, and payment links.
+- **Payments**: Payment list, payment details, invoice references, tenant/property context, and invoice charge breakdowns.
 - **Expenses**: Expense listing and financial reporting integration.
 - **Utilities**: Water/electricity readings with auto previous reading and charge previews.
 - **Documents**: PDF/image uploads, metadata editing, downloads, and delete cleanup.
 - **Reports**: Monthly financial, occupancy, tenant mix, deposit, expense, and utility summaries.
+- **Settings**: Currency, language, late fees, PWA install help, and light/dark mode.
+
+### Navigation And Branding
+
+- Desktop navigation uses the persistent sidebar.
+- Mobile navigation uses the header menu drawer.
+- Shared brand presentation lives in `src/components/brand/BrandLogo.tsx`.
+- PWA icons and manifest assets live under `public/icons` and `public/manifest.json`.
 
 ### Tenant Portal
 
@@ -191,6 +204,7 @@ src/
 - Server Components reduce client-side JavaScript.
 - Route-level code splitting is provided by Next.js.
 - Tailwind CSS keeps styling lightweight.
+- Mobile navigation avoids loading a separate mobile app shell.
 - Heavy report widgets should be lazy-loaded if reports grow.
 
 ### Backend

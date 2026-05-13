@@ -1,18 +1,18 @@
 # Local Development Setup
 
-Get KodiFlow running on your local machine for development.
+Get KodiFlow running locally for development.
 
 ## Prerequisites
 
-- Node.js 18+ (Download from [nodejs.org](https://nodejs.org))
-- npm (comes with Node.js)
+- Node.js 20+ recommended
+- npm
 - Git
-- A Supabase account (free tier)
-- Supabase CLI (see step 3 below)
+- A Supabase account
+- Supabase CLI
 
-## Step-by-Step Setup
+## Setup
 
-### 1. Clone the Repository
+### 1. Clone The Repository
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/kodiflow.git
@@ -25,69 +25,43 @@ cd kodiflow
 npm install
 ```
 
-This installs:
-
-- Next.js 14
-- React 18
-- TypeScript
-- Tailwind CSS
-- Supabase client libraries
-- Lucide icons
-- Other dependencies
+This installs Next.js 16, React 19, TypeScript 6, Tailwind CSS 4, Supabase client libraries, Lucide icons, and app dependencies.
 
 ### 3. Install Supabase CLI
 
-The Supabase CLI enables local development, database migrations, and project management:
-
-**macOS (Homebrew)**:
+See [Supabase CLI setup](../deployment/supabase-cli.md), or install with one of these commands:
 
 ```bash
 brew install supabase/tap/supabase
 ```
-
-**Windows (Scoop)**:
 
 ```powershell
 scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
 scoop install supabase
 ```
 
-**Linux / npm**:
-
 ```bash
 npm install -g supabase
 ```
 
-Verify installation:
+Verify:
 
 ```bash
 supabase --version
 ```
 
-See [Supabase CLI Guide](../deployment/supabase-cli.md) for complete documentation.
-
 ### 4. Set Up Supabase
 
-Follow the [Supabase Setup Guide](../deployment/supabase-setup.md):
-
-1. Create Supabase project
-2. Run the database schema
-3. Get your API keys
-4. Configure authentication
-
-Or use the CLI:
+Follow [Supabase setup](../deployment/supabase-setup.md), then link your project if you use the CLI:
 
 ```bash
-# Login to Supabase
 supabase login
-
-# Link to your project
 supabase link --project-ref YOUR_PROJECT_REF
 ```
 
-### 4. Configure Environment Variables
+### 5. Configure Environment Variables
 
-Create `.env.local` file in project root:
+Create `.env.local` in the project root:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
@@ -97,154 +71,98 @@ NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
 ```
 
-**Never commit this file!** It's already in `.gitignore`.
+Never commit `.env.local`.
 
-### 5. Start Development Server
+### 6. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-You should see:
-
-- Landing page at `/`
-- Login page at `/auth/login`
+Open [http://localhost:3000](http://localhost:3000).
 
 ### 7. Create First Account
 
-1. Go to `http://localhost:3000/auth/register`
-2. Create your admin account
-3. Verify email (check Supabase Auth logs if emails not configured)
-4. Log in
+1. Go to `http://localhost:3000/auth/register`.
+2. Create your admin account.
+3. Verify email if confirmation is enabled.
+4. Log in.
 
-### 8. Seed Demo Data (Optional)
+### 8. Seed Demo Data
 
-To test with sample data:
-
-1. Get your user ID from Supabase Auth → Users
-2. Edit `supabase/seed.sql`
-3. Replace `USER_ID_HERE` with your actual UUID
-4. Run in Supabase SQL Editor
+1. Get your user ID from Supabase Auth -> Users.
+2. Replace `USER_ID_HERE` in `supabase/seed.sql`.
+3. Run the seed SQL in Supabase SQL Editor.
 
 ## Available Scripts
 
 | Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server (hot reload) |
+| --- | --- |
+| `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
 | `npm run type-check` | Run TypeScript compiler |
+| `npm run test` | Run Vitest tests |
+| `npm run db:types` | Regenerate Supabase database types |
 
 ## Development Workflow
 
-### Typical Workflow
+1. Start the dev server with `npm run dev`.
+2. Make changes in `src/`.
+3. Test in desktop and mobile viewports.
+4. Run `npm run type-check`.
+5. Run `npm run build` before larger merges or deployments.
 
-1. **Start dev server**: `npm run dev`
-2. **Make changes**: Edit files in `src/`
-3. **See changes**: Browser auto-refreshes
-4. **Check types**: Run `npm run type-check`
-5. **Commit**: `git commit -am "Description"`
-
-### Adding New Features
-
-1. Create/edit files in `src/app/`
-2. Follow existing patterns
-3. Use TypeScript for type safety
-4. Test on multiple screen sizes
-5. Run `npm run type-check` before committing
-
-### Database Changes
-
-1. Test in Supabase SQL Editor first
-2. Document in `docs/database-changes.md`
-3. Update seed data if needed
-4. Test with fresh database
-
-## Project Structure for Development
+## Project Structure
 
 ```text
 src/
-├── app/                    # Pages (Next.js App Router)
-│   ├── page.tsx           # Landing page
-│   ├── layout.tsx         # Root layout
-│   ├── globals.css        # Global styles
-│   ├── (auth)/            # Auth routes
-│   │   ├── login/page.tsx
-│   │   └── register/page.tsx
-│   ├── dashboard/         # Dashboard
-│   ├── properties/        # Property CRUD
-│   ├── tenants/           # Tenant management
-│   ├── units/             # Unit management
-│   ├── leases/            # Lease management
-│   ├── invoices/          # Invoices
-│   ├── payments/          # Payments
-│   └── reports/           # Reports (to build)
-├── components/            # Reusable components
-│   ├── layout/           # Layout components
-│   │   ├── Sidebar.tsx
-│   │   └── Header.tsx
-│   ├── ui/               # UI components (buttons, inputs)
-│   ├── forms/            # Form components
-│   └── charts/           # Charts (to build)
-├── lib/supabase/         # Supabase setup
-├── types/                # TypeScript types
-└── utils/                # Utility functions
+|-- app/                    # Next.js App Router pages
+|   |-- auth/               # Login, register, forgot password
+|   |-- dashboard/          # Dashboard metrics and alerts
+|   |-- properties/         # Property CRUD and details
+|   |-- sections/           # Property section CRUD
+|   |-- units/              # Unit CRUD and related records
+|   |-- tenants/            # Tenant CRUD and balances
+|   |-- leases/             # Lease create, detail, edit, renewal
+|   |-- invoices/           # Invoice list, detail, generation
+|   |-- payments/           # Payment list, detail, recording
+|   |-- settings/           # Preferences, install help, theme controls
+|   `-- reports/            # Financial and operational reports
+|-- components/
+|   |-- brand/              # Logo and brand mark
+|   |-- layout/             # Header, sidebar, mobile navigation
+|   |-- pwa/                # PWA provider
+|   |-- theme/              # Light/dark theme provider
+|   `-- ui/                 # Reusable UI helpers
+|-- lib/supabase/           # Supabase clients and generated types
+|-- types/                  # App-level TypeScript types
+`-- utils/                  # Constants, currency, billing, reminders
 ```
 
-## Common Development Tasks
+## Database Changes
 
-### Add a New Page
+1. Create or update a migration in `supabase/migrations/`.
+2. Apply the migration locally or in Supabase.
+3. Run `npm run db:types`.
+4. Update app-level helper types in `src/types/index.ts` only when needed.
+5. Test RLS policies with authenticated users.
+6. Run `npm run type-check` and `npm run build`.
 
-1. Create folder: `src/app/new-page/`
-2. Create `page.tsx`:
+## UI Testing Checklist
 
-```tsx
-export default function NewPage() {
-  return (
-    <div>
-      <h1>New Page</h1>
-    </div>
-  )
-}
-```
-
-3. Access at `http://localhost:3000/new-page`
-
-<!-- markdownlint-disable MD029 -->
-
-### Add a New Database Table
-
-1. Write SQL in Supabase SQL Editor
-2. Add types to `src/types/index.ts`
-3. Add RLS policies
-4. Create CRUD functions
-5. Build UI for the feature
-
-### Add a New Component
-
-1. Create file in `src/components/`
-2. Export component:
-
-```tsx
-'use client' // if using client features
-
-export function MyComponent() {
-  return <div>Component</div>
-}
-```
-
-3. Import and use in pages
-
-<!-- markdownlint-enable MD029 -->
+- Desktop sidebar navigation works.
+- Mobile header menu opens and closes.
+- Settings PWA install help appears on mobile.
+- Light and dark mode toggle correctly.
+- Tenant, unit, property, and lease detail/edit routes load from list links.
+- Lease creation and editing preserve tenant, unit, rent, service charge, deposit, billing frequency, and status.
+- Invoice and payment screens show charge line items clearly.
 
 ## Troubleshooting
 
-### Port Already in Use
-
-If port 3000 is taken:
+### Port Already In Use
 
 ```bash
 npm run dev -- --port 3001
@@ -252,15 +170,11 @@ npm run dev -- --port 3001
 
 ### Type Errors
 
-Run type checker:
-
 ```bash
 npm run type-check
 ```
 
 ### Module Not Found
-
-Reinstall dependencies:
 
 ```bash
 rm -rf node_modules package-lock.json
@@ -269,67 +183,15 @@ npm install
 
 ### Supabase Connection Issues
 
-- Check `.env.local` has correct values
-- Verify Supabase project is active
-- Check RLS policies allow your operations
-
-### Hot Reload Not Working
-
-- Restart dev server: `Ctrl+C`, then `npm run dev`
-- Check for syntax errors in console
-- Clear browser cache
-
-## Best Practices
-
-### Code Style
-
-- Use TypeScript for everything
-- Follow existing file naming conventions
-- Use Tailwind utility classes
-- Extract reusable components
-
-### Git
-
-- Commit often with descriptive messages
-- Create feature branches: `git checkout -b feature/name`
-- Pull before pushing to avoid conflicts
-
-### Testing
-
-- Test on mobile viewport
-- Test with different users/permissions
-- Verify database operations work
-- Check console for errors
-
-### Performance
-- Use Server Components where possible
-- Lazy load heavy components
-- Optimize images
-- Minimize client-side JavaScript
-
-## VS Code Extensions (Recommended)
-
-- **ESLint**: Linting support
-- **Prettier**: Code formatting
-- **Tailwind CSS IntelliSense**: Autocomplete classes
-- **TypeScript Importer**: Auto-imports
-- **GitLens**: Git history
-
-## Getting Help
-
-- Check [ROADMAP.md](../../ROADMAP.md) for planned features
-- Review [architecture docs](../architecture/)
-- See [Supabase docs](https://supabase.com/docs)
-- See [Next.js docs](https://nextjs.org/docs)
+- Check `.env.local`.
+- Confirm the project is active.
+- Confirm the anon key is used in browser code.
+- Check RLS policies for the current user.
 
 ## Next Steps
 
-1. [Set up Vercel deployment](../deployment/vercel-deployment.md)
-2. Review [contributing guidelines](./contributing.md)
-3. Check [user guides](../user-guides/) for feature documentation
-
----
-
-**Happy Coding!**
+1. [Deploy to Vercel](../deployment/vercel-deployment.md).
+2. Read the [app user guide](../user-guides/app-user-guide.md).
+3. Review the [tech stack](../architecture/tech-stack.md).
 
 **Last Updated**: May 2026

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { BILLING_FREQUENCIES, LEASE_STATUSES, LEASE_TYPES } from '@/utils/constants'
+import { formatCurrency } from '@/utils/currency'
 
 type LeaseStatus = 'active' | 'expired' | 'terminated' | 'renewed' | 'pending'
 type LeaseType = 'residential' | 'commercial'
@@ -35,6 +36,7 @@ interface LeaseFormData {
   start_date: string
   end_date: string
   monthly_rent: number
+  service_charge: number
   deposit_amount: number
   rent_due_day: number
   lease_type: LeaseType
@@ -70,6 +72,7 @@ export default function EditLeasePage() {
     start_date: '',
     end_date: '',
     monthly_rent: 0,
+    service_charge: 0,
     deposit_amount: 0,
     rent_due_day: 1,
     lease_type: 'residential',
@@ -100,7 +103,7 @@ export default function EditLeasePage() {
       return
     }
 
-    const [leaseResult, tenantsResult, unitsResult] = await Promise.all([
+    const [leaseResult, tenantsResult, unitsResult, serviceChargeResult] = await Promise.all([
       supabase
         .from('leases')
         .select('*')
@@ -117,6 +120,14 @@ export default function EditLeasePage() {
         .select('id, unit_name, property_id, monthly_rent, usage_type, status, properties(name)')
         .eq('user_id', user.id)
         .order('unit_name'),
+      supabase
+        .from('charges')
+        .select('id, amount')
+        .eq('lease_id', leaseId)
+        .eq('user_id', user.id)
+        .eq('charge_type', 'service_charge')
+        .eq('is_active', true)
+        .maybeSingle(),
     ])
 
     if (leaseResult.error || !leaseResult.data) {
@@ -134,6 +145,7 @@ export default function EditLeasePage() {
       start_date: lease.start_date,
       end_date: lease.end_date,
       monthly_rent: lease.monthly_rent,
+      service_charge: serviceChargeResult.data?.amount || 0,
       deposit_amount: lease.deposit_amount || 0,
       rent_due_day: lease.rent_due_day || 1,
       lease_type: lease.lease_type,
@@ -223,6 +235,61 @@ export default function EditLeasePage() {
     }
   }
 
+  const syncServiceCharge = async (userId: string) => {
+    const supabase = createClient()
+    const { data: existingCharge } = await supabase
+      .from('charges')
+      .select('id')
+      .eq('lease_id', leaseId)
+      .eq('user_id', userId)
+      .eq('charge_type', 'service_charge')
+      .maybeSingle()
+
+    if (formData.service_charge > 0) {
+      if (existingCharge) {
+        const { error: updateError } = await supabase
+          .from('charges')
+          .update({
+            charge_name: 'Service Charge',
+            amount: formData.service_charge,
+            frequency: 'monthly',
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingCharge.id)
+          .eq('user_id', userId)
+
+        return updateError
+      }
+
+      const { error: insertError } = await supabase
+        .from('charges')
+        .insert({
+          user_id: userId,
+          lease_id: leaseId!,
+          charge_name: 'Service Charge',
+          charge_type: 'service_charge',
+          amount: formData.service_charge,
+          frequency: 'monthly',
+          is_active: true,
+        })
+
+      return insertError
+    }
+
+    if (existingCharge) {
+      const { error: deactivateError } = await supabase
+        .from('charges')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', existingCharge.id)
+        .eq('user_id', userId)
+
+      return deactivateError
+    }
+
+    return null
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setSaving(true)
@@ -262,6 +329,13 @@ export default function EditLeasePage() {
 
     if (updateError) {
       setError(updateError.message)
+      setSaving(false)
+      return
+    }
+
+    const serviceChargeError = await syncServiceCharge(user.id)
+    if (serviceChargeError) {
+      setError(serviceChargeError.message)
       setSaving(false)
       return
     }
@@ -346,14 +420,38 @@ export default function EditLeasePage() {
             <input id="monthly_rent" required min="0" type="number" className="input" value={formData.monthly_rent} onChange={(event) => setFormData({ ...formData, monthly_rent: parseFloat(event.target.value) || 0 })} />
           </div>
           <div className="form-group">
+            <label htmlFor="service_charge" className="label">Service Charge</label>
+            <input id="service_charge" min="0" type="number" className="input" value={formData.service_charge} onChange={(event) => setFormData({ ...formData, service_charge: parseFloat(event.target.value) || 0 })} />
+          </div>
+          <div className="form-group">
             <label htmlFor="deposit_amount" className="label">Deposit</label>
             <input id="deposit_amount" min="0" type="number" className="input" value={formData.deposit_amount} onChange={(event) => setFormData({ ...formData, deposit_amount: parseFloat(event.target.value) || 0 })} />
           </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="form-group">
             <label htmlFor="rent_due_day" className="label">Rent Due Day</label>
             <select id="rent_due_day" required className="input" value={formData.rent_due_day} onChange={(event) => setFormData({ ...formData, rent_due_day: parseInt(event.target.value) })}>
               {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{day}</option>)}
             </select>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 md:col-span-2">
+            <p className="text-sm font-semibold text-slate-500">Monthly Charge Preview</p>
+            <div className="mt-2 grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-slate-500">Rent</p>
+                <p className="font-bold text-slate-900">{formatCurrency(formData.monthly_rent)}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Service</p>
+                <p className="font-bold text-slate-900">{formatCurrency(formData.service_charge)}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Total</p>
+                <p className="font-bold text-primary-700">{formatCurrency(formData.monthly_rent + formData.service_charge)}</p>
+              </div>
+            </div>
           </div>
         </div>
 

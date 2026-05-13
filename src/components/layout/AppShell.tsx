@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { Sidebar } from '@/components/layout/Sidebar'
+import { MobileSidebar, Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 
 interface AppShellProps {
@@ -17,6 +17,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const isPublicPage = pathname === '/' || publicPrefixes.some((prefix) => pathname.startsWith(prefix))
 
@@ -53,8 +54,9 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen bg-gray-50">
       <div className="flex h-screen overflow-hidden">
         <Sidebar user={user} />
+        <MobileSidebar user={user} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <Header user={user} />
+          <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             {children}
           </main>

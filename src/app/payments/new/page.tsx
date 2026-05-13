@@ -20,6 +20,13 @@ interface Invoice {
   due_date: string
 }
 
+interface InvoiceItem {
+  id: string
+  item_name: string
+  item_type: string
+  amount: number
+}
+
 function NewPaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -29,6 +36,7 @@ function NewPaymentPageContent() {
   const [error, setError] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([])
 
   const [formData, setFormData] = useState<{
     invoice_id: string
@@ -45,6 +53,18 @@ function NewPaymentPageContent() {
     reference: '',
     notes: '',
   })
+
+  const fetchInvoiceItems = async (invoiceId: string, userId: string) => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('invoice_items')
+      .select('id, item_name, item_type, amount')
+      .eq('invoice_id', invoiceId)
+      .eq('user_id', userId)
+      .order('created_at')
+
+    setInvoiceItems(data || [])
+  }
 
   // Fetch unpaid/partially paid invoices
   useEffect(() => {
@@ -89,6 +109,7 @@ function NewPaymentPageContent() {
             const selected = formattedInvoices.find(i => i.id === preselectedInvoiceId)
             if (selected) {
               setSelectedInvoice(selected)
+              await fetchInvoiceItems(selected.id, user.id)
               setFormData(prev => ({
                 ...prev,
                 amount: selected.balance,
@@ -101,14 +122,28 @@ function NewPaymentPageContent() {
     fetchInvoices()
   }, [preselectedInvoiceId])
 
-  const handleInvoiceChange = (invoiceId: string) => {
+  const handleInvoiceChange = async (invoiceId: string) => {
     const selected = invoices.find(i => i.id === invoiceId)
     if (selected) {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
       setSelectedInvoice(selected)
+      if (user) {
+        await fetchInvoiceItems(invoiceId, user.id)
+      }
       setFormData(prev => ({
         ...prev,
         invoice_id: invoiceId,
         amount: selected.balance,
+      }))
+    } else {
+      setSelectedInvoice(null)
+      setInvoiceItems([])
+      setFormData(prev => ({
+        ...prev,
+        invoice_id: '',
+        amount: 0,
       }))
     }
   }
@@ -257,6 +292,23 @@ function NewPaymentPageContent() {
                   <p className="font-medium">{formatDate(selectedInvoice.due_date)}</p>
                 </div>
               </div>
+
+              {invoiceItems.length > 0 && (
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <h4 className="mb-2 text-sm font-semibold text-gray-900">Charge Breakdown</h4>
+                  <div className="space-y-2">
+                    {invoiceItems.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                        <div>
+                          <p className="font-medium text-gray-900">{item.item_name}</p>
+                          <p className="capitalize text-gray-500">{item.item_type.replace('_', ' ')}</p>
+                        </div>
+                        <p className="font-semibold text-gray-900">{formatCurrency(item.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

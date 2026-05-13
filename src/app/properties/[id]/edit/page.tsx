@@ -1,14 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Building2, Loader2 } from 'lucide-react'
 import { PROPERTY_TYPES } from '@/utils/constants'
 
-export default function EditPropertyPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function EditPropertyPage() {
   const router = useRouter()
+  const params = useParams()
+  const propertyId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -21,8 +27,14 @@ export default function EditPropertyPage({ params }: { params: { id: string } })
   })
 
   useEffect(() => {
+    if (!propertyId) {
+      setError('Property not found')
+      setLoading(false)
+      return
+    }
+
     fetchProperty()
-  }, [params.id])
+  }, [propertyId])
 
   const fetchProperty = async () => {
     const supabase = createClient()
@@ -36,7 +48,7 @@ export default function EditPropertyPage({ params }: { params: { id: string } })
     const { data, error: fetchError } = await supabase
       .from('properties')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', propertyId)
       .eq('user_id', user.id)
       .single()
 
@@ -78,13 +90,13 @@ export default function EditPropertyPage({ params }: { params: { id: string } })
         description: formData.description || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', propertyId)
       .eq('user_id', user.id)
 
     if (updateError) {
       setError(updateError.message)
     } else {
-      router.push(`/properties/${params.id}`)
+      router.push(`/properties/${propertyId}`)
       router.refresh()
     }
 
@@ -103,7 +115,7 @@ export default function EditPropertyPage({ params }: { params: { id: string } })
     <div className="max-w-2xl mx-auto">
       <div className="page-header">
         <div className="flex items-center">
-          <Link href={`/properties/${params.id}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
+          <Link href={`/properties/${propertyId}`} className="mr-4 p-2 rounded-lg hover:bg-gray-100">
             <ArrowLeft className="h-5 w-5 text-gray-500" />
           </Link>
           <div>
@@ -184,7 +196,7 @@ export default function EditPropertyPage({ params }: { params: { id: string } })
           </div>
 
           <div className="flex items-center justify-end space-x-4 pt-4">
-            <Link href={`/properties/${params.id}`} className="btn-secondary">
+            <Link href={`/properties/${propertyId}`} className="btn-secondary">
               Cancel
             </Link>
             <button type="submit" disabled={saving} className="btn-primary">

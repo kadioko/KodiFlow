@@ -510,6 +510,11 @@ export default function UnitDetailPage() {
                           <Link href={`/leases/${lease.id}/edit`} className="text-slate-600 hover:text-slate-900 font-medium">
                             Edit
                           </Link>
+                          {lease.status !== 'active' && (
+                            <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${unitId}`} className="text-success-600 hover:text-success-800 font-medium">
+                              Renew
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>

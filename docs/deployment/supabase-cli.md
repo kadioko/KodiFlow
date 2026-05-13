@@ -90,8 +90,8 @@ supabase db push
 # Reset local database
 supabase db reset
 
-# Generate TypeScript types from database schema
-supabase gen types typescript --project-id YOUR_PROJECT_REF --schema public > src/types/supabase.ts
+# Generate TypeScript types from the linked database schema
+npm run db:types
 ```
 
 ### Local Development
@@ -179,6 +179,12 @@ supabase storage upload documents/my-file.pdf ./local-file.pdf
    supabase db push
    ```
 
+6. **Regenerate app database types**:
+
+   ```bash
+   npm run db:types
+   ```
+
 ### Method 2: Using SQL Editor + CLI
 
 1. **Make changes in Supabase SQL Editor** (test first)
@@ -197,6 +203,12 @@ supabase storage upload documents/my-file.pdf ./local-file.pdf
    git add supabase/migrations/
    git commit -m "Add new database migration"
    git push
+   ```
+
+5. **Regenerate database types**:
+
+   ```bash
+   npm run db:types
    ```
 
 ## Environment Variables
@@ -303,7 +315,7 @@ docker ps
 2. **Commit migration files** to version control
 3. **Use descriptive migration names**: `add_user_preferences`, `create_invoices_table`
 4. **Backup before major changes** using Supabase dashboard
-5. **Generate types regularly** to keep TypeScript in sync with database
+5. **Generate types regularly** with `npm run db:types` to keep TypeScript in sync with the database
 
 ## Next Steps
 

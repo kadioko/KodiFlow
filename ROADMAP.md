@@ -4,12 +4,12 @@
 
 KodiFlow is a modern property management system for residential and commercial rental operations.
 
-**Current Status**: v0.5.0 - Core platform, financial workflows, reporting, utilities, documents, PWA, and tenant self-service foundation complete  
+**Current Status**: v0.6.0 - Core platform, linked property/tenant/unit/lease workflows, financial workflows, reporting, utilities, documents, mobile navigation, PWA, and tenant self-service foundation complete  
 **Stack**: Next.js 16 + React 19 + TypeScript 6 + Tailwind CSS 4 + Supabase PostgreSQL/Auth/Storage
 
 ---
 
-## Completed Features ✅
+## Completed Features
 
 ### Foundation and Platform
 
@@ -21,6 +21,8 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Generated database types workflow
 - [x] Sidebar dashboard layout
 - [x] Responsive UI foundation
+- [x] Mobile header menu drawer
+- [x] Shared KodiFlow logo and PWA icon assets
 - [x] GitHub and Vercel deployment foundation
 
 ### Property and Tenant Management
@@ -29,17 +31,22 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Property sections for floors, blocks, wings, areas, compounds, market zones, and parking areas
 - [x] Unit management with unit type, usage type, status, rent, size, and section support
 - [x] Tenant management for individuals, businesses, and organizations
+- [x] Detail/edit route stabilization for tenants, units, properties, and leases
+- [x] Cross-links between properties, units, tenants, leases, invoices, and payments
 - [x] Tenant portal foundation for tenant-linked accounts
 - [x] Dashboard property visibility controls persisted to user profile
 
 ### Lease Management
 
 - [x] Lease creation and detail pages
+- [x] Lease edit page
 - [x] Active, expired, terminated, renewed, and pending lease statuses
 - [x] Lease expiry warnings
 - [x] Lease renewal workflow
+- [x] Unit occupancy synchronization through active leases
 - [x] Rent escalation fields and renewal support
 - [x] Monthly, quarterly, six-month, and annual billing frequencies
+- [x] Separate service charge capture on leases
 - [x] Security deposit tracking fields and reporting summaries
 
 ### Invoices, Payments, and Billing
@@ -48,8 +55,10 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Bulk invoice generation
 - [x] Invoice auto-numbering
 - [x] Invoice item support
+- [x] Rent and service charge as separate invoice line items
 - [x] Six-month billing invoice calculations
 - [x] Full and partial payment recording
+- [x] Invoice charge breakdown on payment recording
 - [x] Payment prefill from invoice pages
 - [x] Automatic invoice balance calculations
 - [x] Invoice statuses: unpaid, partially paid, paid, overdue, cancelled
@@ -96,7 +105,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ---
 
-## Current Priorities 🚧
+## Current Priorities
 
 ### Phase 8: Property Operations
 
@@ -124,6 +133,9 @@ KodiFlow is a modern property management system for residential and commercial r
 ### Phase 11: Mobile and PWA
 
 - [x] **Progressive Web App** - Installable app and basic offline support
+- [x] **Settings Install Help** - Mobile add-to-home-screen guidance in Settings
+- [x] **Light/Dark Mode** - Device-saved appearance controls
+- [x] **Mobile Navigation** - Header menu drawer for mobile layouts
 - [x] **Push Notifications** - Real-time alerts for overdue invoices and lease events
 - [x] **Camera Integration** - Photo capture for inspections, documents, and maintenance
 - [ ] **Mobile App** - React Native or Flutter app after PWA validation
@@ -141,7 +153,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ---
 
-## Technical Backlog 🔧
+## Technical Backlog
 
 ### Performance
 
@@ -155,6 +167,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 - [ ] Integration tests for Supabase flows
 - [ ] E2E tests with Playwright
+- [ ] Browser regression tests for mobile navigation, theme switching, PWA install help, route detail pages, lease editing, invoice generation, and payment recording
 - [ ] Test database seed/reset workflow
 - [ ] Regression tests for invoice generation and payment allocation
 - [ ] Utility meter reading tests
@@ -179,7 +192,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 ---
 
-## Recommended Next Sprint 🎯
+## Recommended Next Sprint
 
 1. **Maintenance Requests** - Add maintenance request CRUD, status tracking, and dashboard alerts.
 2. **Vendor Management** - Add vendor directory and link vendors to expenses/maintenance.

@@ -1,7 +1,7 @@
 'use client'
 
 import { User } from '@supabase/supabase-js'
-import { Search, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Search, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { NotificationManager } from '@/components/notifications/NotificationManager'
@@ -11,9 +11,10 @@ interface HeaderProps {
   user: User
   dashboardVisible?: boolean
   onToggleDashboard?: () => void
+  onOpenMobileMenu?: () => void
 }
 
-export function Header({ user, dashboardVisible = true, onToggleDashboard }: HeaderProps) {
+export function Header({ user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -26,6 +27,14 @@ export function Header({ user, dashboardVisible = true, onToggleDashboard }: Hea
   return (
     <header className="flex h-16 items-center justify-between border-b border-white/70 bg-white/85 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenMobileMenu}
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <div className="lg:hidden">
           <BrandLogo href="/dashboard" size="sm" tone="dark" priorityLabel="KodiFlow dashboard" />
         </div>

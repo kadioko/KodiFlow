@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -54,6 +54,8 @@ interface Unit {
 
 interface Lease {
   id: string
+  tenant_id: string
+  unit_id: string
   tenant_name: string
   unit_name: string
   start_date: string
@@ -83,8 +85,14 @@ interface Payment {
   invoice_number: string
 }
 
-export default function PropertyDetailPage({ params }: { params: { id: string } }) {
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function PropertyDetailPage() {
   const router = useRouter()
+  const params = useParams()
+  const propertyId = getRouteParam(params.id)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -109,8 +117,14 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
   })
 
   useEffect(() => {
+    if (!propertyId) {
+      setError('Property not found')
+      setLoading(false)
+      return
+    }
+
     fetchPropertyData()
-  }, [params.id])
+  }, [propertyId])
 
   const fetchPropertyData = async () => {
     const supabase = createClient()
@@ -125,7 +139,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
     const { data: propertyData } = await supabase
       .from('properties')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', propertyId)
       .eq('user_id', user.id)
       .single()
 
@@ -141,7 +155,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
     const { data: sectionsData } = await supabase
       .from('property_sections')
       .select('*, units(count)')
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
       .eq('user_id', user.id)
 
     if (sectionsData) {
@@ -157,9 +171,9 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
       .select(`
         *,
         property_sections(name),
-        leases!inner(tenant_id, status, tenants(full_name, business_name))
+        leases(tenant_id, status, tenants(full_name, business_name))
       `)
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
       .eq('user_id', user.id)
 
     if (unitsData) {
@@ -193,7 +207,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
         tenants(full_name, business_name),
         units(unit_name)
       `)
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -220,7 +234,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
         tenants(full_name, business_name),
         units(unit_name)
       `)
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -252,7 +266,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
         tenants(full_name, business_name),
         rent_invoices(invoice_number)
       `)
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
       .eq('user_id', user.id)
       .order('payment_date', { ascending: false })
       .limit(20)
@@ -280,22 +294,22 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
     const { data: unitsCheck } = await supabase
       .from('units')
       .select('id', { count: 'exact' })
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
 
     const { data: leasesCheck } = await supabase
       .from('leases')
       .select('id', { count: 'exact' })
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
 
     const { data: invoicesCheck } = await supabase
       .from('rent_invoices')
       .select('id', { count: 'exact' })
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
 
     const { data: paymentsCheck } = await supabase
       .from('payments')
       .select('id', { count: 'exact' })
-      .eq('property_id', params.id)
+      .eq('property_id', propertyId)
 
     if ((unitsCheck && unitsCheck.length > 0) || 
         (leasesCheck && leasesCheck.length > 0) ||
@@ -310,7 +324,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
     const { error: deleteError } = await supabase
       .from('properties')
       .delete()
-      .eq('id', params.id)
+      .eq('id', propertyId)
       .eq('user_id', user.id)
 
     if (deleteError) {
@@ -376,7 +390,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
           </div>
         </div>
         <div className="flex space-x-3">
-          <Link href={`/properties/${params.id}/edit`} className="btn-secondary">
+          <Link href={`/properties/${propertyId}/edit`} className="btn-secondary">
             <Edit2 className="h-4 w-4 mr-2" />
             Edit
           </Link>
@@ -510,7 +524,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Sections</h3>
-              <Link href={`/sections/new?property=${params.id}`} className="btn-primary">
+              <Link href={`/sections/new?property=${propertyId}`} className="btn-primary">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Section
               </Link>
@@ -548,7 +562,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Units</h3>
-              <Link href={`/units/new?property=${params.id}`} className="btn-primary">
+              <Link href={`/units/new?property=${propertyId}`} className="btn-primary">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Unit
               </Link>
@@ -569,7 +583,11 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
                 <tbody className="table-body">
                   {units.map((unit) => (
                     <tr key={unit.id} className="hover:bg-gray-50">
-                      <td className="table-cell font-medium">{unit.unit_name}</td>
+                      <td className="table-cell font-medium">
+                        <Link href={`/units/${unit.id}`} className="text-primary-600 hover:underline">
+                          {unit.unit_name}
+                        </Link>
+                      </td>
                       <td className="table-cell">{unit.section_name || '-'}</td>
                       <td className="table-cell">{unit.unit_type}</td>
                       <td className="table-cell">
@@ -616,13 +634,22 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
                     <th className="table-header-cell">End Date</th>
                     <th className="table-header-cell">Rent</th>
                     <th className="table-header-cell">Status</th>
+                    <th className="table-header-cell">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="table-body">
                   {leases.map((lease) => (
                     <tr key={lease.id} className="hover:bg-gray-50">
-                      <td className="table-cell font-medium">{lease.tenant_name}</td>
-                      <td className="table-cell">{lease.unit_name}</td>
+                      <td className="table-cell font-medium">
+                        <Link href={`/tenants/${lease.tenant_id}`} className="text-primary-600 hover:underline">
+                          {lease.tenant_name}
+                        </Link>
+                      </td>
+                      <td className="table-cell">
+                        <Link href={`/units/${lease.unit_id}`} className="text-primary-600 hover:underline">
+                          {lease.unit_name}
+                        </Link>
+                      </td>
                       <td className="table-cell">{formatDate(lease.start_date)}</td>
                       <td className="table-cell">{formatDate(lease.end_date)}</td>
                       <td className="table-cell">{formatCurrency(lease.monthly_rent)}</td>
@@ -634,6 +661,21 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
                         }`}>
                           {lease.status}
                         </span>
+                      </td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <Link href={`/leases/${lease.id}`} className="text-primary-600 hover:text-primary-900 font-medium">
+                            View
+                          </Link>
+                          <Link href={`/leases/${lease.id}/edit`} className="text-slate-600 hover:text-slate-900 font-medium">
+                            Edit
+                          </Link>
+                          {lease.status !== 'active' && (
+                            <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${lease.unit_id}`} className="text-success-600 hover:text-success-800 font-medium">
+                              Renew
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
