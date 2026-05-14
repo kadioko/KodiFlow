@@ -49,6 +49,7 @@ The maintained docs now cover:
 - PWA installation from Settings, including mobile add-to-home-screen help.
 - Light and dark appearance modes.
 - Lease editing, lease renewal, unit occupancy links, and tenant/unit/property detail navigation.
+- Unit ID/door-number capture and search.
 - Monthly, quarterly, six-month, and annual billing frequencies.
 - Separate monthly rent and service charge entry, invoice line items, and payment charge breakdowns.
 

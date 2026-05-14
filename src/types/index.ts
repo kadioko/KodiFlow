@@ -76,6 +76,7 @@ export interface Unit {
   property_id: string;
   section_id: string | null;
   unit_name: string;
+  unit_identifier: string | null;
   unit_type: UnitType;
   usage_type: UsageType;
   monthly_rent: number;

@@ -17,6 +17,7 @@ interface Tenant {
 interface Unit {
   id: string
   unit_name: string
+  unit_identifier: string | null
   property_id: string
   property_name: string
   monthly_rent: number
@@ -97,6 +98,7 @@ function NewLeasePageContent() {
           .select(`
             id,
             unit_name,
+            unit_identifier,
             property_id,
             monthly_rent,
             usage_type,
@@ -112,6 +114,7 @@ function NewLeasePageContent() {
             .map((u: any) => ({
             id: u.id,
             unit_name: u.unit_name,
+            unit_identifier: u.unit_identifier,
             property_id: u.property_id,
             property_name: u.properties?.name,
             monthly_rent: u.monthly_rent,
@@ -287,7 +290,7 @@ function NewLeasePageContent() {
               <option value="">Select a vacant unit</option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
-                  {unit.property_name} - {unit.unit_name} ({unit.usage_type}, {unit.status}, TZS {unit.monthly_rent.toLocaleString()})
+                  {unit.property_name} - {unit.unit_identifier ? `${unit.unit_identifier} / ` : ''}{unit.unit_name} ({unit.usage_type}, {unit.status}, TZS {unit.monthly_rent.toLocaleString()})
                 </option>
               ))}
             </select>

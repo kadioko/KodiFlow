@@ -44,6 +44,7 @@ interface Section {
 interface Unit {
   id: string
   unit_name: string
+  unit_identifier: string | null
   unit_type: string
   usage_type: string
   monthly_rent: number
@@ -585,7 +586,7 @@ export default function PropertyDetailPage() {
                     <tr key={unit.id} className="hover:bg-gray-50">
                       <td className="table-cell font-medium">
                         <Link href={`/units/${unit.id}`} className="text-primary-600 hover:underline">
-                          {unit.unit_name}
+                          {unit.unit_identifier ? `${unit.unit_identifier} / ` : ''}{unit.unit_name}
                         </Link>
                       </td>
                       <td className="table-cell">{unit.section_name || '-'}</td>

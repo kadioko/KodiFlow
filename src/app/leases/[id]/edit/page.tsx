@@ -22,6 +22,7 @@ interface TenantOption {
 interface UnitOption {
   id: string
   unit_name: string
+  unit_identifier: string | null
   property_id: string
   property_name: string
   monthly_rent: number
@@ -117,7 +118,7 @@ export default function EditLeasePage() {
         .order('full_name'),
       supabase
         .from('units')
-        .select('id, unit_name, property_id, monthly_rent, usage_type, status, properties(name)')
+        .select('id, unit_name, unit_identifier, property_id, monthly_rent, usage_type, status, properties(name)')
         .eq('user_id', user.id)
         .order('unit_name'),
       supabase
@@ -165,6 +166,7 @@ export default function EditLeasePage() {
     setUnits((unitsResult.data || []).map((unit: any) => ({
       id: unit.id,
       unit_name: unit.unit_name,
+      unit_identifier: unit.unit_identifier,
       property_id: unit.property_id,
       property_name: unit.properties?.name || 'Property',
       monthly_rent: unit.monthly_rent,
@@ -390,7 +392,7 @@ export default function EditLeasePage() {
               <option value="">Select unit</option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
-                  {unit.property_name} - {unit.unit_name}{unit.status !== 'vacant' && unit.id !== originalUnitId ? ` (${unit.status})` : ''}
+                  {unit.property_name} - {unit.unit_identifier ? `${unit.unit_identifier} / ` : ''}{unit.unit_name}{unit.status !== 'vacant' && unit.id !== originalUnitId ? ` (${unit.status})` : ''}
                 </option>
               ))}
             </select>

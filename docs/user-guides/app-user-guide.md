@@ -72,7 +72,7 @@ To add a unit:
 1. Go to **Units**.
 2. Click **Add Unit**.
 3. Select the property and optional section.
-4. Enter the unit name, type, usage type, rent, size, and status.
+4. Enter the unit name, unit ID or door number, type, usage type, rent, size, and status.
 5. Save.
 
 Unit status meanings:
@@ -84,6 +84,8 @@ Unit status meanings:
 - **Inactive**: Not currently used.
 
 When you create an active lease for a unit, KodiFlow marks the unit as occupied. When a lease is terminated or moved away from a unit, KodiFlow can mark that unit vacant if no other active lease remains.
+
+Use **Unit ID / Door Number** for the building code printed on doors or plans, such as `A-101`, `B2-04`, or `SHOP-G01`. This helps distinguish similar unit names inside the same building.
 
 ## 6. Tenants
 
@@ -227,6 +229,7 @@ Good searches include:
 - Tenant name
 - Property name
 - Unit name
+- Unit ID or door number
 - Invoice number
 
 ## 15. Settings

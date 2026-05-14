@@ -151,6 +151,9 @@ export default async function UnitsPage() {
                         </div>
                         <div className="ml-4">
                           <p className="font-medium text-gray-900">{unit.unit_name}</p>
+                          {unit.unit_identifier && (
+                            <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">ID: {unit.unit_identifier}</p>
+                          )}
                           {unit.section_name && (
                             <p className="text-sm text-gray-500">{unit.section_name}</p>
                           )}
@@ -213,4 +216,3 @@ export default async function UnitsPage() {
     </div>
   )
 }
-

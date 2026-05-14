@@ -57,6 +57,7 @@ CREATE TABLE units (
   property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
   section_id UUID REFERENCES property_sections(id) ON DELETE SET NULL,
   unit_name TEXT NOT NULL,
+  unit_identifier TEXT,
   unit_type TEXT NOT NULL CHECK (unit_type IN ('apartment', 'room', 'house', 'shop', 'office', 'stall', 'kiosk', 'warehouse', 'godown', 'parking_slot', 'land_space', 'other')),
   usage_type TEXT NOT NULL CHECK (usage_type IN ('residential', 'commercial', 'mixed')),
   monthly_rent DECIMAL(12, 2) DEFAULT 0,
@@ -266,6 +267,7 @@ CREATE INDEX idx_units_property_id ON units(property_id);
 CREATE INDEX idx_units_section_id ON units(section_id);
 CREATE INDEX idx_units_user_id ON units(user_id);
 CREATE INDEX idx_units_status ON units(status);
+CREATE UNIQUE INDEX idx_units_property_identifier_unique ON units(user_id, property_id, lower(unit_identifier)) WHERE unit_identifier IS NOT NULL AND btrim(unit_identifier) <> '';
 CREATE INDEX idx_tenants_user_id ON tenants(user_id);
 CREATE INDEX idx_leases_tenant_id ON leases(tenant_id);
 CREATE INDEX idx_leases_unit_id ON leases(unit_id);

@@ -157,6 +157,7 @@ src/
 - Settings PWA install help appears on mobile.
 - Light and dark mode toggle correctly.
 - Tenant, unit, property, and lease detail/edit routes load from list links.
+- Unit create/edit screens save and display Unit ID / Door Number.
 - Lease creation and editing preserve tenant, unit, rent, service charge, deposit, billing frequency, and status.
 - Invoice and payment screens show charge line items clearly.
 

@@ -29,6 +29,7 @@ export default function NewUnitPage() {
     property_id: string
     section_id: string
     unit_name: string
+    unit_identifier: string
     unit_type: 'apartment' | 'room' | 'house' | 'shop' | 'office' | 'stall' | 'kiosk' | 'warehouse' | 'godown' | 'parking_slot' | 'land_space' | 'other'
     usage_type: 'residential' | 'commercial' | 'mixed'
     monthly_rent: number
@@ -39,6 +40,7 @@ export default function NewUnitPage() {
     property_id: '',
     section_id: '',
     unit_name: '',
+    unit_identifier: '',
     unit_type: 'apartment',
     usage_type: 'residential',
     monthly_rent: 0,
@@ -116,6 +118,7 @@ export default function NewUnitPage() {
         property_id: formData.property_id,
         section_id: formData.section_id || null,
         unit_name: formData.unit_name,
+        unit_identifier: formData.unit_identifier.trim() || null,
         unit_type: formData.unit_type,
         usage_type: formData.usage_type,
         monthly_rent: formData.monthly_rent,
@@ -201,20 +204,37 @@ export default function NewUnitPage() {
             </select>
           </div>
 
-          {/* Unit Name */}
-          <div className="form-group">
-            <label htmlFor="unit_name" className="label">
-              Unit Name <span className="text-danger-500">*</span>
-            </label>
-            <input
-              id="unit_name"
-              type="text"
-              required
-              value={formData.unit_name}
-              onChange={(e) => setFormData({ ...formData, unit_name: e.target.value })}
-              className="input"
-              placeholder="e.g., A1, Shop G01, Office 101"
-            />
+          {/* Unit Name & Identifier */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-group">
+              <label htmlFor="unit_name" className="label">
+                Unit Name <span className="text-danger-500">*</span>
+              </label>
+              <input
+                id="unit_name"
+                type="text"
+                required
+                value={formData.unit_name}
+                onChange={(e) => setFormData({ ...formData, unit_name: e.target.value })}
+                className="input"
+                placeholder="e.g., Apartment 101, Shop G01"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="unit_identifier" className="label">
+                Unit ID / Door Number <span className="text-danger-500">*</span>
+              </label>
+              <input
+                id="unit_identifier"
+                type="text"
+                required
+                value={formData.unit_identifier}
+                onChange={(e) => setFormData({ ...formData, unit_identifier: e.target.value.toUpperCase() })}
+                className="input"
+                placeholder="e.g., A-101, B2-04, SHOP-G01"
+              />
+            </div>
           </div>
 
           {/* Unit Type & Usage Type */}

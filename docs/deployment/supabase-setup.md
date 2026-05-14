@@ -112,7 +112,7 @@ Seed data can include sample properties, sections, units, tenants, active leases
 
 ## 10. Schema Areas Used By Current Features
 
-- `properties`, `property_sections`, and `units` power property structure and occupancy.
+- `properties`, `property_sections`, and `units` power property structure, unit IDs/door numbers, and occupancy.
 - `tenants` stores individual, business, and organization tenants.
 - `leases` links tenants to units and stores rent, deposit, billing frequency, dates, and status.
 - `charges` stores recurring extras such as service charge.

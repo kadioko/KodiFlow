@@ -10,6 +10,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Property -> sections -> units organization.
 - Section types such as floors, blocks, wings, areas, compounds, market zones, and parking areas.
 - Unit types such as apartments, rooms, houses, shops, offices, stalls, kiosks, warehouses, godowns, and parking slots.
+- Unit identification codes or door numbers such as `A-101`, `B2-04`, and `SHOP-G01`.
 
 ### Tenant Management
 
@@ -21,7 +22,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 
 ### Lease Management
 
-- Lease records connect one tenant to one unit.
+- Lease records connect one tenant to one unit, with unit identifiers visible in selection flows.
 - Detail and edit pages for tenants, units, properties, and leases.
 - Lease renewal entry points from lease, tenant, unit, and property history.
 - Monthly, quarterly, six-month, and annual billing frequencies.
@@ -138,6 +139,7 @@ Important database behavior:
 
 - Triggers generate invoice numbers, update totals, and protect active lease overlaps.
 - Indexes support dashboard, report, and detail-page queries.
+- Unit identifiers are unique per property when provided.
 - RLS policies isolate each manager's records by `user_id`.
 
 ## Project Structure

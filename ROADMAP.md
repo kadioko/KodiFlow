@@ -30,6 +30,7 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Property CRUD for residential, commercial, and mixed-use properties
 - [x] Property sections for floors, blocks, wings, areas, compounds, market zones, and parking areas
 - [x] Unit management with unit type, usage type, status, rent, size, and section support
+- [x] Unit identification codes/door numbers for building-level lookup
 - [x] Tenant management for individuals, businesses, and organizations
 - [x] Detail/edit route stabilization for tenants, units, properties, and leases
 - [x] Cross-links between properties, units, tenants, leases, invoices, and payments

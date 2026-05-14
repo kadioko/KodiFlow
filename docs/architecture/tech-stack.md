@@ -152,7 +152,7 @@ src/
 
 - **Properties**: Property cards with sections, units, vacancy, and occupancy summaries.
 - **Sections**: Floors, blocks, wings, areas, compounds, market zones, and parking areas.
-- **Units**: Unit statuses, rent, section, property, active tenant display, and linked lease history.
+- **Units**: Unit identifiers, statuses, rent, section, property, active tenant display, and linked lease history.
 - **Tenants**: Tenant contact details, active lease counts, linked units, invoices, payments, and outstanding balance summaries.
 - **Leases**: Tenant/unit/property links, active status tracking, editing, renewal entry points, rent, deposits, service charges, and billing frequency.
 - **Invoices**: Monthly, quarterly, six-month, and annual invoice summaries, status filtering, reminders, line items, and payment links.

@@ -118,6 +118,7 @@ export interface Database {
           property_id: string
           section_id: string | null
           unit_name: string
+          unit_identifier: string | null
           unit_type: 'apartment' | 'room' | 'house' | 'shop' | 'office' | 'stall' | 'kiosk' | 'warehouse' | 'godown' | 'parking_slot' | 'land_space' | 'other'
           usage_type: 'residential' | 'commercial' | 'mixed'
           monthly_rent: number
@@ -134,6 +135,7 @@ export interface Database {
           property_id: string
           section_id?: string | null
           unit_name: string
+          unit_identifier?: string | null
           unit_type: 'apartment' | 'room' | 'house' | 'shop' | 'office' | 'stall' | 'kiosk' | 'warehouse' | 'godown' | 'parking_slot' | 'land_space' | 'other'
           usage_type: 'residential' | 'commercial' | 'mixed'
           monthly_rent?: number
@@ -150,6 +152,7 @@ export interface Database {
           property_id?: string
           section_id?: string | null
           unit_name?: string
+          unit_identifier?: string | null
           unit_type?: 'apartment' | 'room' | 'house' | 'shop' | 'office' | 'stall' | 'kiosk' | 'warehouse' | 'godown' | 'parking_slot' | 'land_space' | 'other'
           usage_type?: 'residential' | 'commercial' | 'mixed'
           monthly_rent?: number

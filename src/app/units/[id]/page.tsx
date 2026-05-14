@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from '@/utils/currency'
 interface Unit {
   id: string
   unit_name: string
+  unit_identifier: string | null
   unit_type: string
   usage_type: string
   monthly_rent: number
@@ -276,6 +277,14 @@ export default function UnitDetailPage() {
             <div>
               <h1 className="page-title">{unit.unit_name}</h1>
               <div className="flex items-center space-x-2">
+                {unit.unit_identifier && (
+                  <>
+                    <span className="rounded-md bg-primary-50 px-2 py-0.5 text-xs font-semibold uppercase text-primary-700">
+                      ID: {unit.unit_identifier}
+                    </span>
+                    <span className="text-gray-400">•</span>
+                  </>
+                )}
                 <Link href={`/properties/${unit.property_id}`} className="text-gray-500 hover:text-primary-600">
                   {unit.property_name}
                 </Link>
@@ -311,7 +320,11 @@ export default function UnitDetailPage() {
       )}
 
       {/* Status & Rent */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="stat-card">
+          <p className="stat-label">Unit ID / Door Number</p>
+          <p className="stat-value">{unit.unit_identifier || 'N/A'}</p>
+        </div>
         <div className="stat-card">
           <p className="stat-label">Status</p>
           <p className="stat-value">

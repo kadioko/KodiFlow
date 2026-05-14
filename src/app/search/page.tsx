@@ -36,9 +36,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           .limit(10),
         supabase
           .from('units')
-          .select('id, unit_name, status, properties(name)')
+          .select('id, unit_name, unit_identifier, status, properties(name)')
           .eq('user_id', user.id)
-          .ilike('unit_name', pattern)
+          .or(`unit_name.ilike.${pattern},unit_identifier.ilike.${pattern}`)
           .limit(10),
         supabase
           .from('rent_invoices')
@@ -97,7 +97,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           }))} />
           <SearchSection title="Units" items={units.map((unit: any) => ({
             href: `/units/${unit.id}`,
-            title: unit.unit_name,
+            title: unit.unit_identifier ? `${unit.unit_identifier} / ${unit.unit_name}` : unit.unit_name,
             subtitle: `${Array.isArray(unit.properties) ? unit.properties[0]?.name : unit.properties?.name || 'Property'} • ${unit.status}`,
           }))} />
           <SearchSection title="Invoices" items={invoices.map((invoice: any) => ({
