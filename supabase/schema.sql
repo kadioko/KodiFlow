@@ -271,7 +271,7 @@ CREATE INDEX idx_units_property_id ON units(property_id);
 CREATE INDEX idx_units_section_id ON units(section_id);
 CREATE INDEX idx_units_user_id ON units(user_id);
 CREATE INDEX idx_units_status ON units(status);
-CREATE UNIQUE INDEX idx_units_property_identifier_unique ON units(user_id, property_id, lower(unit_identifier)) WHERE unit_identifier IS NOT NULL AND btrim(unit_identifier) <> '';
+CREATE UNIQUE INDEX idx_units_section_identifier_unique ON units(user_id, property_id, section_id, lower(unit_identifier)) WHERE unit_identifier IS NOT NULL AND btrim(unit_identifier) <> '';
 CREATE INDEX idx_tenants_user_id ON tenants(user_id);
 CREATE INDEX idx_leases_tenant_id ON leases(tenant_id);
 CREATE INDEX idx_leases_unit_id ON leases(unit_id);
