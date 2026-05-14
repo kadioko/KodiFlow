@@ -194,29 +194,50 @@ export default function UnitDetailPage() {
     
     if (!user) return
 
-    // Check if unit has leases, invoices, or payments
     const { data: leasesCheck } = await supabase
       .from('leases')
-      .select('id', { count: 'exact' })
+      .select('id')
       .eq('unit_id', unitId)
+      .eq('user_id', user.id)
 
     const { data: invoicesCheck } = await supabase
       .from('rent_invoices')
-      .select('id', { count: 'exact' })
+      .select('id')
       .eq('unit_id', unitId)
+      .eq('user_id', user.id)
 
-    const { data: paymentsCheck } = await supabase
+    await supabase
       .from('payments')
-      .select('id', { count: 'exact' })
+      .delete()
       .eq('unit_id', unitId)
+      .eq('user_id', user.id)
 
-    if ((leasesCheck && leasesCheck.length > 0) || 
-        (invoicesCheck && invoicesCheck.length > 0) ||
-        (paymentsCheck && paymentsCheck.length > 0)) {
-      setError('Cannot delete unit with existing leases, invoices, or payments.')
-      setShowDeleteConfirm(false)
-      setDeleteLoading(false)
-      return
+    if (invoicesCheck && invoicesCheck.length > 0) {
+      await supabase
+        .from('invoice_items')
+        .delete()
+        .in('invoice_id', invoicesCheck.map((invoice: { id: string }) => invoice.id))
+        .eq('user_id', user.id)
+
+      await supabase
+        .from('rent_invoices')
+        .delete()
+        .eq('unit_id', unitId)
+        .eq('user_id', user.id)
+    }
+
+    if (leasesCheck && leasesCheck.length > 0) {
+      await supabase
+        .from('charges')
+        .delete()
+        .in('lease_id', leasesCheck.map((lease: { id: string }) => lease.id))
+        .eq('user_id', user.id)
+
+      await supabase
+        .from('leases')
+        .delete()
+        .eq('unit_id', unitId)
+        .eq('user_id', user.id)
     }
 
     const { error: deleteError } = await supabase
@@ -617,9 +638,9 @@ export default function UnitDetailPage() {
               <h3 className="text-lg font-medium text-gray-900">Delete Unit</h3>
             </div>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete unit <strong>{unit.unit_name}</strong>? This action cannot be undone.
+              Are you sure you want to delete unit <strong>{unit.unit_name}</strong>? This will also delete related leases, invoices, invoice items, payments, and charges.
               <br /><br />
-              Note: You can only delete units with no leases, invoices, or payments.
+              This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <button 
