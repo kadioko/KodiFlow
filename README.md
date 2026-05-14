@@ -18,6 +18,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Residential details such as full name, ID number, and emergency contact.
 - Commercial details such as business name, TIN, business license, and contact person.
 - Tenant detail pages with linked leases, invoices, payments, and balance history.
+- Tenant-level withholding tax toggles for 10% rent WHT and 5% service charge WHT.
 - Tenant portal foundation scoped by the logged-in tenant email.
 
 ### Lease Management
@@ -34,6 +35,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 
 - Multi-line invoices with automatic status tracking.
 - Invoice items for rent, service charge, utilities, parking, tax, penalty, and other charges.
+- Withholding tax deductions as negative invoice tax lines where enabled for the tenant.
 - Payment recording with full and partial payment support.
 - Payment screen shows invoice charge breakdown before recording money received.
 - Expense tracking by property and category.
@@ -209,6 +211,7 @@ kodiflow/
 - [Supabase setup](docs/deployment/supabase-setup.md)
 - [Vercel deployment](docs/deployment/vercel-deployment.md)
 - [Tech stack](docs/architecture/tech-stack.md)
+- [Dora Tower import SQL](supabase/imports/dora_tower_clients.sql)
 
 ## Common Commands
 

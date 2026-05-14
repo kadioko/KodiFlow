@@ -52,6 +52,8 @@ The maintained docs now cover:
 - Unit ID/door-number capture and search.
 - Monthly, quarterly, six-month, and annual billing frequencies.
 - Separate monthly rent and service charge entry, invoice line items, and payment charge breakdowns.
+- Tenant-level withholding tax toggles for rent and service charge deductions.
+- Dora Tower client import SQL for `doratower2020@gmail.com`.
 
 ## Documentation Maintenance Rules
 

@@ -34,6 +34,10 @@ interface Tenant {
   id_number: string | null
   tin_number: string | null
   business_license_number: string | null
+  rent_withholding_tax_enabled: boolean
+  service_charge_withholding_tax_enabled: boolean
+  rent_withholding_tax_rate: number
+  service_charge_withholding_tax_rate: number
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   address: string | null
@@ -462,6 +466,24 @@ export default function TenantDetailPage() {
                       )}
                     </>
                   )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="mb-3 text-lg font-medium text-gray-900">Withholding Tax</h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-lg bg-white p-3">
+                  <p className="text-sm text-gray-500">Rent WHT</p>
+                  <p className={`font-semibold ${tenant.rent_withholding_tax_enabled ? 'text-success-700' : 'text-gray-500'}`}>
+                    {tenant.rent_withholding_tax_enabled ? `${tenant.rent_withholding_tax_rate}% deduction enabled` : 'Not applied'}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white p-3">
+                  <p className="text-sm text-gray-500">Service Charge WHT</p>
+                  <p className={`font-semibold ${tenant.service_charge_withholding_tax_enabled ? 'text-success-700' : 'text-gray-500'}`}>
+                    {tenant.service_charge_withholding_tax_enabled ? `${tenant.service_charge_withholding_tax_rate}% deduction enabled` : 'Not applied'}
+                  </p>
                 </div>
               </div>
             </div>

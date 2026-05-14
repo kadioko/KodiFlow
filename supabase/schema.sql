@@ -84,6 +84,10 @@ CREATE TABLE tenants (
   id_number TEXT,
   tin_number TEXT,
   business_license_number TEXT,
+  rent_withholding_tax_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  service_charge_withholding_tax_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  rent_withholding_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 10,
+  service_charge_withholding_tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 5,
   emergency_contact_name TEXT,
   emergency_contact_phone TEXT,
   address TEXT,
@@ -320,26 +324,53 @@ CREATE TRIGGER trigger_generate_invoice_number
   EXECUTE FUNCTION generate_invoice_number();
 
 -- Function to update invoice status based on payments
-CREATE OR REPLACE FUNCTION update_invoice_status()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION refresh_invoice_payment_status(target_invoice_id UUID)
+RETURNS VOID AS $$
+DECLARE
+  v_amount_paid NUMERIC;
+  v_subtotal NUMERIC;
+  v_due_date DATE;
 BEGIN
-  -- Calculate total paid
-  SELECT COALESCE(SUM(amount), 0) INTO NEW.amount_paid
-  FROM payments
-  WHERE invoice_id = NEW.id;
+  SELECT subtotal, due_date
+  INTO v_subtotal, v_due_date
+  FROM rent_invoices
+  WHERE id = target_invoice_id;
 
-  -- Update status based on payment and due date
-  IF NEW.amount_paid >= NEW.subtotal THEN
-    NEW.status = 'paid';
-  ELSIF NEW.amount_paid > 0 THEN
-    NEW.status = 'partially_paid';
-  ELSIF NEW.due_date < CURRENT_DATE THEN
-    NEW.status = 'overdue';
-  ELSE
-    NEW.status = 'unpaid';
+  IF v_subtotal IS NULL THEN
+    RETURN;
   END IF;
 
-  RETURN NEW;
+  SELECT COALESCE(SUM(amount), 0)
+  INTO v_amount_paid
+  FROM payments
+  WHERE invoice_id = target_invoice_id;
+
+  UPDATE rent_invoices
+  SET
+    amount_paid = v_amount_paid,
+    status = CASE
+      WHEN v_amount_paid >= v_subtotal THEN 'paid'
+      WHEN v_amount_paid > 0 THEN 'partially_paid'
+      WHEN v_due_date < CURRENT_DATE THEN 'overdue'
+      ELSE 'unpaid'
+    END,
+    updated_at = NOW()
+  WHERE id = target_invoice_id;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION refresh_invoice_payment_status_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP IN ('INSERT', 'UPDATE') THEN
+    PERFORM refresh_invoice_payment_status(NEW.invoice_id);
+  END IF;
+
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN
+    PERFORM refresh_invoice_payment_status(OLD.invoice_id);
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -371,6 +402,11 @@ CREATE TRIGGER trigger_update_unit_on_lease
   AFTER INSERT OR UPDATE OF status ON leases
   FOR EACH ROW
   EXECUTE FUNCTION update_unit_status_on_lease_change();
+
+CREATE TRIGGER trigger_refresh_invoice_payment_status
+  AFTER INSERT OR UPDATE OR DELETE ON payments
+  FOR EACH ROW
+  EXECUTE FUNCTION refresh_invoice_payment_status_trigger();
 
 -- Function to prevent overlapping active leases
 CREATE OR REPLACE FUNCTION check_overlapping_leases()

@@ -114,9 +114,11 @@ Seed data can include sample properties, sections, units, tenants, active leases
 
 - `properties`, `property_sections`, and `units` power property structure, unit IDs/door numbers, and occupancy.
 - `tenants` stores individual, business, and organization tenants.
+- Tenant records also store rent and service charge withholding tax toggles.
 - `leases` links tenants to units and stores rent, deposit, billing frequency, dates, and status.
 - `charges` stores recurring extras such as service charge.
 - `rent_invoices` and `invoice_items` keep rent and service charge as separate invoice lines.
+- Withholding tax deductions are stored as negative `tax` invoice items.
 - `payments` records full and partial payments against invoices.
 - `documents` and the `documents` storage bucket support uploads.
 - `utility_meter_readings` supports water/electricity tracking.

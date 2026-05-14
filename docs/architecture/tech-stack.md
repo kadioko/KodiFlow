@@ -153,9 +153,9 @@ src/
 - **Properties**: Property cards with sections, units, vacancy, and occupancy summaries.
 - **Sections**: Floors, blocks, wings, areas, compounds, market zones, and parking areas.
 - **Units**: Unit identifiers, statuses, rent, section, property, active tenant display, and linked lease history.
-- **Tenants**: Tenant contact details, active lease counts, linked units, invoices, payments, and outstanding balance summaries.
+- **Tenants**: Tenant contact details, withholding tax settings, active lease counts, linked units, invoices, payments, and outstanding balance summaries.
 - **Leases**: Tenant/unit/property links, active status tracking, editing, renewal entry points, rent, deposits, service charges, and billing frequency.
-- **Invoices**: Monthly, quarterly, six-month, and annual invoice summaries, status filtering, reminders, line items, and payment links.
+- **Invoices**: Monthly, quarterly, six-month, and annual invoice summaries, status filtering, reminders, rent/service/tax line items, and payment links.
 - **Payments**: Payment list, payment details, invoice references, tenant/property context, and invoice charge breakdowns.
 - **Expenses**: Expense listing and financial reporting integration.
 - **Utilities**: Water/electricity readings with auto previous reading and charge previews.

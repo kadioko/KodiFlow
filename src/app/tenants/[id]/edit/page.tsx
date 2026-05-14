@@ -30,6 +30,8 @@ export default function EditTenantPage() {
     id_number: string
     tin_number: string
     business_license_number: string
+    rent_withholding_tax_enabled: boolean
+    service_charge_withholding_tax_enabled: boolean
     emergency_contact_name: string
     emergency_contact_phone: string
     address: string
@@ -44,6 +46,8 @@ export default function EditTenantPage() {
     id_number: '',
     tin_number: '',
     business_license_number: '',
+    rent_withholding_tax_enabled: false,
+    service_charge_withholding_tax_enabled: false,
     emergency_contact_name: '',
     emergency_contact_phone: '',
     address: '',
@@ -93,6 +97,8 @@ export default function EditTenantPage() {
       id_number: data.id_number || '',
       tin_number: data.tin_number || '',
       business_license_number: data.business_license_number || '',
+      rent_withholding_tax_enabled: data.rent_withholding_tax_enabled || false,
+      service_charge_withholding_tax_enabled: data.service_charge_withholding_tax_enabled || false,
       emergency_contact_name: data.emergency_contact_name || '',
       emergency_contact_phone: data.emergency_contact_phone || '',
       address: data.address || '',
@@ -127,6 +133,8 @@ export default function EditTenantPage() {
         id_number: formData.id_number || null,
         tin_number: formData.tin_number || null,
         business_license_number: formData.business_license_number || null,
+        rent_withholding_tax_enabled: formData.rent_withholding_tax_enabled,
+        service_charge_withholding_tax_enabled: formData.service_charge_withholding_tax_enabled,
         emergency_contact_name: formData.emergency_contact_name || null,
         emergency_contact_phone: formData.emergency_contact_phone || null,
         address: formData.address || null,
@@ -357,6 +365,36 @@ export default function EditTenantPage() {
               </div>
             </>
           )}
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">Withholding Tax</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="flex items-start gap-3 rounded-lg bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={formData.rent_withholding_tax_enabled}
+                  onChange={(e) => setFormData({ ...formData, rent_withholding_tax_enabled: e.target.checked })}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-900">Deduct 10% rent WHT</span>
+                  <span className="block text-xs text-slate-500">Applies as a deduction on rent invoice lines.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 rounded-lg bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={formData.service_charge_withholding_tax_enabled}
+                  onChange={(e) => setFormData({ ...formData, service_charge_withholding_tax_enabled: e.target.checked })}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-900">Deduct 5% service WHT</span>
+                  <span className="block text-xs text-slate-500">Applies as a deduction on service charge invoice lines.</span>
+                </span>
+              </label>
+            </div>
+          </div>
 
           <div className="form-group">
             <label htmlFor="address" className="label">Address</label>

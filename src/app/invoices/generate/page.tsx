@@ -17,6 +17,10 @@ interface Lease {
   unit_name: string
   property_name: string
   monthly_rent: number
+  rent_withholding_tax_enabled: boolean
+  service_charge_withholding_tax_enabled: boolean
+  rent_withholding_tax_rate: number
+  service_charge_withholding_tax_rate: number
   lease_type: string
   billing_frequency: string
 }
@@ -66,7 +70,7 @@ export default function GenerateInvoicesPage() {
             monthly_rent,
             lease_type,
             billing_frequency,
-            tenants(full_name, business_name),
+            tenants(full_name, business_name, rent_withholding_tax_enabled, service_charge_withholding_tax_enabled, rent_withholding_tax_rate, service_charge_withholding_tax_rate),
             units(unit_name),
             properties(name)
           `)
@@ -84,6 +88,10 @@ export default function GenerateInvoicesPage() {
             unit_name: l.units?.unit_name,
             property_name: l.properties?.name,
             monthly_rent: l.monthly_rent,
+            rent_withholding_tax_enabled: l.tenants?.rent_withholding_tax_enabled || false,
+            service_charge_withholding_tax_enabled: l.tenants?.service_charge_withholding_tax_enabled || false,
+            rent_withholding_tax_rate: l.tenants?.rent_withholding_tax_rate || 10,
+            service_charge_withholding_tax_rate: l.tenants?.service_charge_withholding_tax_rate || 5,
             lease_type: l.lease_type,
             billing_frequency: l.billing_frequency,
           }))
@@ -136,12 +144,24 @@ export default function GenerateInvoicesPage() {
   }
 
   const calculateInvoiceTotal = (lease: Lease) => {
+    const { months } = getBillingPeriod(billingYear, billingMonth, lease.billing_frequency)
     const leaseCharges = charges[lease.id] || []
-    return calculateBillingInvoiceTotal(
+    const grossTotal = calculateBillingInvoiceTotal(
       lease.monthly_rent,
       leaseCharges.filter(charge => charge.charge_type !== 'rent').map(charge => charge.amount),
       lease.billing_frequency
     )
+    const rentWithholding = lease.rent_withholding_tax_enabled
+      ? (lease.monthly_rent * months * lease.rent_withholding_tax_rate) / 100
+      : 0
+    const serviceChargeTotal = leaseCharges
+      .filter(charge => charge.charge_type === 'service_charge')
+      .reduce((sum, charge) => sum + (charge.amount * months), 0)
+    const serviceWithholding = lease.service_charge_withholding_tax_enabled
+      ? (serviceChargeTotal * lease.service_charge_withholding_tax_rate) / 100
+      : 0
+
+    return Math.max(grossTotal - rentWithholding - serviceWithholding, 0)
   }
 
   const generateInvoices = async () => {
@@ -236,18 +256,45 @@ export default function GenerateInvoicesPage() {
 
       // Additional charges
       const leaseCharges = charges[lease.id] || []
+      let serviceChargeTotal = 0
       leaseCharges.forEach(charge => {
         if (charge.charge_type !== 'rent') {
+          const amount = charge.amount * months
+          if (charge.charge_type === 'service_charge') {
+            serviceChargeTotal += amount
+          }
           invoiceItems.push({
             user_id: user.id,
             invoice_id: invoice.id,
             item_name: charge.charge_name,
             item_type: charge.charge_type,
-            amount: charge.amount * months,
+            amount,
             notes: charge.notes,
           })
         }
       })
+
+      if (lease.rent_withholding_tax_enabled) {
+        invoiceItems.push({
+          user_id: user.id,
+          invoice_id: invoice.id,
+          item_name: `Rent Withholding Tax (${lease.rent_withholding_tax_rate}%)`,
+          item_type: 'tax',
+          amount: -((lease.monthly_rent * months * lease.rent_withholding_tax_rate) / 100),
+          notes: 'Tenant withholding tax deduction on rent',
+        })
+      }
+
+      if (lease.service_charge_withholding_tax_enabled && serviceChargeTotal > 0) {
+        invoiceItems.push({
+          user_id: user.id,
+          invoice_id: invoice.id,
+          item_name: `Service Charge Withholding Tax (${lease.service_charge_withholding_tax_rate}%)`,
+          item_type: 'tax',
+          amount: -((serviceChargeTotal * lease.service_charge_withholding_tax_rate) / 100),
+          notes: 'Tenant withholding tax deduction on service charge',
+        })
+      }
 
       // Insert invoice items
       const { error: itemsError } = await supabase
@@ -401,6 +448,7 @@ export default function GenerateInvoicesPage() {
                 const leaseCharges = charges[lease.id] || []
                 const additionalTotal = leaseCharges.reduce((sum, c) => sum + c.amount, 0)
                 const total = calculateInvoiceTotal(lease)
+                const hasWithholding = lease.rent_withholding_tax_enabled || lease.service_charge_withholding_tax_enabled
                 const isGenerating = generating.has(lease.id)
 
                 return (
@@ -417,6 +465,14 @@ export default function GenerateInvoicesPage() {
                     <td className="table-cell">
                       <p className="font-medium text-gray-900">{lease.tenant_name}</p>
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
+                      {hasWithholding && (
+                        <p className="text-xs font-medium text-warning-700">
+                          WHT: {[
+                            lease.rent_withholding_tax_enabled ? `${lease.rent_withholding_tax_rate}% rent` : null,
+                            lease.service_charge_withholding_tax_enabled ? `${lease.service_charge_withholding_tax_rate}% service` : null,
+                          ].filter(Boolean).join(', ')}
+                        </p>
+                      )}
                     </td>
                     <td className="table-cell">
                       <p className="text-sm text-gray-900">{lease.property_name}</p>

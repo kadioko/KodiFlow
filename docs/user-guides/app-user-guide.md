@@ -98,9 +98,19 @@ To add a tenant:
 3. Choose the tenant type.
 4. Enter contact details.
 5. Add ID, TIN, license, emergency contact, address, and notes where relevant.
-6. Save.
+6. Choose whether the tenant has rent or service charge withholding tax deductions.
+7. Save.
 
 Open a tenant to view their leases, invoices, payments, and balance history.
+
+### Tenant Withholding Tax
+
+Some tenants deduct withholding tax when they pay. Turn this on per tenant only when it applies:
+
+- **Rent WHT** deducts 10% from rent invoice lines.
+- **Service Charge WHT** deducts 5% from service charge invoice lines.
+
+When invoice generation runs, KodiFlow adds those deductions as negative tax lines so the tenant balance reflects the net payable amount.
 
 ## 7. Leases
 
@@ -154,6 +164,7 @@ Use **Invoices** to:
 - View issued invoices.
 - Open invoice details.
 - Review rent and service charge as separate invoice lines.
+- Review withholding tax deduction lines where enabled for that tenant.
 - Track paid, partially paid, pending, and overdue invoices.
 - Record payments against invoices.
 

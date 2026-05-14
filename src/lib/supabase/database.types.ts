@@ -177,6 +177,10 @@ export interface Database {
           id_number: string | null
           tin_number: string | null
           business_license_number: string | null
+          rent_withholding_tax_enabled: boolean
+          service_charge_withholding_tax_enabled: boolean
+          rent_withholding_tax_rate: number
+          service_charge_withholding_tax_rate: number
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           address: string | null
@@ -196,6 +200,10 @@ export interface Database {
           id_number?: string | null
           tin_number?: string | null
           business_license_number?: string | null
+          rent_withholding_tax_enabled?: boolean
+          service_charge_withholding_tax_enabled?: boolean
+          rent_withholding_tax_rate?: number
+          service_charge_withholding_tax_rate?: number
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           address?: string | null
@@ -215,6 +223,10 @@ export interface Database {
           id_number?: string | null
           tin_number?: string | null
           business_license_number?: string | null
+          rent_withholding_tax_enabled?: boolean
+          service_charge_withholding_tax_enabled?: boolean
+          rent_withholding_tax_rate?: number
+          service_charge_withholding_tax_rate?: number
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           address?: string | null

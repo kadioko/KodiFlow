@@ -32,6 +32,7 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Unit management with unit type, usage type, status, rent, size, and section support
 - [x] Unit identification codes/door numbers for building-level lookup
 - [x] Tenant management for individuals, businesses, and organizations
+- [x] Tenant-level withholding tax toggles for rent and service charge deductions
 - [x] Detail/edit route stabilization for tenants, units, properties, and leases
 - [x] Cross-links between properties, units, tenants, leases, invoices, and payments
 - [x] Tenant portal foundation for tenant-linked accounts
@@ -57,6 +58,7 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Invoice auto-numbering
 - [x] Invoice item support
 - [x] Rent and service charge as separate invoice line items
+- [x] Withholding tax deduction lines in generated invoices
 - [x] Six-month billing invoice calculations
 - [x] Full and partial payment recording
 - [x] Invoice charge breakdown on payment recording

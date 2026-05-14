@@ -160,6 +160,7 @@ src/
 - Unit create/edit screens save and display Unit ID / Door Number.
 - Lease creation and editing preserve tenant, unit, rent, service charge, deposit, billing frequency, and status.
 - Invoice and payment screens show charge line items clearly.
+- Tenant withholding tax toggles create rent/service deduction lines during invoice generation.
 
 ## Troubleshooting
 
