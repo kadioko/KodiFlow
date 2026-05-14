@@ -286,6 +286,14 @@ WHERE b.tenant_id IS NOT NULL
       AND l.unit_id = b.unit_id
       AND l.start_date = b.period_start
       AND l.end_date = b.period_end
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.leases l
+    WHERE l.user_id = b.user_id
+      AND l.unit_id = b.unit_id
+      AND l.status = 'active'
+      AND (l.start_date, l.end_date) OVERLAPS (b.period_start, b.period_end)
   );
 
 INSERT INTO public.charges (user_id, lease_id, charge_name, charge_type, amount, frequency, is_active, notes)
