@@ -18,7 +18,8 @@ import {
   Calendar,
   DollarSign,
   CreditCard,
-  Edit2
+  Edit2,
+  Trash2
 } from 'lucide-react'
 import { LEASE_TYPES, LEASE_STATUSES, BILLING_FREQUENCIES, getLabelByValue } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
@@ -247,6 +248,44 @@ export default function LeaseDetailPage() {
     setActionLoading(false)
   }
 
+  const deleteLease = async () => {
+    if (!lease) return
+    if (!confirm('Delete this lease? Related invoices and payments may also be deleted by the database. This cannot be undone.')) return
+
+    setActionLoading(true)
+    setError('')
+
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      setError('You must be logged in')
+      setActionLoading(false)
+      return
+    }
+
+    const { error: deleteError } = await supabase
+      .from('leases')
+      .delete()
+      .eq('id', leaseId)
+      .eq('user_id', user.id)
+
+    if (deleteError) {
+      setError(deleteError.message)
+      setActionLoading(false)
+      return
+    }
+
+    await supabase
+      .from('units')
+      .update({ status: 'vacant', updated_at: new Date().toISOString() })
+      .eq('id', lease.unit_id)
+      .eq('user_id', user.id)
+
+    router.push('/leases')
+    router.refresh()
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -306,6 +345,10 @@ export default function LeaseDetailPage() {
             <Edit2 className="h-4 w-4 mr-2" />
             Edit
           </Link>
+          <button onClick={deleteLease} disabled={actionLoading} className="btn-danger">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </button>
           {isActive && (
             <>
               <button 

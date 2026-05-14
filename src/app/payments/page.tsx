@@ -132,12 +132,20 @@ export default async function PaymentsPage() {
                       {payment.reference || '-'}
                     </td>
                     <td className="table-cell">
+                      <div className="flex items-center gap-3">
                       <Link 
                         href={`/payments/${payment.id}`}
                         className="text-primary-600 hover:text-primary-900 font-medium"
                       >
                         View
                       </Link>
+                      <Link 
+                        href={`/payments/${payment.id}/edit`}
+                        className="text-slate-600 hover:text-slate-900 font-medium"
+                      >
+                        Edit
+                      </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

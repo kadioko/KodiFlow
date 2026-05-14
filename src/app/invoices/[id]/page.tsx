@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
   ArrowLeft, 
   Receipt, 
   Printer,
-  Mail,
+  Edit2,
+  Trash2,
   CheckCircle,
   AlertCircle,
   Loader2,
@@ -56,17 +57,33 @@ interface Payment {
   reference: string | null
 }
 
-export default function InvoiceDetailPage({ params }: { params: { id: string } }) {
+type ItemFilter = 'all' | 'rent' | 'service_charge'
+
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+export default function InvoiceDetailPage() {
   const router = useRouter()
+  const params = useParams()
+  const invoiceId = getRouteParam(params.id)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [itemFilter, setItemFilter] = useState<ItemFilter>('all')
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [items, setItems] = useState<InvoiceItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
 
   useEffect(() => {
+    if (!invoiceId) {
+      setError('Invoice not found')
+      setLoading(false)
+      return
+    }
+
     fetchInvoiceData()
-  }, [params.id])
+  }, [invoiceId])
 
   const fetchInvoiceData = async () => {
     const supabase = createClient()
@@ -86,7 +103,7 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
         units(unit_name),
         properties(name)
       `)
-      .eq('id', params.id)
+      .eq('id', invoiceId)
       .eq('user_id', user.id)
       .single()
 
@@ -107,7 +124,7 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
     const { data: itemsData } = await supabase
       .from('invoice_items')
       .select('*')
-      .eq('invoice_id', params.id)
+      .eq('invoice_id', invoiceId)
       .eq('user_id', user.id)
       .order('created_at')
 
@@ -119,7 +136,7 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
     const { data: paymentsData } = await supabase
       .from('payments')
       .select('*')
-      .eq('invoice_id', params.id)
+      .eq('invoice_id', invoiceId)
       .eq('user_id', user.id)
       .order('payment_date', { ascending: false })
 
@@ -132,6 +149,36 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
 
   const handlePrint = () => {
     window.print()
+  }
+
+  const deleteInvoice = async () => {
+    if (!confirm('Delete this invoice and all related invoice items and payments? This cannot be undone.')) return
+
+    setDeleting(true)
+    setError('')
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      setError('You must be logged in')
+      setDeleting(false)
+      return
+    }
+
+    const { error: deleteError } = await supabase
+      .from('rent_invoices')
+      .delete()
+      .eq('id', invoiceId)
+      .eq('user_id', user.id)
+
+    if (deleteError) {
+      setError(deleteError.message)
+      setDeleting(false)
+      return
+    }
+
+    router.push('/invoices')
+    router.refresh()
   }
 
   const getStatusColor = (status: string) => {
@@ -163,6 +210,13 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
     )
   }
 
+  const rentItems = items.filter((item) => item.item_type === 'rent' || (item.item_type === 'tax' && item.item_name.toLowerCase().includes('rent')))
+  const serviceItems = items.filter((item) => item.item_type === 'service_charge' || (item.item_type === 'tax' && item.item_name.toLowerCase().includes('service')))
+  const displayedItems = itemFilter === 'rent' ? rentItems : itemFilter === 'service_charge' ? serviceItems : items
+  const rentTotal = rentItems.reduce((sum, item) => sum + item.amount, 0)
+  const serviceTotal = serviceItems.reduce((sum, item) => sum + item.amount, 0)
+  const otherTotal = items.reduce((sum, item) => sum + item.amount, 0) - rentTotal - serviceTotal
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -189,12 +243,20 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
         <div className="flex space-x-3 print:hidden">
+          <Link href={`/invoices/${invoiceId}/edit`} className="btn-secondary">
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit
+          </Link>
           <button onClick={handlePrint} className="btn-secondary">
             <Printer className="h-4 w-4 mr-2" />
             Print
           </button>
+          <button onClick={deleteInvoice} disabled={deleting} className="btn-danger">
+            <Trash2 className="h-4 w-4 mr-2" />
+            {deleting ? 'Deleting...' : 'Delete'}
+          </button>
           <Link 
-            href={`/payments/new?invoice=${params.id}`}
+            href={`/payments/new?invoice=${invoiceId}`}
             className={`btn-success ${invoice.balance <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={(e) => invoice.balance <= 0 && e.preventDefault()}
           >
@@ -260,6 +322,34 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
             </div>
           </div>
 
+          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 print:hidden">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-semibold text-slate-900">Owed Breakdown</h3>
+              <div className="flex rounded-xl bg-white p-1 ring-1 ring-slate-200">
+                {[
+                  { value: 'all', label: 'All' },
+                  { value: 'rent', label: 'Rent' },
+                  { value: 'service_charge', label: 'Service' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setItemFilter(option.value as ItemFilter)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${itemFilter === option.value ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-3 text-sm md:grid-cols-4">
+              <div><p className="text-slate-500">Rent</p><p className="font-bold text-slate-900">{formatCurrency(rentTotal)}</p></div>
+              <div><p className="text-slate-500">Service Charge</p><p className="font-bold text-slate-900">{formatCurrency(serviceTotal)}</p></div>
+              <div><p className="text-slate-500">Other / Tax</p><p className="font-bold text-slate-900">{formatCurrency(otherTotal)}</p></div>
+              <div><p className="text-slate-500">Balance Due</p><p className="font-bold text-primary-700">{formatCurrency(invoice.balance)}</p></div>
+            </div>
+          </div>
+
           {/* Invoice Items */}
           <table className="w-full mb-8">
             <thead className="border-b-2 border-gray-200">
@@ -269,7 +359,7 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {displayedItems.map((item) => (
                 <tr key={item.id} className="border-b border-gray-100">
                   <td className="py-3">
                     <p className="font-medium">{item.item_name}</p>
@@ -288,10 +378,12 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
                 <td className="py-3 text-right font-medium">Subtotal</td>
                 <td className="py-3 text-right font-medium">{formatCurrency(invoice.subtotal)}</td>
               </tr>
+              {invoice.amount_paid > 0 && (
               <tr className="text-success-600">
                 <td className="py-3 text-right font-medium">Amount Paid</td>
                 <td className="py-3 text-right font-medium">-{formatCurrency(invoice.amount_paid)}</td>
               </tr>
+              )}
               <tr className="text-lg font-bold">
                 <td className="py-3 text-right">Balance Due</td>
                 <td className={`py-3 text-right ${invoice.balance > 0 ? 'text-danger-600' : 'text-success-600'}`}>
@@ -321,6 +413,9 @@ export default function InvoiceDetailPage({ params }: { params: { id: string } }
                     <span className="text-success-600 font-bold">
                       {formatCurrency(payment.amount)}
                     </span>
+                    <Link href={`/payments/${payment.id}/edit`} className="ml-4 text-sm font-medium text-slate-600 hover:text-slate-900 print:hidden">
+                      Edit
+                    </Link>
                   </div>
                 ))}
               </div>
