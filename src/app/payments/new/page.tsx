@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, CreditCard, CheckCircle } from 'lucide-react'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
+import { firstRelation } from '@/utils/supabase-relations'
+import type { Database } from '@/lib/supabase/database.types'
 
 interface Invoice {
   id: string
@@ -27,6 +29,20 @@ interface InvoiceItem {
   amount: number
 }
 
+type PaymentMethod = Database['public']['Tables']['payments']['Row']['payment_method']
+
+type InvoiceListRow = {
+  id: string
+  invoice_number: string
+  balance: number
+  subtotal: number
+  amount_paid: number
+  due_date: string
+  tenants: { full_name: string | null; business_name: string | null } | { full_name: string | null; business_name: string | null }[] | null
+  units: { unit_name: string } | { unit_name: string }[] | null
+  properties: { name: string } | { name: string }[] | null
+}
+
 function NewPaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -42,7 +58,7 @@ function NewPaymentPageContent() {
     invoice_id: string
     amount: number
     payment_date: string
-    payment_method: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
+    payment_method: PaymentMethod
     reference: string
     notes: string
   }>({
@@ -91,17 +107,23 @@ function NewPaymentPageContent() {
           .order('due_date')
         
         if (data) {
-          const formattedInvoices = data.map((inv: any) => ({
+          const formattedInvoices = (data as InvoiceListRow[]).map((inv) => {
+            const tenant = firstRelation(inv.tenants)
+            const unit = firstRelation(inv.units)
+            const property = firstRelation(inv.properties)
+
+            return {
             id: inv.id,
             invoice_number: inv.invoice_number,
-            tenant_name: inv.tenants?.full_name || inv.tenants?.business_name,
-            unit_name: inv.units?.unit_name,
-            property_name: inv.properties?.name,
+            tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
+            unit_name: unit?.unit_name || 'Unknown unit',
+            property_name: property?.name || 'Unknown property',
             balance: inv.balance,
             subtotal: inv.subtotal,
             amount_paid: inv.amount_paid,
             due_date: inv.due_date,
-          }))
+            }
+          })
           setInvoices(formattedInvoices)
 
           // If invoice is preselected, set it
@@ -180,34 +202,14 @@ function NewPaymentPageContent() {
       return
     }
 
-    // Get lease and other related IDs
-    const { data: invoiceData } = await supabase
-      .from('rent_invoices')
-      .select('tenant_id, lease_id, property_id, unit_id')
-      .eq('id', formData.invoice_id)
-      .single()
-
-    if (!invoiceData) {
-      setError('Invoice not found')
-      setLoading(false)
-      return
-    }
-
-    const { error: insertError } = await supabase
-      .from('payments')
-      .insert({
-        user_id: user.id,
-        invoice_id: formData.invoice_id,
-        tenant_id: invoiceData.tenant_id,
-        lease_id: invoiceData.lease_id,
-        property_id: invoiceData.property_id,
-        unit_id: invoiceData.unit_id,
-        amount: formData.amount,
-        payment_date: formData.payment_date,
-        payment_method: formData.payment_method,
-        reference: formData.reference || null,
-        notes: formData.notes || null,
-      })
+    const { error: insertError } = await supabase.rpc('record_invoice_payment', {
+      p_invoice_id: formData.invoice_id,
+      p_amount: formData.amount,
+      p_payment_date: formData.payment_date,
+      p_payment_method: formData.payment_method,
+      p_reference: formData.reference || null,
+      p_notes: formData.notes || null,
+    })
 
     if (insertError) {
       setError(insertError.message)

@@ -63,9 +63,13 @@ The schema includes properties, sections, units, tenants, leases, recurring char
 
 KodiFlow uses Supabase Storage for private documents.
 
-1. Go to **Storage**.
-2. Create a bucket named `documents`.
-3. Add policies that allow authenticated users to manage their own files.
+The current schema and migrations create the private `documents` bucket and `storage.objects` policies for user-scoped paths such as `<user-id>/lease_agreement/2026/file.pdf`.
+
+If you are configuring an older project manually:
+
+1. Apply the latest migrations in `supabase/migrations/`.
+2. Confirm **Storage** contains a private bucket named `documents`.
+3. Confirm storage policies allow authenticated users to manage files only when the first path segment matches their user ID.
 4. Keep uploaded files scoped to user-owned paths.
 
 ## 6. Environment Variables
@@ -119,6 +123,8 @@ Seed data can include sample properties, sections, units, tenants, active leases
 - `charges` stores recurring extras such as service charge.
 - `rent_invoices` and `invoice_items` keep rent and service charge as separate invoice lines.
 - Withholding tax deductions are stored as negative `tax` invoice items.
+- `create_rent_invoice_for_lease` creates invoice headers and line items in one database transaction.
+- `record_invoice_payment` locks the invoice row and prevents stale-balance overpayments.
 - `payments` records full and partial payments against invoices.
 - `documents` and the `documents` storage bucket support uploads.
 - `utility_meter_readings` supports water/electricity tracking.

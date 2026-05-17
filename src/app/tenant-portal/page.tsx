@@ -1,10 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
 import { Calendar, FileText, Home, Receipt } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/utils/currency'
+import { relationField } from '@/utils/supabase-relations'
 
-function relationName(value: any, key: string) {
-  const item = Array.isArray(value) ? value[0] : value
-  return item?.[key] || ''
+type PortalLease = {
+  id: string
+  start_date: string
+  end_date: string
+  monthly_rent: number
+  status: string
+  units: { unit_name: string } | { unit_name: string }[] | null
+  properties: { name: string } | { name: string }[] | null
+}
+
+type PortalInvoice = {
+  id: string
+  invoice_number: string
+  subtotal: number
+  amount_paid: number
+  balance: number
+  due_date: string
+  status: string
+  billing_month: number
+  billing_year: number
+  properties: { name: string } | { name: string }[] | null
+  units: { unit_name: string } | { unit_name: string }[] | null
 }
 
 export default async function TenantPortalPage() {
@@ -50,8 +70,10 @@ export default async function TenantPortalPage() {
       .order('due_date', { ascending: false }),
   ])
 
-  const outstanding = (invoices || []).reduce((sum: number, invoice: any) => sum + (invoice.balance || 0), 0)
-  const activeLease = (leases || []).find((lease: any) => lease.status === 'active')
+  const portalLeases = (leases || []) as PortalLease[]
+  const portalInvoices = (invoices || []) as PortalInvoice[]
+  const outstanding = portalInvoices.reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
+  const activeLease = portalLeases.find((lease) => lease.status === 'active')
 
   return (
     <div className="space-y-6">
@@ -66,7 +88,7 @@ export default async function TenantPortalPage() {
         <div className="stat-card">
           <Home className="h-6 w-6 text-primary-600" />
           <p className="stat-label mt-4">Current Unit</p>
-          <p className="stat-value text-lg">{activeLease ? relationName(activeLease.units, 'unit_name') : 'None'}</p>
+          <p className="stat-value text-lg">{activeLease ? relationField(activeLease.units, 'unit_name') || 'None' : 'None'}</p>
         </div>
         <div className="stat-card">
           <Receipt className="h-6 w-6 text-warning-600" />
@@ -76,7 +98,7 @@ export default async function TenantPortalPage() {
         <div className="stat-card">
           <FileText className="h-6 w-6 text-success-600" />
           <p className="stat-label mt-4">Active Leases</p>
-          <p className="stat-value">{(leases || []).filter((lease: any) => lease.status === 'active').length}</p>
+          <p className="stat-value">{portalLeases.filter((lease) => lease.status === 'active').length}</p>
         </div>
       </div>
 
@@ -99,10 +121,10 @@ export default async function TenantPortalPage() {
               </tr>
             </thead>
             <tbody className="table-body">
-              {(invoices || []).map((invoice: any) => (
+              {portalInvoices.map((invoice) => (
                 <tr key={invoice.id}>
                   <td className="table-cell font-medium">{invoice.invoice_number}</td>
-                  <td className="table-cell">{relationName(invoice.properties, 'name')} / {relationName(invoice.units, 'unit_name')}</td>
+                  <td className="table-cell">{relationField(invoice.properties, 'name')} / {relationField(invoice.units, 'unit_name')}</td>
                   <td className="table-cell">{invoice.billing_month}/{invoice.billing_year}</td>
                   <td className="table-cell">{formatDate(invoice.due_date)}</td>
                   <td className="table-cell text-success-600">{formatCurrency(invoice.amount_paid)}</td>
@@ -121,10 +143,10 @@ export default async function TenantPortalPage() {
           <p className="text-sm text-gray-500">Lease information relevant to your occupied units.</p>
         </div>
         <div className="divide-y divide-gray-100">
-          {(leases || []).map((lease: any) => (
+          {portalLeases.map((lease) => (
             <div key={lease.id} className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="font-semibold text-gray-900">{relationName(lease.properties, 'name')} / {relationName(lease.units, 'unit_name')}</p>
+                <p className="font-semibold text-gray-900">{relationField(lease.properties, 'name')} / {relationField(lease.units, 'unit_name')}</p>
                 <p className="text-sm text-gray-500 flex items-center mt-1">
                   <Calendar className="h-4 w-4 mr-1" />
                   {formatDate(lease.start_date)} - {formatDate(lease.end_date)}
@@ -136,10 +158,9 @@ export default async function TenantPortalPage() {
               </div>
             </div>
           ))}
-          {(leases || []).length === 0 && <div className="p-6 text-gray-500">No leases are linked to your tenant profile.</div>}
+          {portalLeases.length === 0 && <div className="p-6 text-gray-500">No leases are linked to your tenant profile.</div>}
         </div>
       </div>
     </div>
   )
 }
-

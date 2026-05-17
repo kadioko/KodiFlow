@@ -649,7 +649,29 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_rent_invoice_for_lease: {
+        Args: {
+          p_lease_id: string
+          p_billing_month: number
+          p_billing_year: number
+          p_due_day?: number
+        }
+        Returns: {
+          invoice_id: string
+          result: 'created' | 'skipped'
+        }[]
+      }
+      record_invoice_payment: {
+        Args: {
+          p_invoice_id: string
+          p_amount: number
+          p_payment_date: string
+          p_payment_method: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
+          p_reference?: string | null
+          p_notes?: string | null
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

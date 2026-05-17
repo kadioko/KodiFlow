@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Receipt, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import { calculateInvoiceTotal as calculateBillingInvoiceTotal, getBillingPeriod } from '@/utils/billing'
+import { firstRelation } from '@/utils/supabase-relations'
+import type { Database } from '@/lib/supabase/database.types'
 
 interface Lease {
   id: string
@@ -29,9 +31,36 @@ interface Charge {
   id: string
   lease_id: string
   charge_name: string
-  charge_type: string
+  charge_type: Database['public']['Tables']['charges']['Row']['charge_type']
   amount: number
   notes?: string
+}
+
+type ActiveLeaseRow = {
+  id: string
+  tenant_id: string
+  unit_id: string
+  property_id: string
+  monthly_rent: number
+  lease_type: string
+  billing_frequency: string
+  tenants: {
+    full_name: string | null
+    business_name: string | null
+    rent_withholding_tax_enabled: boolean
+    service_charge_withholding_tax_enabled: boolean
+    rent_withholding_tax_rate: number
+    service_charge_withholding_tax_rate: number
+  } | {
+    full_name: string | null
+    business_name: string | null
+    rent_withholding_tax_enabled: boolean
+    service_charge_withholding_tax_enabled: boolean
+    rent_withholding_tax_rate: number
+    service_charge_withholding_tax_rate: number
+  }[] | null
+  units: { unit_name: string } | { unit_name: string }[] | null
+  properties: { name: string } | { name: string }[] | null
 }
 
 export default function GenerateInvoicesPage() {
@@ -79,22 +108,28 @@ export default function GenerateInvoicesPage() {
           .order('created_at')
         
         if (leasesData) {
-          const formattedLeases = leasesData.map((l: any) => ({
+          const formattedLeases = (leasesData as ActiveLeaseRow[]).map((l) => {
+            const tenant = firstRelation(l.tenants)
+            const unit = firstRelation(l.units)
+            const property = firstRelation(l.properties)
+
+            return {
             id: l.id,
             tenant_id: l.tenant_id,
             unit_id: l.unit_id,
             property_id: l.property_id,
-            tenant_name: l.tenants?.full_name || l.tenants?.business_name,
-            unit_name: l.units?.unit_name,
-            property_name: l.properties?.name,
+            tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
+            unit_name: unit?.unit_name || 'Unknown unit',
+            property_name: property?.name || 'Unknown property',
             monthly_rent: l.monthly_rent,
-            rent_withholding_tax_enabled: l.tenants?.rent_withholding_tax_enabled || false,
-            service_charge_withholding_tax_enabled: l.tenants?.service_charge_withholding_tax_enabled || false,
-            rent_withholding_tax_rate: l.tenants?.rent_withholding_tax_rate || 10,
-            service_charge_withholding_tax_rate: l.tenants?.service_charge_withholding_tax_rate || 5,
+            rent_withholding_tax_enabled: tenant?.rent_withholding_tax_enabled || false,
+            service_charge_withholding_tax_enabled: tenant?.service_charge_withholding_tax_enabled || false,
+            rent_withholding_tax_rate: tenant?.rent_withholding_tax_rate || 10,
+            service_charge_withholding_tax_rate: tenant?.service_charge_withholding_tax_rate || 5,
             lease_type: l.lease_type,
             billing_frequency: l.billing_frequency,
-          }))
+            }
+          })
           setLeases(formattedLeases)
           
           // Select all by default
@@ -110,7 +145,7 @@ export default function GenerateInvoicesPage() {
           
           if (chargesData) {
             const chargesByLease: Record<string, Charge[]> = {}
-            chargesData.forEach((charge: any) => {
+            chargesData.forEach((charge) => {
               if (!chargesByLease[charge.lease_id]) {
                 chargesByLease[charge.lease_id] = []
               }
@@ -186,123 +221,26 @@ export default function GenerateInvoicesPage() {
     const selectedLeasesList = leases.filter(l => selectedLeases.has(l.id))
     let generated = 0
     let skipped = 0
+    let failed = 0
+    let lastError = ''
     const generatingSet = new Set<string>()
 
     for (const lease of selectedLeasesList) {
       generatingSet.add(lease.id)
       setGenerating(new Set(generatingSet))
 
-      // Check if invoice already exists for this period
-      const { data: existingInvoice } = await supabase
-        .from('rent_invoices')
-        .select('id')
-        .eq('lease_id', lease.id)
-        .eq('billing_month', billingMonth)
-        .eq('billing_year', billingYear)
-        .maybeSingle()
+      const { data, error: invoiceError } = await supabase.rpc('create_rent_invoice_for_lease', {
+        p_lease_id: lease.id,
+        p_billing_month: billingMonth,
+        p_billing_year: billingYear,
+        p_due_day: dueDay,
+      })
 
-      if (existingInvoice) {
+      if (invoiceError) {
+        failed++
+        lastError = invoiceError.message
+      } else if (data?.[0]?.result === 'skipped') {
         skipped++
-        generatingSet.delete(lease.id)
-        setGenerating(new Set(generatingSet))
-        continue
-      }
-
-      // Calculate billing period
-      const { months, periodStart, periodEnd } = getBillingPeriod(billingYear, billingMonth, lease.billing_frequency)
-      const dueDate = new Date(billingYear, billingMonth - 1, dueDay)
-
-      // Calculate subtotal
-      const subtotal = calculateInvoiceTotal(lease)
-
-      // Create invoice
-      const { data: invoice, error: invoiceError } = await supabase
-        .from('rent_invoices')
-        .insert({
-          user_id: user.id,
-          lease_id: lease.id,
-          tenant_id: lease.tenant_id,
-          unit_id: lease.unit_id,
-          property_id: lease.property_id,
-          billing_period_start: periodStart.toISOString().split('T')[0],
-          billing_period_end: periodEnd.toISOString().split('T')[0],
-          billing_month: billingMonth,
-          billing_year: billingYear,
-          subtotal: subtotal,
-          due_date: dueDate.toISOString().split('T')[0],
-          status: 'unpaid',
-        })
-        .select()
-        .single()
-
-      if (invoiceError || !invoice) {
-        console.error('Error creating invoice:', invoiceError)
-        generatingSet.delete(lease.id)
-        setGenerating(new Set(generatingSet))
-        continue
-      }
-
-      // Create invoice items
-      const invoiceItems = []
-      
-      // Rent item
-      invoiceItems.push({
-        user_id: user.id,
-        invoice_id: invoice.id,
-        item_name: `${months === 1 ? getMonthName(billingMonth) : `${months}-Month`} ${billingYear} Rent`,
-        item_type: 'rent',
-        amount: lease.monthly_rent * months,
-      })
-
-      // Additional charges
-      const leaseCharges = charges[lease.id] || []
-      let serviceChargeTotal = 0
-      leaseCharges.forEach(charge => {
-        if (charge.charge_type !== 'rent') {
-          const amount = charge.amount * months
-          if (charge.charge_type === 'service_charge') {
-            serviceChargeTotal += amount
-          }
-          invoiceItems.push({
-            user_id: user.id,
-            invoice_id: invoice.id,
-            item_name: charge.charge_name,
-            item_type: charge.charge_type,
-            amount,
-            notes: charge.notes,
-          })
-        }
-      })
-
-      if (lease.rent_withholding_tax_enabled) {
-        invoiceItems.push({
-          user_id: user.id,
-          invoice_id: invoice.id,
-          item_name: `Rent Withholding Tax (${lease.rent_withholding_tax_rate}%)`,
-          item_type: 'tax',
-          amount: -((lease.monthly_rent * months * lease.rent_withholding_tax_rate) / 100),
-          notes: 'Tenant withholding tax deduction on rent',
-        })
-      }
-
-      if (lease.service_charge_withholding_tax_enabled && serviceChargeTotal > 0) {
-        invoiceItems.push({
-          user_id: user.id,
-          invoice_id: invoice.id,
-          item_name: `Service Charge Withholding Tax (${lease.service_charge_withholding_tax_rate}%)`,
-          item_type: 'tax',
-          amount: -((serviceChargeTotal * lease.service_charge_withholding_tax_rate) / 100),
-          notes: 'Tenant withholding tax deduction on service charge',
-        })
-      }
-
-      // Insert invoice items
-      const { error: itemsError } = await supabase
-        .from('invoice_items')
-        .insert(invoiceItems)
-
-      if (itemsError) {
-        console.error('Error creating invoice items:', itemsError)
       } else {
         generated++
       }
@@ -315,15 +253,15 @@ export default function GenerateInvoicesPage() {
     setGenerating(new Set())
     
     if (generated > 0) {
-      setSuccess(`Generated ${generated} invoice(s). ${skipped > 0 ? `Skipped ${skipped} (already exist).` : ''}`)
+      setSuccess(`Generated ${generated} invoice(s). ${skipped > 0 ? `Skipped ${skipped} (already exist).` : ''} ${failed > 0 ? `Failed ${failed}.` : ''}`)
       setTimeout(() => {
         router.push('/invoices')
         router.refresh()
       }, 2000)
     } else if (skipped > 0) {
-      setError(`All ${skipped} invoice(s) already exist for this billing period.`)
+      setError(failed > 0 ? `Skipped ${skipped}; failed ${failed}. ${lastError}` : `All ${skipped} invoice(s) already exist for this billing period.`)
     } else {
-      setError('Failed to generate invoices. Please try again.')
+      setError(lastError || 'Failed to generate invoices. Please try again.')
     }
   }
 
