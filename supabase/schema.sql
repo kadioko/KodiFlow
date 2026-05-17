@@ -198,6 +198,7 @@ CREATE TABLE payments (
   payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'bank', 'mobile_money', 'cheque', 'card', 'other')),
   reference TEXT,
   notes TEXT,
+  client_request_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -292,6 +293,7 @@ CREATE INDEX idx_payments_invoice_id ON payments(invoice_id);
 CREATE INDEX idx_payments_tenant_id ON payments(tenant_id);
 CREATE INDEX idx_payments_property_id ON payments(property_id);
 CREATE INDEX idx_payments_user_id ON payments(user_id);
+CREATE UNIQUE INDEX payments_user_client_request_id_unique ON payments(user_id, client_request_id) WHERE client_request_id IS NOT NULL;
 CREATE INDEX idx_expenses_property_id ON expenses(property_id);
 CREATE INDEX idx_expenses_user_id ON expenses(user_id);
 CREATE INDEX idx_documents_property_id ON documents(property_id);
@@ -329,15 +331,15 @@ CREATE OR REPLACE FUNCTION refresh_invoice_payment_status(target_invoice_id UUID
 RETURNS VOID AS $$
 DECLARE
   v_amount_paid NUMERIC;
-  v_subtotal NUMERIC;
-  v_due_date DATE;
+  subtotal_amount NUMERIC;
+  due_date_value DATE;
 BEGIN
   SELECT subtotal, due_date
-  INTO v_subtotal, v_due_date
+  INTO subtotal_amount, due_date_value
   FROM rent_invoices
   WHERE id = target_invoice_id;
 
-  IF v_subtotal IS NULL THEN
+  IF subtotal_amount IS NULL THEN
     RETURN;
   END IF;
 
@@ -350,9 +352,9 @@ BEGIN
   SET
     amount_paid = v_amount_paid,
     status = CASE
-      WHEN v_amount_paid >= v_subtotal THEN 'paid'
+      WHEN v_amount_paid >= subtotal_amount THEN 'paid'
       WHEN v_amount_paid > 0 THEN 'partially_paid'
-      WHEN v_due_date < CURRENT_DATE THEN 'overdue'
+      WHEN due_date_value < CURRENT_DATE THEN 'overdue'
       ELSE 'unpaid'
     END,
     updated_at = NOW()
@@ -376,7 +378,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to create an invoice and its line items atomically
-CREATE OR REPLACE FUNCTION create_rent_invoice_for_lease(
+CREATE OR REPLACE FUNCTION public.create_rent_invoice_for_lease(
   p_lease_id UUID,
   p_billing_month INTEGER,
   p_billing_year INTEGER,
@@ -388,21 +390,30 @@ SECURITY INVOKER
 SET search_path = public
 AS $create_rent_invoice$
 DECLARE
-  v_user_id UUID := auth.uid();
-  v_lease RECORD;
-  v_months INTEGER;
-  v_period_start DATE;
-  v_period_end DATE;
-  v_due_day INTEGER;
-  v_due_date DATE;
-  v_invoice_id UUID;
-  v_subtotal NUMERIC := 0;
-  v_service_charge_total NUMERIC := 0;
-  v_rent_withholding NUMERIC := 0;
-  v_service_withholding NUMERIC := 0;
-  v_charge RECORD;
+  _uid UUID := auth.uid();
+  _lease_id UUID;
+  _tenant_id UUID;
+  _unit_id UUID;
+  _property_id UUID;
+  _rent NUMERIC;
+  _billing_frequency TEXT;
+  _rent_wht_enabled BOOLEAN;
+  _service_wht_enabled BOOLEAN;
+  _rent_wht_rate NUMERIC;
+  _service_wht_rate NUMERIC;
+  _months INTEGER;
+  _start_date DATE;
+  _end_date DATE;
+  _due_day INTEGER;
+  _due_date DATE;
+  _new_invoice_id UUID;
+  _subtotal NUMERIC := 0;
+  _service_total NUMERIC := 0;
+  _rent_wht NUMERIC := 0;
+  _service_wht NUMERIC := 0;
+  _charge RECORD;
 BEGIN
-  IF v_user_id IS NULL THEN
+  IF _uid IS NULL THEN
     RAISE EXCEPTION 'You must be logged in';
   END IF;
 
@@ -412,7 +423,6 @@ BEGIN
 
   SELECT
     l.id,
-    l.user_id,
     l.tenant_id,
     l.unit_id,
     l.property_id,
@@ -422,70 +432,80 @@ BEGIN
     t.service_charge_withholding_tax_enabled,
     t.rent_withholding_tax_rate,
     t.service_charge_withholding_tax_rate
-  INTO v_lease
-  FROM leases l
-  JOIN tenants t ON t.id = l.tenant_id
+  INTO
+    _lease_id,
+    _tenant_id,
+    _unit_id,
+    _property_id,
+    _rent,
+    _billing_frequency,
+    _rent_wht_enabled,
+    _service_wht_enabled,
+    _rent_wht_rate,
+    _service_wht_rate
+  FROM public.leases l
+  JOIN public.tenants t ON t.id = l.tenant_id
   WHERE l.id = p_lease_id
-    AND l.user_id = v_user_id
+    AND l.user_id = _uid
     AND l.status = 'active';
 
-  IF NOT FOUND THEN
+  IF _lease_id IS NULL THEN
     RAISE EXCEPTION 'Active lease not found';
   END IF;
 
-  SELECT ri.id INTO v_invoice_id
-  FROM rent_invoices ri
+  SELECT ri.id INTO _new_invoice_id
+  FROM public.rent_invoices ri
   WHERE ri.lease_id = p_lease_id
     AND ri.billing_month = p_billing_month
     AND ri.billing_year = p_billing_year;
 
-  IF FOUND THEN
-    invoice_id := v_invoice_id;
+  IF _new_invoice_id IS NOT NULL THEN
+    invoice_id := _new_invoice_id;
     result := 'skipped';
     RETURN NEXT;
     RETURN;
   END IF;
 
-  v_months := CASE v_lease.billing_frequency
+  _months := CASE _billing_frequency
     WHEN 'quarterly' THEN 3
     WHEN 'semi_annually' THEN 6
     WHEN 'annually' THEN 12
     ELSE 1
   END;
 
-  v_period_start := make_date(p_billing_year, p_billing_month, 1);
-  v_period_end := (v_period_start + (v_months || ' months')::INTERVAL - INTERVAL '1 day')::DATE;
-  v_due_day := LEAST(GREATEST(COALESCE(p_due_day, 5), 1), EXTRACT(DAY FROM (date_trunc('month', v_period_start) + INTERVAL '1 month - 1 day'))::INTEGER);
-  v_due_date := make_date(p_billing_year, p_billing_month, v_due_day);
+  _start_date := make_date(p_billing_year, p_billing_month, 1);
+  _end_date := (_start_date + (_months || ' months')::INTERVAL - INTERVAL '1 day')::DATE;
+  _due_day := LEAST(GREATEST(COALESCE(p_due_day, 5), 1), EXTRACT(DAY FROM (date_trunc('month', _start_date) + INTERVAL '1 month - 1 day'))::INTEGER);
+  _due_date := make_date(p_billing_year, p_billing_month, _due_day);
 
-  v_subtotal := COALESCE(v_lease.monthly_rent, 0) * v_months;
+  _subtotal := COALESCE(_rent, 0) * _months;
 
-  FOR v_charge IN
+  FOR _charge IN
     SELECT charge_name, charge_type, amount, notes
-    FROM charges
+    FROM public.charges
     WHERE lease_id = p_lease_id
-      AND user_id = v_user_id
+      AND user_id = _uid
       AND is_active = TRUE
       AND charge_type <> 'rent'
   LOOP
-    v_subtotal := v_subtotal + (COALESCE(v_charge.amount, 0) * v_months);
+    _subtotal := _subtotal + (COALESCE(_charge.amount, 0) * _months);
 
-    IF v_charge.charge_type = 'service_charge' THEN
-      v_service_charge_total := v_service_charge_total + (COALESCE(v_charge.amount, 0) * v_months);
+    IF _charge.charge_type = 'service_charge' THEN
+      _service_total := _service_total + (COALESCE(_charge.amount, 0) * _months);
     END IF;
   END LOOP;
 
-  IF COALESCE(v_lease.rent_withholding_tax_enabled, FALSE) THEN
-    v_rent_withholding := (COALESCE(v_lease.monthly_rent, 0) * v_months * COALESCE(v_lease.rent_withholding_tax_rate, 10)) / 100;
+  IF COALESCE(_rent_wht_enabled, FALSE) THEN
+    _rent_wht := (COALESCE(_rent, 0) * _months * COALESCE(_rent_wht_rate, 10)) / 100;
   END IF;
 
-  IF COALESCE(v_lease.service_charge_withholding_tax_enabled, FALSE) THEN
-    v_service_withholding := (v_service_charge_total * COALESCE(v_lease.service_charge_withholding_tax_rate, 5)) / 100;
+  IF COALESCE(_service_wht_enabled, FALSE) THEN
+    _service_wht := (_service_total * COALESCE(_service_wht_rate, 5)) / 100;
   END IF;
 
-  v_subtotal := GREATEST(v_subtotal - v_rent_withholding - v_service_withholding, 0);
+  _subtotal := GREATEST(_subtotal - _rent_wht - _service_wht, 0);
 
-  INSERT INTO rent_invoices (
+  INSERT INTO public.rent_invoices (
     user_id,
     lease_id,
     tenant_id,
@@ -500,98 +520,97 @@ BEGIN
     status
   )
   VALUES (
-    v_user_id,
-    v_lease.id,
-    v_lease.tenant_id,
-    v_lease.unit_id,
-    v_lease.property_id,
-    v_period_start,
-    v_period_end,
+    _uid,
+    _lease_id,
+    _tenant_id,
+    _unit_id,
+    _property_id,
+    _start_date,
+    _end_date,
     p_billing_month,
     p_billing_year,
-    v_subtotal,
-    v_due_date,
+    _subtotal,
+    _due_date,
     'unpaid'
   )
-  RETURNING id INTO v_invoice_id;
+  RETURNING id INTO _new_invoice_id;
 
-  INSERT INTO invoice_items (user_id, invoice_id, item_name, item_type, amount)
+  INSERT INTO public.invoice_items (user_id, invoice_id, item_name, item_type, amount)
   VALUES (
-    v_user_id,
-    v_invoice_id,
-    CASE WHEN v_months = 1 THEN to_char(v_period_start, 'Month YYYY') || ' Rent' ELSE v_months || '-Month ' || p_billing_year || ' Rent' END,
+    _uid,
+    _new_invoice_id,
+    CASE WHEN _months = 1 THEN to_char(_start_date, 'Month YYYY') || ' Rent' ELSE _months || '-Month ' || p_billing_year || ' Rent' END,
     'rent',
-    COALESCE(v_lease.monthly_rent, 0) * v_months
+    COALESCE(_rent, 0) * _months
   );
 
-  FOR v_charge IN
+  FOR _charge IN
     SELECT charge_name, charge_type, amount, notes
-    FROM charges
+    FROM public.charges
     WHERE lease_id = p_lease_id
-      AND user_id = v_user_id
+      AND user_id = _uid
       AND is_active = TRUE
       AND charge_type <> 'rent'
   LOOP
-    INSERT INTO invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
+    INSERT INTO public.invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
     VALUES (
-      v_user_id,
-      v_invoice_id,
-      v_charge.charge_name,
-      v_charge.charge_type,
-      COALESCE(v_charge.amount, 0) * v_months,
-      v_charge.notes
+      _uid,
+      _new_invoice_id,
+      _charge.charge_name,
+      _charge.charge_type,
+      COALESCE(_charge.amount, 0) * _months,
+      _charge.notes
     );
   END LOOP;
 
-  IF v_rent_withholding > 0 THEN
-    INSERT INTO invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
+  IF _rent_wht > 0 THEN
+    INSERT INTO public.invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
     VALUES (
-      v_user_id,
-      v_invoice_id,
-      'Rent Withholding Tax (' || COALESCE(v_lease.rent_withholding_tax_rate, 10) || '%)',
+      _uid,
+      _new_invoice_id,
+      'Rent Withholding Tax (' || COALESCE(_rent_wht_rate, 10) || '%)',
       'tax',
-      -v_rent_withholding,
+      -_rent_wht,
       'Tenant withholding tax deduction on rent'
     );
   END IF;
 
-  IF v_service_withholding > 0 THEN
-    INSERT INTO invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
+  IF _service_wht > 0 THEN
+    INSERT INTO public.invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
     VALUES (
-      v_user_id,
-      v_invoice_id,
-      'Service Charge Withholding Tax (' || COALESCE(v_lease.service_charge_withholding_tax_rate, 5) || '%)',
+      _uid,
+      _new_invoice_id,
+      'Service Charge Withholding Tax (' || COALESCE(_service_wht_rate, 5) || '%)',
       'tax',
-      -v_service_withholding,
+      -_service_wht,
       'Tenant withholding tax deduction on service charge'
     );
   END IF;
 
-  invoice_id := v_invoice_id;
+  invoice_id := _new_invoice_id;
   result := 'created';
   RETURN NEXT;
 EXCEPTION
   WHEN unique_violation THEN
-    SELECT ri.id INTO v_invoice_id
-    FROM rent_invoices ri
+    SELECT ri.id INTO _new_invoice_id
+    FROM public.rent_invoices ri
     WHERE ri.lease_id = p_lease_id
       AND ri.billing_month = p_billing_month
       AND ri.billing_year = p_billing_year;
 
-    invoice_id := v_invoice_id;
+    invoice_id := _new_invoice_id;
     result := 'skipped';
     RETURN NEXT;
 END;
 $create_rent_invoice$;
-
--- Function to record a payment with a locked invoice balance check
-CREATE OR REPLACE FUNCTION record_invoice_payment(
+CREATE OR REPLACE FUNCTION public.record_invoice_payment(
   p_invoice_id UUID,
   p_amount NUMERIC,
   p_payment_date DATE,
   p_payment_method TEXT,
   p_reference TEXT DEFAULT NULL,
-  p_notes TEXT DEFAULT NULL
+  p_notes TEXT DEFAULT NULL,
+  p_client_request_id UUID DEFAULT NULL
 )
 RETURNS UUID
 LANGUAGE plpgsql
@@ -599,12 +618,23 @@ SECURITY INVOKER
 SET search_path = public
 AS $record_invoice_payment$
 DECLARE
-  v_user_id UUID := auth.uid();
-  v_invoice RECORD;
-  v_payment_id UUID;
+  current_user_id UUID := auth.uid();
+  invoice_record RECORD;
+  payment_uuid UUID;
 BEGIN
-  IF v_user_id IS NULL THEN
+  IF current_user_id IS NULL THEN
     RAISE EXCEPTION 'You must be logged in';
+  END IF;
+
+  IF p_client_request_id IS NOT NULL THEN
+    SELECT id INTO payment_uuid
+    FROM public.payments
+    WHERE user_id = current_user_id
+      AND client_request_id = p_client_request_id;
+
+    IF payment_uuid IS NOT NULL THEN
+      RETURN payment_uuid;
+    END IF;
   END IF;
 
   IF p_amount <= 0 THEN
@@ -612,25 +642,25 @@ BEGIN
   END IF;
 
   SELECT *
-  INTO v_invoice
-  FROM rent_invoices
+  INTO invoice_record
+  FROM public.rent_invoices
   WHERE id = p_invoice_id
-    AND user_id = v_user_id
+    AND user_id = current_user_id
   FOR UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Invoice not found';
   END IF;
 
-  IF v_invoice.status = 'cancelled' THEN
+  IF invoice_record.status = 'cancelled' THEN
     RAISE EXCEPTION 'Cannot record a payment against a cancelled invoice';
   END IF;
 
-  IF p_amount > v_invoice.balance THEN
+  IF p_amount > invoice_record.balance THEN
     RAISE EXCEPTION 'Payment amount cannot exceed the invoice balance';
   END IF;
 
-  INSERT INTO payments (
+  INSERT INTO public.payments (
     user_id,
     invoice_id,
     tenant_id,
@@ -641,26 +671,31 @@ BEGIN
     payment_date,
     payment_method,
     reference,
-    notes
+    notes,
+    client_request_id
   )
   VALUES (
-    v_user_id,
-    v_invoice.id,
-    v_invoice.tenant_id,
-    v_invoice.lease_id,
-    v_invoice.property_id,
-    v_invoice.unit_id,
+    current_user_id,
+    invoice_record.id,
+    invoice_record.tenant_id,
+    invoice_record.lease_id,
+    invoice_record.property_id,
+    invoice_record.unit_id,
     p_amount,
     p_payment_date,
     p_payment_method,
     NULLIF(p_reference, ''),
-    NULLIF(p_notes, '')
+    NULLIF(p_notes, ''),
+    p_client_request_id
   )
-  RETURNING id INTO v_payment_id;
+  ON CONFLICT (user_id, client_request_id) WHERE client_request_id IS NOT NULL
+  DO UPDATE SET client_request_id = EXCLUDED.client_request_id
+  RETURNING id INTO payment_uuid;
 
-  RETURN v_payment_id;
+  RETURN payment_uuid;
 END;
 $record_invoice_payment$;
+
 
 -- Function to update unit status when lease changes
 CREATE OR REPLACE FUNCTION update_unit_status_on_lease_change()

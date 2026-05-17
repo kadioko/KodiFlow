@@ -1,10 +1,10 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useRef, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, CreditCard, CheckCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 import { firstRelation } from '@/utils/supabase-relations'
@@ -43,12 +43,25 @@ type InvoiceListRow = {
   properties: { name: string } | { name: string }[] | null
 }
 
+function createClientRequestId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) =>
+    (Number(char) ^ Math.floor(Math.random() * 16) >> Number(char) / 4).toString(16)
+  )
+}
+
 function NewPaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedInvoiceId = searchParams.get('invoice')
   
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
+  const submitLockedRef = useRef(false)
+  const clientRequestIdRef = useRef(createClientRequestId())
   const [error, setError] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
@@ -85,6 +98,7 @@ function NewPaymentPageContent() {
   // Fetch unpaid/partially paid invoices
   useEffect(() => {
     const fetchInvoices = async () => {
+      setFetching(true)
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
@@ -140,6 +154,7 @@ function NewPaymentPageContent() {
           }
         }
       }
+      setFetching(false)
     }
     fetchInvoices()
   }, [preselectedInvoiceId])
@@ -172,24 +187,29 @@ function NewPaymentPageContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitLockedRef.current) return
+    submitLockedRef.current = true
     setLoading(true)
     setError('')
 
     if (!selectedInvoice) {
       setError('Please select an invoice')
       setLoading(false)
+      submitLockedRef.current = false
       return
     }
 
     if (formData.amount <= 0) {
       setError('Payment amount must be greater than 0')
       setLoading(false)
+      submitLockedRef.current = false
       return
     }
 
     if (formData.amount > selectedInvoice.balance) {
       setError('Payment amount cannot exceed the invoice balance')
       setLoading(false)
+      submitLockedRef.current = false
       return
     }
 
@@ -199,6 +219,7 @@ function NewPaymentPageContent() {
     if (!user) {
       setError('You must be logged in')
       setLoading(false)
+      submitLockedRef.current = false
       return
     }
 
@@ -209,17 +230,20 @@ function NewPaymentPageContent() {
       p_payment_method: formData.payment_method,
       p_reference: formData.reference || null,
       p_notes: formData.notes || null,
+      p_client_request_id: clientRequestIdRef.current,
     })
 
     if (insertError) {
       setError(insertError.message)
+      submitLockedRef.current = false
+      setLoading(false)
     } else {
       router.push('/payments')
       router.refresh()
     }
-
-    setLoading(false)
   }
+
+  const formDisabled = loading || fetching
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -235,8 +259,31 @@ function NewPaymentPageContent() {
         </div>
       </div>
 
-      <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <div className="card relative">
+        {loading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+            <div className="rounded-xl border border-success-100 bg-white px-5 py-4 text-center shadow-lg">
+              <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-success-600" />
+              <p className="text-sm font-semibold text-slate-900">Recording payment</p>
+              <p className="mt-1 text-xs text-slate-500">Please wait. This prevents duplicate transactions.</p>
+            </div>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-busy={formDisabled}>
+          {fetching && (
+            <div className="flex items-center rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading open invoices...
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex items-center rounded-lg border border-success-100 bg-success-50 px-4 py-3 text-sm font-medium text-success-700">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Recording this payment. Do not close this page or submit again.
+            </div>
+          )}
+
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -253,6 +300,7 @@ function NewPaymentPageContent() {
               required
               value={formData.invoice_id}
               onChange={(e) => handleInvoiceChange(e.target.value)}
+              disabled={formDisabled}
               className="input"
             >
               <option value="">Select an invoice</option>
@@ -327,6 +375,7 @@ function NewPaymentPageContent() {
               required
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+              disabled={formDisabled}
               className="input"
               placeholder="0.00"
             />
@@ -335,6 +384,7 @@ function NewPaymentPageContent() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance })}
+                  disabled={formDisabled}
                   className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded hover:bg-primary-200"
                 >
                   Full Balance
@@ -342,6 +392,7 @@ function NewPaymentPageContent() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance / 2 })}
+                  disabled={formDisabled}
                   className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
                 >
                   50%
@@ -362,6 +413,7 @@ function NewPaymentPageContent() {
                 required
                 value={formData.payment_date}
                 onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
+                disabled={formDisabled}
                 className="input"
               />
             </div>
@@ -375,6 +427,7 @@ function NewPaymentPageContent() {
                 required
                 value={formData.payment_method}
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as typeof formData.payment_method })}
+                disabled={formDisabled}
                 className="input"
               >
                 {PAYMENT_METHODS.map((method) => (
@@ -396,6 +449,7 @@ function NewPaymentPageContent() {
               type="text"
               value={formData.reference}
               onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+              disabled={formDisabled}
               className="input"
               placeholder="Receipt number, transaction ID, etc."
             />
@@ -411,18 +465,28 @@ function NewPaymentPageContent() {
               rows={3}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              disabled={formDisabled}
               className="input"
               placeholder="Additional notes about this payment..."
             />
           </div>
 
           <div className="flex items-center justify-end space-x-4 pt-4">
-            <Link href="/payments" className="btn-secondary">
+            <Link href="/payments" className={`btn-secondary ${formDisabled ? 'pointer-events-none opacity-50' : ''}`}>
               Cancel
             </Link>
-            <button type="submit" disabled={loading || !selectedInvoice} className="btn-success">
-              <CheckCircle className="h-5 w-5 mr-2" />
-              {loading ? 'Recording...' : 'Record Payment'}
+            <button type="submit" disabled={formDisabled || !selectedInvoice} className="btn-success min-w-40">
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Recording...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-5 w-5 mr-2" />
+                  Record Payment
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -433,7 +497,12 @@ function NewPaymentPageContent() {
 
 export default function NewPaymentPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary-600" />
+        <span className="text-sm font-medium text-slate-600">Loading payment form...</span>
+      </div>
+    }>
       <NewPaymentPageContent />
     </Suspense>
   )

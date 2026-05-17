@@ -1,4 +1,6 @@
--- Harden billing writes, tenant portal reads, and document storage setup.
+-- KodiFlow manual SQL Editor patch.
+-- Paste this whole file into Supabase SQL Editor, press Ctrl+A, then Run.
+-- Do not run selected fragments inside either CREATE FUNCTION block.
 
 DO $kodiflow_migration$
 BEGIN

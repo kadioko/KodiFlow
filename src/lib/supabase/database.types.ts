@@ -462,6 +462,7 @@ export interface Database {
           payment_method: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
           reference: string | null
           notes: string | null
+          client_request_id: string | null
           created_at: string
         }
         Insert: {
@@ -477,6 +478,7 @@ export interface Database {
           payment_method: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
           reference?: string | null
           notes?: string | null
+          client_request_id?: string | null
           created_at?: string
         }
         Update: {
@@ -492,6 +494,7 @@ export interface Database {
           payment_method?: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
           reference?: string | null
           notes?: string | null
+          client_request_id?: string | null
           created_at?: string
         }
       }
@@ -669,6 +672,7 @@ export interface Database {
           p_payment_method: 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
           p_reference?: string | null
           p_notes?: string | null
+          p_client_request_id?: string | null
         }
         Returns: string
       }
