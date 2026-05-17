@@ -1,11 +1,12 @@
 'use client'
 
 import { User } from '@supabase/supabase-js'
-import { Search, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Search, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { NotificationManager } from '@/components/notifications/NotificationManager'
 import { BrandLogo } from '@/components/brand/BrandLogo'
+import { useState } from 'react'
 
 interface HeaderProps {
   user: User
@@ -14,11 +15,14 @@ interface HeaderProps {
   onOpenMobileMenu?: () => void
 }
 
-export function Header({ user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu }: HeaderProps) {
+export function Header({ user: _user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/auth/login')
     router.refresh()
@@ -73,11 +77,12 @@ export function Header({ user, dashboardVisible = true, onToggleDashboard, onOpe
 
         <button
           onClick={handleLogout}
+          disabled={loggingOut}
           className="flex items-center rounded-xl px-2 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:px-3"
           aria-label="Logout"
         >
-          <LogOut className="mr-0 h-5 w-5 sm:mr-1" />
-          <span className="hidden sm:inline">Logout</span>
+          {loggingOut ? <Loader2 className="mr-0 h-5 w-5 animate-spin sm:mr-1" /> : <LogOut className="mr-0 h-5 w-5 sm:mr-1" />}
+          <span className="hidden sm:inline">{loggingOut ? 'Signing out...' : 'Logout'}</span>
         </button>
       </div>
     </header>

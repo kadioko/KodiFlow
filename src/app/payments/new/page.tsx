@@ -127,15 +127,15 @@ function NewPaymentPageContent() {
             const property = firstRelation(inv.properties)
 
             return {
-            id: inv.id,
-            invoice_number: inv.invoice_number,
-            tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
-            unit_name: unit?.unit_name || 'Unknown unit',
-            property_name: property?.name || 'Unknown property',
-            balance: inv.balance,
-            subtotal: inv.subtotal,
-            amount_paid: inv.amount_paid,
-            due_date: inv.due_date,
+              id: inv.id,
+              invoice_number: inv.invoice_number,
+              tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
+              unit_name: unit?.unit_name || 'Unknown unit',
+              property_name: property?.name || 'Unknown property',
+              balance: inv.balance,
+              subtotal: inv.subtotal,
+              amount_paid: inv.amount_paid,
+              due_date: inv.due_date,
             }
           })
           setInvoices(formattedInvoices)
@@ -270,6 +270,7 @@ function NewPaymentPageContent() {
           </div>
         )}
         <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-busy={formDisabled}>
+          <fieldset disabled={formDisabled} className="space-y-6 disabled:opacity-75">
           {fetching && (
             <div className="flex items-center rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -300,7 +301,6 @@ function NewPaymentPageContent() {
               required
               value={formData.invoice_id}
               onChange={(e) => handleInvoiceChange(e.target.value)}
-              disabled={formDisabled}
               className="input"
             >
               <option value="">Select an invoice</option>
@@ -375,7 +375,6 @@ function NewPaymentPageContent() {
               required
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-              disabled={formDisabled}
               className="input"
               placeholder="0.00"
             />
@@ -384,7 +383,6 @@ function NewPaymentPageContent() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance })}
-                  disabled={formDisabled}
                   className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded hover:bg-primary-200"
                 >
                   Full Balance
@@ -392,7 +390,6 @@ function NewPaymentPageContent() {
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance / 2 })}
-                  disabled={formDisabled}
                   className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
                 >
                   50%
@@ -413,7 +410,6 @@ function NewPaymentPageContent() {
                 required
                 value={formData.payment_date}
                 onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                disabled={formDisabled}
                 className="input"
               />
             </div>
@@ -427,7 +423,6 @@ function NewPaymentPageContent() {
                 required
                 value={formData.payment_method}
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as typeof formData.payment_method })}
-                disabled={formDisabled}
                 className="input"
               >
                 {PAYMENT_METHODS.map((method) => (
@@ -449,7 +444,6 @@ function NewPaymentPageContent() {
               type="text"
               value={formData.reference}
               onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
-              disabled={formDisabled}
               className="input"
               placeholder="Receipt number, transaction ID, etc."
             />
@@ -465,11 +459,11 @@ function NewPaymentPageContent() {
               rows={3}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              disabled={formDisabled}
               className="input"
               placeholder="Additional notes about this payment..."
             />
           </div>
+          </fieldset>
 
           <div className="flex items-center justify-end space-x-4 pt-4">
             <Link href="/payments" className={`btn-secondary ${formDisabled ? 'pointer-events-none opacity-50' : ''}`}>

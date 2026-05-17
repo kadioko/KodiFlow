@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import DashboardPropertyVisibility from '@/components/dashboard/DashboardPropertyVisibility'
+import { LoadingState } from '@/components/ui/LoadingState'
 import Link from 'next/link'
 import {
   Building2,
@@ -129,7 +130,7 @@ export default async function DashboardPage() {
   const metrics = await getDashboardMetrics()
 
   if (!metrics) {
-    return <div>Loading...</div>
+    return <LoadingState title="Loading dashboard" message="Checking your session and property metrics..." fullHeight />
   }
 
   return (
@@ -333,4 +334,3 @@ export default async function DashboardPage() {
     </div>
   )
 }
-

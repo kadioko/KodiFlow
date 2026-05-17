@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { MobileSidebar, Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { PageSkeleton } from '@/components/ui/LoadingState'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -46,7 +47,15 @@ export function AppShell({ children }: AppShellProps) {
     return <>{children}</>
   }
 
-  if (loading || !user) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+        <PageSkeleton />
+      </div>
+    )
+  }
+
+  if (!user) {
     return <>{children}</>
   }
 
