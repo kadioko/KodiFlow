@@ -7,12 +7,17 @@ import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react'
 import { DateInput } from '@/components/ui/DateInput'
 import { createClient } from '@/lib/supabase/client'
 import { PAYMENT_METHODS } from '@/utils/constants'
-import { formatCurrency } from '@/utils/currency'
+import { formatCurrency, parseCurrencyInput } from '@/utils/currency'
 
 type PaymentMethod = 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other'
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
+}
+
+function formatAmountInput(amount: number) {
+  if (!amount) return ''
+  return amount.toLocaleString('en-TZ', { maximumFractionDigits: 0 })
 }
 
 export default function EditPaymentPage() {
@@ -26,6 +31,7 @@ export default function EditPaymentPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceSubtotal, setInvoiceSubtotal] = useState(0)
   const [otherPaid, setOtherPaid] = useState(0)
+  const [amountInput, setAmountInput] = useState('')
   const [formData, setFormData] = useState({
     invoice_id: '',
     amount: 0,
@@ -85,6 +91,7 @@ export default function EditPaymentPage() {
       reference: payment.reference || '',
       notes: payment.notes || '',
     })
+    setAmountInput(formatAmountInput(payment.amount))
     setLoading(false)
   }
 
@@ -198,7 +205,20 @@ export default function EditPaymentPage() {
 
         <div className="form-group">
           <label htmlFor="amount" className="label">Amount</label>
-          <input id="amount" required min="0" type="number" className="input" value={formData.amount} onChange={(event) => setFormData({ ...formData, amount: parseFloat(event.target.value) || 0 })} />
+          <input
+            id="amount"
+            required
+            type="text"
+            inputMode="numeric"
+            className="input"
+            value={amountInput}
+            onChange={(event) => {
+              const amount = parseCurrencyInput(event.target.value)
+              setAmountInput(event.target.value ? amount.toLocaleString('en-TZ', { maximumFractionDigits: 0 }) : '')
+              setFormData({ ...formData, amount })
+            }}
+            placeholder="Enter amount"
+          />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

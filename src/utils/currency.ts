@@ -16,7 +16,7 @@ export function formatCurrency(
 
   // Handle TZS specially since it's not in all Intl locales
   if (currency === 'TZS') {
-    return `TZS ${amount.toLocaleString('en-TZ')}`;
+    return `TZS ${Math.round(amount).toLocaleString('en-TZ')}`;
   }
 
   return formatter.format(amount);
