@@ -403,7 +403,7 @@ export default function GenerateInvoicesPage() {
           <div className="flex items-center">
             <input
               type="checkbox"
-              checked={selectedLeases.size === leases.length && leases.length > 0}
+              checked={selectedLeases.size === leases.filter(isLeaseInvoiceableForPeriod).length && selectedLeases.size > 0}
               onChange={toggleAll}
               className="h-4 w-4 text-primary-600 rounded border-gray-300 mr-3"
             />
@@ -454,7 +454,7 @@ export default function GenerateInvoicesPage() {
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
                       {!isInvoiceable && (
                         <p className="text-xs font-medium text-warning-700">
-                          Not a {lease.billing_frequency.replace('_', ' ')} cycle from {formatDate(lease.start_date)}
+                          Selected period is outside {formatDate(lease.start_date)} - {formatDate(lease.end_date)}
                         </p>
                       )}
                       {hasWithholding && (

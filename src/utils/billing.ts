@@ -28,13 +28,12 @@ export function getBillingPeriod(billingYear: number, billingMonth: number, bill
   return { months, periodStart, periodEnd }
 }
 
-export function isBillingPeriodOnCadence(leaseStartDate: string, billingYear: number, billingMonth: number, billingFrequency: string) {
-  const months = billingFrequencyMonths[billingFrequency] || 1
+export function isBillingPeriodOnCadence(leaseStartDate: string, billingYear: number, billingMonth: number, _billingFrequency: string) {
   const leaseStart = new Date(`${leaseStartDate}T00:00:00Z`)
   const leaseStartIndex = leaseStart.getUTCFullYear() * 12 + leaseStart.getUTCMonth()
   const billingIndex = billingYear * 12 + (billingMonth - 1)
 
-  return billingIndex >= leaseStartIndex && (billingIndex - leaseStartIndex) % months === 0
+  return billingIndex >= leaseStartIndex
 }
 
 export function getLeaseBillingPeriod(leaseStartDate: string, billingYear: number, billingMonth: number, billingFrequency: string) {

@@ -45,9 +45,9 @@ describe('billing helpers', () => {
     expect(calculateChargeAmountForPeriod(100000, 'one_time', 'annually')).toBe(100000)
   })
 
-  it('checks invoice billing cadence and lease term boundaries', () => {
+  it('allows invoice billing to start from any selected month on or after the lease start month', () => {
     expect(isBillingPeriodOnCadence('2026-01-01', 2026, 1, 'quarterly')).toBe(true)
-    expect(isBillingPeriodOnCadence('2026-01-01', 2026, 2, 'quarterly')).toBe(false)
+    expect(isBillingPeriodOnCadence('2026-01-01', 2026, 2, 'quarterly')).toBe(true)
     expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 1, 'quarterly')).toBe(true)
     expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 2, 'quarterly')).toBe(false)
   })
