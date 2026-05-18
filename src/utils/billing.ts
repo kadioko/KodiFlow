@@ -59,7 +59,7 @@ export function isBillingPeriodWithinLease(leaseStartDate: string, leaseEndDate:
 
   const leaseEnd = new Date(`${leaseEndDate}T00:00:00Z`)
 
-  return period.periodEnd <= leaseEnd
+  return period.periodStart <= leaseEnd
 }
 
 export function getRenewalTerm(previousEndDate: string, billingFrequency: string) {

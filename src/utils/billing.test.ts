@@ -49,7 +49,12 @@ describe('billing helpers', () => {
     expect(isBillingPeriodOnCadence('2026-01-01', 2026, 1, 'quarterly')).toBe(true)
     expect(isBillingPeriodOnCadence('2026-01-01', 2026, 2, 'quarterly')).toBe(true)
     expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 1, 'quarterly')).toBe(true)
-    expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 2, 'quarterly')).toBe(false)
+    expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 2, 'quarterly')).toBe(true)
+    expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 4, 'quarterly')).toBe(false)
+  })
+
+  it('allows the last invoice period to be clipped to the lease end date', () => {
+    expect(isBillingPeriodWithinLease('2025-12-01', '2026-05-30', 2025, 12, 'semi_annually')).toBe(true)
   })
 
   it('anchors invoice billing periods to the original lease start day', () => {
