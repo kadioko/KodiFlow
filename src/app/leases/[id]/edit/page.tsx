@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { DateInput } from '@/components/ui/DateInput'
 import { createClient } from '@/lib/supabase/client'
 import { BILLING_FREQUENCIES, LEASE_STATUSES, LEASE_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
@@ -39,6 +41,7 @@ interface LeaseFormData {
   monthly_rent: number
   service_charge: number
   deposit_amount: number
+  opening_balance: number
   rent_due_day: number
   lease_type: LeaseType
   billing_frequency: BillingFrequency
@@ -75,6 +78,7 @@ export default function EditLeasePage() {
     monthly_rent: 0,
     service_charge: 0,
     deposit_amount: 0,
+    opening_balance: 0,
     rent_due_day: 1,
     lease_type: 'residential',
     billing_frequency: 'monthly',
@@ -104,7 +108,7 @@ export default function EditLeasePage() {
       return
     }
 
-    const [leaseResult, tenantsResult, unitsResult, serviceChargeResult] = await Promise.all([
+    const [leaseResult, tenantsResult, unitsResult, serviceChargeResult, openingBalanceResult] = await Promise.all([
       supabase
         .from('leases')
         .select('*')
@@ -129,6 +133,15 @@ export default function EditLeasePage() {
         .eq('charge_type', 'service_charge')
         .eq('is_active', true)
         .maybeSingle(),
+      supabase
+        .from('charges')
+        .select('id, amount')
+        .eq('lease_id', leaseId)
+        .eq('user_id', user.id)
+        .eq('charge_name', 'Opening Balance')
+        .eq('frequency', 'one_time')
+        .eq('is_active', true)
+        .maybeSingle(),
     ])
 
     if (leaseResult.error || !leaseResult.data) {
@@ -148,6 +161,7 @@ export default function EditLeasePage() {
       monthly_rent: lease.monthly_rent,
       service_charge: serviceChargeResult.data?.amount || 0,
       deposit_amount: lease.deposit_amount || 0,
+      opening_balance: openingBalanceResult.data?.amount || 0,
       rent_due_day: lease.rent_due_day || 1,
       lease_type: lease.lease_type,
       billing_frequency: lease.billing_frequency,
@@ -292,6 +306,63 @@ export default function EditLeasePage() {
     return null
   }
 
+  const syncOpeningBalance = async (userId: string) => {
+    const supabase = createClient()
+    const { data: existingCharge } = await supabase
+      .from('charges')
+      .select('id')
+      .eq('lease_id', leaseId)
+      .eq('user_id', userId)
+      .eq('charge_name', 'Opening Balance')
+      .eq('frequency', 'one_time')
+      .maybeSingle()
+
+    if (formData.opening_balance > 0) {
+      if (existingCharge) {
+        const { error: updateError } = await supabase
+          .from('charges')
+          .update({
+            charge_type: 'other',
+            amount: formData.opening_balance,
+            is_active: true,
+            notes: 'Previous balance carried into this lease',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingCharge.id)
+          .eq('user_id', userId)
+
+        return updateError
+      }
+
+      const { error: insertError } = await supabase
+        .from('charges')
+        .insert({
+          user_id: userId,
+          lease_id: leaseId!,
+          charge_name: 'Opening Balance',
+          charge_type: 'other',
+          amount: formData.opening_balance,
+          frequency: 'one_time',
+          is_active: true,
+          notes: 'Previous balance carried into this lease',
+        })
+
+      return insertError
+    }
+
+    if (existingCharge) {
+      const { error: deactivateError } = await supabase
+        .from('charges')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', existingCharge.id)
+        .eq('user_id', userId)
+
+      return deactivateError
+    }
+
+    return null
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setSaving(true)
@@ -338,6 +409,13 @@ export default function EditLeasePage() {
     const serviceChargeError = await syncServiceCharge(user.id)
     if (serviceChargeError) {
       setError(serviceChargeError.message)
+      setSaving(false)
+      return
+    }
+
+    const openingBalanceError = await syncOpeningBalance(user.id)
+    if (openingBalanceError) {
+      setError(openingBalanceError.message)
       setSaving(false)
       return
     }
@@ -400,14 +478,8 @@ export default function EditLeasePage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="form-group">
-            <label htmlFor="start_date" className="label">Start Date</label>
-            <input id="start_date" required type="date" className="input" value={formData.start_date} onChange={(event) => setFormData({ ...formData, start_date: event.target.value })} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="end_date" className="label">End Date</label>
-            <input id="end_date" required type="date" className="input" value={formData.end_date} onChange={(event) => setFormData({ ...formData, end_date: event.target.value })} />
-          </div>
+          <DateInput id="start_date" label="Start Date" required value={formData.start_date} onChange={(value) => setFormData({ ...formData, start_date: value })} />
+          <DateInput id="end_date" label="End Date" required value={formData.end_date} onChange={(value) => setFormData({ ...formData, end_date: value })} />
           <div className="form-group">
             <label htmlFor="status" className="label">Status</label>
             <select id="status" required className="input" value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value as LeaseStatus })}>
@@ -417,18 +489,19 @@ export default function EditLeasePage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="form-group">
-            <label htmlFor="monthly_rent" className="label">Monthly Rent</label>
-            <input id="monthly_rent" required min="0" type="number" className="input" value={formData.monthly_rent} onChange={(event) => setFormData({ ...formData, monthly_rent: parseFloat(event.target.value) || 0 })} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="service_charge" className="label">Service Charge</label>
-            <input id="service_charge" min="0" type="number" className="input" value={formData.service_charge} onChange={(event) => setFormData({ ...formData, service_charge: parseFloat(event.target.value) || 0 })} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="deposit_amount" className="label">Deposit</label>
-            <input id="deposit_amount" min="0" type="number" className="input" value={formData.deposit_amount} onChange={(event) => setFormData({ ...formData, deposit_amount: parseFloat(event.target.value) || 0 })} />
-          </div>
+          <CurrencyInput id="monthly_rent" label="Monthly Rent" required value={formData.monthly_rent} onChange={(value) => setFormData({ ...formData, monthly_rent: value })} />
+          <CurrencyInput id="service_charge" label="Service Charge" value={formData.service_charge} onChange={(value) => setFormData({ ...formData, service_charge: value })} />
+          <CurrencyInput id="deposit_amount" label="Deposit" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <CurrencyInput
+            id="opening_balance"
+            label="Opening Balance (old owed)"
+            value={formData.opening_balance}
+            onChange={(value) => setFormData({ ...formData, opening_balance: value })}
+            helperText="One-time amount added to the next generated invoice."
+          />
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -456,6 +529,26 @@ export default function EditLeasePage() {
             </div>
           </div>
         </div>
+
+        {formData.opening_balance > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">First Invoice Preview</p>
+            <div className="mt-2 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-amber-700">Monthly total</p>
+                <p className="font-bold text-slate-900">{formatCurrency(formData.monthly_rent + formData.service_charge)}</p>
+              </div>
+              <div>
+                <p className="text-amber-700">Opening balance</p>
+                <p className="font-bold text-slate-900">{formatCurrency(formData.opening_balance)}</p>
+              </div>
+              <div>
+                <p className="text-amber-700">First invoice</p>
+                <p className="font-bold text-primary-700">{formatCurrency(formData.monthly_rent + formData.service_charge + formData.opening_balance)}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="form-group">

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react'
+import { DateInput } from '@/components/ui/DateInput'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 import { firstRelation } from '@/utils/supabase-relations'
@@ -400,19 +401,7 @@ function NewPaymentPageContent() {
 
           {/* Payment Date & Method */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-group">
-              <label htmlFor="payment_date" className="label">
-                Payment Date <span className="text-danger-500">*</span>
-              </label>
-              <input
-                id="payment_date"
-                type="date"
-                required
-                value={formData.payment_date}
-                onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                className="input"
-              />
-            </div>
+            <DateInput id="payment_date" label="Payment Date" required value={formData.payment_date} onChange={(value) => setFormData({ ...formData, payment_date: value })} />
 
             <div className="form-group">
               <label htmlFor="payment_method" className="label">

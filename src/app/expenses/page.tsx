@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency } from '@/utils/currency'
+import { formatCurrency, formatDate } from '@/utils/currency'
 import { ReceiptText } from 'lucide-react'
 
 async function getExpenses() {
@@ -79,7 +79,7 @@ export default async function ExpensesPage() {
               <tbody className="table-body">
                 {expenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-slate-50">
-                    <td className="table-cell">{new Date(expense.expense_date).toLocaleDateString()}</td>
+                    <td className="table-cell">{formatDate(expense.expense_date)}</td>
                     <td className="table-cell">
                       <span className="badge bg-warning-100 text-warning-800">{expense.category}</span>
                       {expense.description && <p className="mt-1 text-xs text-slate-500">{expense.description}</p>}

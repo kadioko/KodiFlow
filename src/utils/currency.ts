@@ -32,24 +32,84 @@ export function parseCurrencyInput(value: string): number {
   return parseFloat(cleaned) || 0;
 }
 
+function parseDateParts(date: string | Date): { day: number; month: number; year: number } | null {
+  if (date instanceof Date) {
+    if (Number.isNaN(date.getTime())) return null;
+    return {
+      day: date.getDate(),
+      month: date.getMonth() + 1,
+      year: date.getFullYear(),
+    };
+  }
+
+  const isoMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return {
+      day: Number(isoMatch[3]),
+      month: Number(isoMatch[2]),
+      year: Number(isoMatch[1]),
+    };
+  }
+
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return {
+    day: parsed.getDate(),
+    month: parsed.getMonth() + 1,
+    year: parsed.getFullYear(),
+  };
+}
+
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  const parts = parseDateParts(date);
+  if (!parts) return '';
+
+  return `${String(parts.day).padStart(2, '0')}/${String(parts.month).padStart(2, '0')}/${parts.year}`;
 }
 
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  const formattedDate = formatDate(d);
+  const formattedTime = d.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  return formattedDate ? `${formattedDate}, ${formattedTime}` : '';
+}
+
+export function formatDateInputValue(value: string): string {
+  return value ? formatDate(value) : '';
+}
+
+export function formatDateInputText(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+
+  return [day, month, year].filter(Boolean).join('/');
+}
+
+export function parseDateInputToISO(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 8) return '';
+
+  const day = Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+  const year = Number(digits.slice(4, 8));
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return '';
+  }
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 export function getMonthName(month: number): string {

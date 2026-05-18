@@ -4,7 +4,9 @@ import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, FileText, Calendar } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { DateInput } from '@/components/ui/DateInput'
 import { LEASE_TYPES, BILLING_FREQUENCIES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
@@ -45,6 +47,7 @@ function NewLeasePageContent() {
     monthly_rent: number
     service_charge: number
     deposit_amount: number
+    opening_balance: number
     rent_due_day: number
     lease_type: 'residential' | 'commercial'
     billing_frequency: 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
@@ -61,6 +64,7 @@ function NewLeasePageContent() {
     monthly_rent: 0,
     service_charge: 0,
     deposit_amount: 0,
+    opening_balance: 0,
     rent_due_day: 1,
     lease_type: 'residential',
     billing_frequency: 'monthly',
@@ -214,6 +218,27 @@ function NewLeasePageContent() {
         }
       }
 
+      if (formData.opening_balance > 0) {
+        const { error: openingBalanceError } = await supabase
+          .from('charges')
+          .insert({
+            user_id: user.id,
+            lease_id: createdLease.id,
+            charge_name: 'Opening Balance',
+            charge_type: 'other',
+            amount: formData.opening_balance,
+            frequency: 'one_time',
+            is_active: true,
+            notes: 'Previous balance carried into this lease',
+          })
+
+        if (openingBalanceError) {
+          setError(openingBalanceError.message)
+          setLoading(false)
+          return
+        }
+      }
+
       await supabase
         .from('units')
         .update({ status: 'occupied', updated_at: new Date().toISOString() })
@@ -339,80 +364,25 @@ function NewLeasePageContent() {
 
           {/* Dates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-group">
-              <label htmlFor="start_date" className="label">
-                Start Date <span className="text-danger-500">*</span>
-              </label>
-              <input
-                id="start_date"
-                type="date"
-                required
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                className="input"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="end_date" className="label">
-                End Date <span className="text-danger-500">*</span>
-              </label>
-              <input
-                id="end_date"
-                type="date"
-                required
-                value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                className="input"
-              />
-            </div>
+            <DateInput id="start_date" label="Start Date" required value={formData.start_date} onChange={(value) => setFormData({ ...formData, start_date: value })} />
+            <DateInput id="end_date" label="End Date" required value={formData.end_date} onChange={(value) => setFormData({ ...formData, end_date: value })} />
           </div>
 
           {/* Rent, Service Charge & Deposit */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="form-group">
-              <label htmlFor="monthly_rent" className="label">
-                Monthly Rent (TZS) <span className="text-danger-500">*</span>
-              </label>
-              <input
-                id="monthly_rent"
-                type="number"
-                min="0"
-                required
-                value={formData.monthly_rent}
-                onChange={(e) => setFormData({ ...formData, monthly_rent: parseFloat(e.target.value) || 0 })}
-                className="input"
-              />
-            </div>
+            <CurrencyInput id="monthly_rent" label="Monthly Rent (TZS)" required value={formData.monthly_rent} onChange={(value) => setFormData({ ...formData, monthly_rent: value })} />
+            <CurrencyInput id="service_charge" label="Service Charge (TZS)" value={formData.service_charge} onChange={(value) => setFormData({ ...formData, service_charge: value })} />
+            <CurrencyInput id="deposit_amount" label="Deposit (TZS)" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} />
+          </div>
 
-            <div className="form-group">
-              <label htmlFor="service_charge" className="label">
-                Service Charge (TZS)
-              </label>
-              <input
-                id="service_charge"
-                type="number"
-                min="0"
-                value={formData.service_charge}
-                onChange={(e) => setFormData({ ...formData, service_charge: parseFloat(e.target.value) || 0 })}
-                className="input"
-                placeholder="0"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="deposit_amount" className="label">
-                Deposit (TZS)
-              </label>
-              <input
-                id="deposit_amount"
-                type="number"
-                min="0"
-                value={formData.deposit_amount}
-                onChange={(e) => setFormData({ ...formData, deposit_amount: parseFloat(e.target.value) || 0 })}
-                className="input"
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <CurrencyInput
+              id="opening_balance"
+              label="Opening Balance (old owed)"
+              value={formData.opening_balance}
+              onChange={(value) => setFormData({ ...formData, opening_balance: value })}
+              helperText="One-time amount added to the next generated invoice."
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -453,6 +423,26 @@ function NewLeasePageContent() {
               </div>
             </div>
           </div>
+
+          {formData.opening_balance > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-800">First Invoice Preview</p>
+              <div className="mt-2 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <p className="text-amber-700">Monthly total</p>
+                  <p className="font-bold text-slate-900">{formatCurrency(formData.monthly_rent + formData.service_charge)}</p>
+                </div>
+                <div>
+                  <p className="text-amber-700">Opening balance</p>
+                  <p className="font-bold text-slate-900">{formatCurrency(formData.opening_balance)}</p>
+                </div>
+                <div>
+                  <p className="text-amber-700">First invoice</p>
+                  <p className="font-bold text-primary-700">{formatCurrency(formData.monthly_rent + formData.service_charge + formData.opening_balance)}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Rent Escalation (Commercial) */}
           {formData.lease_type === 'commercial' && (

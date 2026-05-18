@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react'
+import { DateInput } from '@/components/ui/DateInput'
 import { createClient } from '@/lib/supabase/client'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
@@ -201,10 +202,7 @@ export default function EditPaymentPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="form-group">
-            <label htmlFor="payment_date" className="label">Payment Date</label>
-            <input id="payment_date" required type="date" className="input" value={formData.payment_date} onChange={(event) => setFormData({ ...formData, payment_date: event.target.value })} />
-          </div>
+          <DateInput id="payment_date" label="Payment Date" required value={formData.payment_date} onChange={(value) => setFormData({ ...formData, payment_date: value })} />
           <div className="form-group">
             <label htmlFor="payment_method" className="label">Payment Method</label>
             <select id="payment_method" required className="input" value={formData.payment_method} onChange={(event) => setFormData({ ...formData, payment_method: event.target.value as PaymentMethod })}>

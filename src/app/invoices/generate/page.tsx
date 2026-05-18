@@ -33,6 +33,7 @@ interface Charge {
   charge_name: string
   charge_type: Database['public']['Tables']['charges']['Row']['charge_type']
   amount: number
+  frequency: string | null
   notes?: string
 }
 
@@ -181,17 +182,21 @@ export default function GenerateInvoicesPage() {
   const calculateInvoiceTotal = (lease: Lease) => {
     const { months } = getBillingPeriod(billingYear, billingMonth, lease.billing_frequency)
     const leaseCharges = charges[lease.id] || []
+    const recurringCharges = leaseCharges.filter(charge => charge.charge_type !== 'rent' && charge.frequency !== 'one_time')
+    const oneTimeTotal = leaseCharges
+      .filter(charge => charge.frequency === 'one_time')
+      .reduce((sum, charge) => sum + charge.amount, 0)
     const grossTotal = calculateBillingInvoiceTotal(
       lease.monthly_rent,
-      leaseCharges.filter(charge => charge.charge_type !== 'rent').map(charge => charge.amount),
+      recurringCharges.map(charge => charge.amount),
       lease.billing_frequency
-    )
+    ) + oneTimeTotal
     const rentWithholding = lease.rent_withholding_tax_enabled
       ? (lease.monthly_rent * months * lease.rent_withholding_tax_rate) / 100
       : 0
     const serviceChargeTotal = leaseCharges
       .filter(charge => charge.charge_type === 'service_charge')
-      .reduce((sum, charge) => sum + (charge.amount * months), 0)
+      .reduce((sum, charge) => sum + (charge.frequency === 'one_time' ? charge.amount : charge.amount * months), 0)
     const serviceWithholding = lease.service_charge_withholding_tax_enabled
       ? (serviceChargeTotal * lease.service_charge_withholding_tax_rate) / 100
       : 0
@@ -384,7 +389,9 @@ export default function GenerateInvoicesPage() {
             <tbody className="table-body">
               {leases.map((lease) => {
                 const leaseCharges = charges[lease.id] || []
-                const additionalTotal = leaseCharges.reduce((sum, c) => sum + c.amount, 0)
+                const recurringAdditionalTotal = leaseCharges.filter((charge) => charge.frequency !== 'one_time').reduce((sum, c) => sum + c.amount, 0)
+                const oneTimeTotal = leaseCharges.filter((charge) => charge.frequency === 'one_time').reduce((sum, c) => sum + c.amount, 0)
+                const additionalTotal = recurringAdditionalTotal + oneTimeTotal
                 const total = calculateInvoiceTotal(lease)
                 const hasWithholding = lease.rent_withholding_tax_enabled || lease.service_charge_withholding_tax_enabled
                 const isGenerating = generating.has(lease.id)
@@ -422,7 +429,7 @@ export default function GenerateInvoicesPage() {
                         <div className="text-sm">
                           <p className="text-success-600">+{formatCurrency(additionalTotal)}</p>
                           <p className="text-xs text-gray-500">
-                            {leaseCharges.map(c => c.charge_name).join(', ')}
+                            {leaseCharges.map(c => c.frequency === 'one_time' ? `${c.charge_name} (one-time)` : c.charge_name).join(', ')}
                           </p>
                         </div>
                       ) : (

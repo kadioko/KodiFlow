@@ -50,6 +50,7 @@ DECLARE
   _service_total NUMERIC := 0;
   _rent_wht NUMERIC := 0;
   _service_wht NUMERIC := 0;
+  _charge_amount NUMERIC := 0;
   _charge RECORD;
 BEGIN
   IF _uid IS NULL THEN
@@ -120,17 +121,21 @@ BEGIN
   _subtotal := COALESCE(_rent, 0) * _months;
 
   FOR _charge IN
-    SELECT charge_name, charge_type, amount, notes
+    SELECT charge_name, charge_type, amount, frequency, notes
     FROM public.charges
     WHERE lease_id = p_lease_id
       AND user_id = _uid
       AND is_active = TRUE
       AND charge_type <> 'rent'
   LOOP
-    _subtotal := _subtotal + (COALESCE(_charge.amount, 0) * _months);
+    _charge_amount := CASE
+      WHEN _charge.frequency = 'one_time' THEN COALESCE(_charge.amount, 0)
+      ELSE COALESCE(_charge.amount, 0) * _months
+    END;
+    _subtotal := _subtotal + _charge_amount;
 
     IF _charge.charge_type = 'service_charge' THEN
-      _service_total := _service_total + (COALESCE(_charge.amount, 0) * _months);
+      _service_total := _service_total + _charge_amount;
     END IF;
   END LOOP;
 
@@ -184,20 +189,25 @@ BEGIN
   );
 
   FOR _charge IN
-    SELECT charge_name, charge_type, amount, notes
+    SELECT charge_name, charge_type, amount, frequency, notes
     FROM public.charges
     WHERE lease_id = p_lease_id
       AND user_id = _uid
       AND is_active = TRUE
       AND charge_type <> 'rent'
   LOOP
+    _charge_amount := CASE
+      WHEN _charge.frequency = 'one_time' THEN COALESCE(_charge.amount, 0)
+      ELSE COALESCE(_charge.amount, 0) * _months
+    END;
+
     INSERT INTO public.invoice_items (user_id, invoice_id, item_name, item_type, amount, notes)
     VALUES (
       _uid,
       _new_invoice_id,
       _charge.charge_name,
       _charge.charge_type,
-      COALESCE(_charge.amount, 0) * _months,
+      _charge_amount,
       _charge.notes
     );
   END LOOP;
@@ -225,6 +235,14 @@ BEGIN
       'Tenant withholding tax deduction on service charge'
     );
   END IF;
+
+  UPDATE public.charges
+  SET is_active = FALSE,
+      updated_at = NOW()
+  WHERE lease_id = p_lease_id
+    AND user_id = _uid
+    AND is_active = TRUE
+    AND frequency = 'one_time';
 
   invoice_id := _new_invoice_id;
   result := 'created';

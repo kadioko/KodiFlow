@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Save, Trash2 } from 'lucide-react'
+import { DateInput } from '@/components/ui/DateInput'
 import { createClient } from '@/lib/supabase/client'
 import { INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
@@ -212,10 +213,7 @@ export default function EditInvoicePage() {
         {error && <div className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">{error}</div>}
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="form-group">
-            <label htmlFor="due_date" className="label">Due Date</label>
-            <input id="due_date" required type="date" className="input" value={formData.due_date} onChange={(event) => setFormData({ ...formData, due_date: event.target.value })} />
-          </div>
+          <DateInput id="due_date" label="Due Date" required value={formData.due_date} onChange={(value) => setFormData({ ...formData, due_date: value })} />
           <div className="form-group">
             <label htmlFor="status" className="label">Status</label>
             <select id="status" required className="input" value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value as InvoiceStatus })}>

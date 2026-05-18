@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, DoorOpen, MapPin, Users, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
 import { getLabelByValue, getColorByValue, UNIT_TYPES, UNIT_STATUSES } from '@/utils/constants'
-import { formatCurrency } from '@/utils/currency'
+import { formatCurrency, formatDate } from '@/utils/currency'
 
 const floorSortOrder: Record<string, number> = {
   basement: 0,
@@ -182,7 +182,7 @@ export default async function UnitsPage() {
                           <p className="text-sm text-gray-900">{unit.current_tenant_name}</p>
                           {unit.lease_end_date && (
                             <p className="text-xs text-gray-500">
-                              Until {new Date(unit.lease_end_date).toLocaleDateString()}
+                              Until {formatDate(unit.lease_end_date)}
                             </p>
                           )}
                         </div>

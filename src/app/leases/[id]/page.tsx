@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { DateInput } from '@/components/ui/DateInput'
 import { 
   ArrowLeft, 
   FileText, 
@@ -592,13 +593,12 @@ export default function LeaseDetailPage() {
             
             <div className="space-y-4 mb-6">
               <div className="form-group">
-                <label className="label">New End Date</label>
-                <input
-                  type="date"
+                <DateInput
+                  id="renew_end_date"
+                  label="New End Date"
                   value={renewData.new_end_date}
-                  onChange={(e) => setRenewData({ ...renewData, new_end_date: e.target.value })}
-                  className="input"
                   min={lease.end_date}
+                  onChange={(value) => setRenewData({ ...renewData, new_end_date: value })}
                 />
               </div>
               

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { DateInput } from '@/components/ui/DateInput'
 import { UTILITY_TYPES, getLabelByValue } from '@/utils/constants'
-import { formatCurrency, getCurrentMonthYear } from '@/utils/currency'
+import { formatCurrency, formatDate, getCurrentMonthYear } from '@/utils/currency'
 import { Bolt, Droplets, Gauge, Plus, Trash2 } from 'lucide-react'
 
 type UtilityType = 'water' | 'electricity'
@@ -253,10 +254,7 @@ export default function UtilitiesPage() {
             <label className="label">Rate per Unit</label>
             <input className="input" type="number" min="0" step="0.01" value={formData.rate_per_unit} onChange={(event) => setFormData({ ...formData, rate_per_unit: toNumber(event.target.value) })} />
           </div>
-          <div className="form-group">
-            <label className="label">Reading Date</label>
-            <input className="input" type="date" value={formData.reading_date} onChange={(event) => setFormData({ ...formData, reading_date: event.target.value })} />
-          </div>
+          <DateInput id="reading_date" label="Reading Date" value={formData.reading_date} onChange={(value) => setFormData({ ...formData, reading_date: value })} />
           <div className="form-group">
             <label className="label">Billing Month</label>
             <input className="input" type="number" min="1" max="12" value={formData.billing_month} onChange={(event) => setFormData({ ...formData, billing_month: parseInt(event.target.value) || month })} />
@@ -325,7 +323,7 @@ export default function UtilitiesPage() {
                       <td className="table-cell">{reading.previous_reading.toLocaleString()} → {reading.current_reading.toLocaleString()}</td>
                       <td className="table-cell">{reading.usage_amount.toLocaleString()}</td>
                       <td className="table-cell font-semibold">{formatCurrency(reading.total_amount)}</td>
-                      <td className="table-cell">{new Date(reading.reading_date).toLocaleDateString()}</td>
+                      <td className="table-cell">{formatDate(reading.reading_date)}</td>
                       <td className="table-cell">
                         <button onClick={() => deleteReading(reading.id)} className="text-danger-600 hover:text-danger-800" aria-label="Delete utility reading">
                           <Trash2 className="h-4 w-4" />
