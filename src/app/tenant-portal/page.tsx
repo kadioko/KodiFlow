@@ -71,7 +71,12 @@ export default async function TenantPortalPage() {
   ])
 
   const portalLeases = (leases || []) as PortalLease[]
-  const portalInvoices = (invoices || []) as PortalInvoice[]
+  const portalInvoices = ((invoices || []) as PortalInvoice[]).map((invoice) => ({
+    ...invoice,
+    status: invoice.status !== 'cancelled' && invoice.status !== 'paid' && invoice.balance > 0 && invoice.due_date < new Date().toISOString().split('T')[0]
+      ? 'overdue'
+      : invoice.status,
+  }))
   const outstanding = portalInvoices.reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
   const activeLease = portalLeases.find((lease) => lease.status === 'active')
 

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { LEASE_TYPES, LEASE_STATUSES, BILLING_FREQUENCIES, getLabelByValue } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
+import { calculateChargeAmountForPeriod, getRenewalTerm } from '@/utils/billing'
 
 interface Lease {
   id: string
@@ -60,6 +61,13 @@ type LeaseInvoiceBalance = {
   status: string
 }
 
+type RecurringCharge = {
+  id: string
+  charge_name: string
+  amount: number
+  frequency: string
+}
+
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
@@ -78,6 +86,7 @@ export default function LeaseDetailPage() {
   const [lease, setLease] = useState<Lease | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [outstandingBalance, setOutstandingBalance] = useState(0)
+  const [recurringCharges, setRecurringCharges] = useState<RecurringCharge[]>([])
   const [renewData, setRenewData] = useState({
     new_end_date: '',
     new_rent: 0,
@@ -102,6 +111,9 @@ export default function LeaseDetailPage() {
       return
     }
 
+    await supabase.rpc('expire_stale_leases')
+    await supabase.rpc('refresh_overdue_invoices')
+
     // Fetch lease with tenant, unit, property info
     const { data: leaseData } = await supabase
       .from('leases')
@@ -121,20 +133,8 @@ export default function LeaseDetailPage() {
       return
     }
 
-    const today = new Date().toISOString().split('T')[0]
-    const isPastActiveLease = leaseData.status === 'active' && leaseData.end_date < today
-
-    if (isPastActiveLease) {
-      await supabase
-        .from('leases')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', leaseId)
-        .eq('user_id', user.id)
-    }
-
     setLease({
       ...leaseData,
-      status: isPastActiveLease ? 'expired' : leaseData.status,
       tenant_name: leaseData.tenants?.full_name || leaseData.tenants?.business_name,
       tenant_type: leaseData.tenants?.tenant_type,
       unit_name: leaseData.units?.unit_name,
@@ -142,11 +142,9 @@ export default function LeaseDetailPage() {
     })
 
     // Set default renew data
-    const currentEnd = new Date(leaseData.end_date)
-    const newEnd = new Date(currentEnd)
-    newEnd.setFullYear(newEnd.getFullYear() + 1)
+    const renewalTerm = getRenewalTerm(leaseData.end_date, leaseData.billing_frequency)
     setRenewData({
-      new_end_date: newEnd.toISOString().split('T')[0],
+      new_end_date: renewalTerm.endDate,
       new_rent: leaseData.monthly_rent,
     })
 
@@ -177,6 +175,16 @@ export default function LeaseDetailPage() {
 
     const oldBalance = ((invoiceBalances || []) as LeaseInvoiceBalance[]).reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)
     setOutstandingBalance(oldBalance)
+
+    const { data: chargeData } = await supabase
+      .from('charges')
+      .select('id, charge_name, amount, frequency')
+      .eq('lease_id', leaseId)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .neq('frequency', 'one_time')
+
+    setRecurringCharges((chargeData || []) as RecurringCharge[])
 
     setLoading(false)
   }
@@ -230,74 +238,18 @@ export default function LeaseDetailPage() {
     
     if (!user || !lease) return
 
-    const nextStartDate = new Date(`${lease.end_date}T00:00:00`)
-    nextStartDate.setDate(nextStartDate.getDate() + 1)
-    const nextStartDateIso = nextStartDate.toISOString().split('T')[0]
+    const { data: renewalResult, error: renewError } = await supabase.rpc('renew_lease', {
+      p_lease_id: lease.id,
+      p_new_end_date: renewData.new_end_date,
+      p_new_rent: renewData.new_rent,
+    })
 
-    // Mark current lease as renewed
-    const { error: updateError } = await supabase
-      .from('leases')
-      .update({
-        status: 'renewed',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', leaseId)
-      .eq('user_id', user.id)
-
-    if (updateError) {
-      setError(updateError.message)
-      setActionLoading(false)
-      return
-    }
-
-    // Create new lease
-    const { data: newLease, error: createError } = await supabase
-      .from('leases')
-      .insert({
-        user_id: user.id,
-        tenant_id: lease.tenant_id,
-        unit_id: lease.unit_id,
-        property_id: lease.property_id,
-        start_date: nextStartDateIso,
-        end_date: renewData.new_end_date,
-        monthly_rent: renewData.new_rent,
-        deposit_amount: lease.deposit_amount,
-        rent_due_day: lease.rent_due_day,
-        lease_type: lease.lease_type,
-        billing_frequency: lease.billing_frequency,
-        status: 'active',
-        notes: `Renewed from lease ${leaseId}`,
-      })
-      .select()
-      .single()
-
-    if (createError) {
-      setError(createError.message)
+    if (renewError || !renewalResult?.[0]) {
+      setError(renewError?.message || 'Lease was not renewed')
     } else {
-      if (outstandingBalance > 0) {
-        const { error: openingBalanceError } = await supabase
-          .from('charges')
-          .insert({
-            user_id: user.id,
-            lease_id: newLease.id,
-            charge_name: 'Opening Balance',
-            charge_type: 'other',
-            amount: outstandingBalance,
-            frequency: 'one_time',
-            is_active: true,
-            notes: `Outstanding balance carried from renewed lease ${leaseId}`,
-          })
-
-        if (openingBalanceError) {
-          setError(openingBalanceError.message)
-          setActionLoading(false)
-          return
-        }
-      }
-
       setSuccess('Lease renewed successfully')
       setShowRenewModal(false)
-      router.push(`/leases/${newLease.id}`)
+      router.push(`/leases/${renewalResult[0].new_lease_id}`)
     }
 
     setActionLoading(false)
@@ -365,6 +317,16 @@ export default function LeaseDetailPage() {
   const isExpired = new Date(lease.end_date) < new Date()
   const canRenew = lease.status === 'active' || lease.status === 'expired'
   const daysUntilExpiry = Math.ceil((new Date(lease.end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  const renewalTerm = getRenewalTerm(lease.end_date, lease.billing_frequency)
+  const renewalRecurringCharges = recurringCharges.reduce(
+    (sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency),
+    0
+  )
+  const renewalFirstInvoiceTotal = (
+    renewData.new_rent * renewalTerm.months +
+    renewalRecurringCharges +
+    outstandingBalance
+  )
 
   return (
     <div className="space-y-6">
@@ -647,6 +609,26 @@ export default function LeaseDetailPage() {
             <p className="text-gray-600 mb-4">
               Renew lease for <strong>{lease.tenant_name}</strong> at {lease.property_name} - {lease.unit_name}
             </p>
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-slate-500">New start</p>
+                  <p className="font-semibold text-slate-900">{formatDate(renewalTerm.startDate)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Billing</p>
+                  <p className="font-semibold text-slate-900">{getLabelByValue(BILLING_FREQUENCIES, lease.billing_frequency)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Recurring charges</p>
+                  <p className="font-semibold text-slate-900">{formatCurrency(renewalRecurringCharges)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">First invoice preview</p>
+                  <p className="font-semibold text-primary-700">{formatCurrency(renewalFirstInvoiceTotal)}</p>
+                </div>
+              </div>
+            </div>
             
             <div className="space-y-4 mb-6">
               <div className="form-group">

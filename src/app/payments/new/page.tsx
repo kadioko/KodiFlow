@@ -104,6 +104,8 @@ function NewPaymentPageContent() {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        await supabase.rpc('refresh_overdue_invoices')
+
         const { data } = await supabase
           .from('rent_invoices')
           .select(`

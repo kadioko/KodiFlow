@@ -10,14 +10,7 @@ async function getLeases() {
   
   if (!user) return []
 
-  const todayIso = new Date().toISOString().split('T')[0]
-
-  await supabase
-    .from('leases')
-    .update({ status: 'expired', updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .lt('end_date', todayIso)
+  await supabase.rpc('expire_stale_leases')
 
   const { data: leases, error } = await supabase
     .from('leases')

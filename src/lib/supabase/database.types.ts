@@ -652,6 +652,20 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
+      charge_amount_for_billing_period: {
+        Args: {
+          p_amount: number
+          p_charge_frequency: string
+          p_billing_frequency: string
+        }
+        Returns: number
+      }
+      billing_frequency_months: {
+        Args: {
+          p_frequency: string
+        }
+        Returns: number
+      }
       create_rent_invoice_for_lease: {
         Args: {
           p_lease_id: string
@@ -664,6 +678,10 @@ export interface Database {
           result: 'created' | 'skipped'
         }[]
       }
+      expire_stale_leases: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       record_invoice_payment: {
         Args: {
           p_invoice_id: string
@@ -675,6 +693,23 @@ export interface Database {
           p_client_request_id?: string | null
         }
         Returns: string
+      }
+      refresh_overdue_invoices: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      renew_lease: {
+        Args: {
+          p_lease_id: string
+          p_new_end_date: string
+          p_new_rent: number
+        }
+        Returns: {
+          new_lease_id: string
+          opening_balance: number
+          new_start_date: string
+          new_end_date: string
+        }[]
       }
     }
     Enums: {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { calculateInvoiceTotal, calculatePaymentBalance, createProfileInsert, getBillingPeriod } from './billing'
+import {
+  calculateChargeAmountForPeriod,
+  calculateInvoiceTotal,
+  calculatePaymentBalance,
+  createProfileInsert,
+  getBillingPeriod,
+  getRenewalTerm,
+  isBillingPeriodOnCadence,
+  isBillingPeriodWithinLease,
+} from './billing'
 import { calculateLateFee, calculateNetIncome } from './finance'
 
 describe('billing helpers', () => {
@@ -13,6 +22,33 @@ describe('billing helpers', () => {
     expect(period.months).toBe(6)
     expect(period.periodStart.toISOString().split('T')[0]).toBe('2026-01-01')
     expect(period.periodEnd.toISOString().split('T')[0]).toBe('2026-06-30')
+  })
+
+  it.each([
+    ['monthly', '2026-01-31', '2026-02-01', '2026-02-28'],
+    ['quarterly', '2026-03-31', '2026-04-01', '2026-06-30'],
+    ['semi_annually', '2026-06-30', '2026-07-01', '2026-12-31'],
+    ['annually', '2026-12-31', '2027-01-01', '2027-12-31'],
+  ])('calculates %s renewal terms from the previous lease end date', (frequency, previousEndDate, expectedStart, expectedEnd) => {
+    expect(getRenewalTerm(previousEndDate, frequency)).toMatchObject({
+      startDate: expectedStart,
+      endDate: expectedEnd,
+    })
+  })
+
+  it('calculates non-monthly charge amounts without treating them as monthly', () => {
+    expect(calculateChargeAmountForPeriod(100000, 'monthly', 'quarterly')).toBe(300000)
+    expect(calculateChargeAmountForPeriod(100000, 'quarterly', 'quarterly')).toBe(100000)
+    expect(calculateChargeAmountForPeriod(100000, 'quarterly', 'monthly')).toBe(0)
+    expect(calculateChargeAmountForPeriod(100000, 'annually', 'annually')).toBe(100000)
+    expect(calculateChargeAmountForPeriod(100000, 'one_time', 'annually')).toBe(100000)
+  })
+
+  it('checks invoice billing cadence and lease term boundaries', () => {
+    expect(isBillingPeriodOnCadence('2026-01-01', 2026, 1, 'quarterly')).toBe(true)
+    expect(isBillingPeriodOnCadence('2026-01-01', 2026, 2, 'quarterly')).toBe(false)
+    expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 1, 'quarterly')).toBe(true)
+    expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 2, 'quarterly')).toBe(false)
   })
 
   it('calculates payment balance after recording payment', () => {

@@ -6,7 +6,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Receipt, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
-import { calculateInvoiceTotal as calculateBillingInvoiceTotal, getBillingPeriod } from '@/utils/billing'
+import {
+  calculateChargeAmountForPeriod,
+  calculateInvoiceTotal as calculateBillingInvoiceTotal,
+  getBillingPeriod,
+  isBillingPeriodOnCadence,
+  isBillingPeriodWithinLease,
+} from '@/utils/billing'
 import { firstRelation } from '@/utils/supabase-relations'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -19,6 +25,8 @@ interface Lease {
   unit_name: string
   property_name: string
   monthly_rent: number
+  start_date: string
+  end_date: string
   rent_withholding_tax_enabled: boolean
   service_charge_withholding_tax_enabled: boolean
   rent_withholding_tax_rate: number
@@ -43,6 +51,8 @@ type ActiveLeaseRow = {
   unit_id: string
   property_id: string
   monthly_rent: number
+  start_date: string
+  end_date: string
   lease_type: string
   billing_frequency: string
   tenants: {
@@ -89,13 +99,8 @@ export default function GenerateInvoicesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
-        const todayIso = new Date().toISOString().split('T')[0]
-        await supabase
-          .from('leases')
-          .update({ status: 'expired', updated_at: new Date().toISOString() })
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .lt('end_date', todayIso)
+        await supabase.rpc('expire_stale_leases')
+        await supabase.rpc('refresh_overdue_invoices')
 
         // Fetch active leases
         const { data: leasesData } = await supabase
@@ -106,6 +111,8 @@ export default function GenerateInvoicesPage() {
             unit_id,
             property_id,
             monthly_rent,
+            start_date,
+            end_date,
             lease_type,
             billing_frequency,
             tenants(full_name, business_name, rent_withholding_tax_enabled, service_charge_withholding_tax_enabled, rent_withholding_tax_rate, service_charge_withholding_tax_rate),
@@ -131,6 +138,8 @@ export default function GenerateInvoicesPage() {
             unit_name: unit?.unit_name || 'Unknown unit',
             property_name: property?.name || 'Unknown property',
             monthly_rent: l.monthly_rent,
+            start_date: l.start_date,
+            end_date: l.end_date,
             rent_withholding_tax_enabled: tenant?.rent_withholding_tax_enabled || false,
             service_charge_withholding_tax_enabled: tenant?.service_charge_withholding_tax_enabled || false,
             rent_withholding_tax_rate: tenant?.rent_withholding_tax_rate || 10,
@@ -141,8 +150,13 @@ export default function GenerateInvoicesPage() {
           })
           setLeases(formattedLeases)
           
-          // Select all by default
-          setSelectedLeases(new Set(formattedLeases.map(l => l.id)))
+          // Select invoiceable leases by default for the selected billing period.
+          setSelectedLeases(new Set(formattedLeases
+            .filter((lease) => (
+              isBillingPeriodOnCadence(lease.start_date, billingYear, billingMonth, lease.billing_frequency) &&
+              isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency)
+            ))
+            .map(l => l.id)))
 
           // Fetch charges for each lease
           const leaseIds = formattedLeases.map(l => l.id)
@@ -180,10 +194,12 @@ export default function GenerateInvoicesPage() {
   }
 
   const toggleAll = () => {
-    if (selectedLeases.size === leases.length) {
+    const invoiceableLeases = leases.filter(isLeaseInvoiceableForPeriod)
+
+    if (selectedLeases.size === invoiceableLeases.length) {
       setSelectedLeases(new Set())
     } else {
-      setSelectedLeases(new Set(leases.map(l => l.id)))
+      setSelectedLeases(new Set(invoiceableLeases.map(l => l.id)))
     }
   }
 
@@ -194,23 +210,32 @@ export default function GenerateInvoicesPage() {
     const oneTimeTotal = leaseCharges
       .filter(charge => charge.frequency === 'one_time')
       .reduce((sum, charge) => sum + charge.amount, 0)
-    const grossTotal = calculateBillingInvoiceTotal(
-      lease.monthly_rent,
-      recurringCharges.map(charge => charge.amount),
-      lease.billing_frequency
-    ) + oneTimeTotal
+    const recurringTotal = recurringCharges.reduce(
+      (sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency),
+      0
+    )
+    const grossTotal = calculateBillingInvoiceTotal(lease.monthly_rent, [], lease.billing_frequency) + recurringTotal + oneTimeTotal
     const rentWithholding = lease.rent_withholding_tax_enabled
       ? (lease.monthly_rent * months * lease.rent_withholding_tax_rate) / 100
       : 0
     const serviceChargeTotal = leaseCharges
       .filter(charge => charge.charge_type === 'service_charge')
-      .reduce((sum, charge) => sum + (charge.frequency === 'one_time' ? charge.amount : charge.amount * months), 0)
+      .reduce((sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency), 0)
     const serviceWithholding = lease.service_charge_withholding_tax_enabled
       ? (serviceChargeTotal * lease.service_charge_withholding_tax_rate) / 100
       : 0
 
     return Math.max(grossTotal - rentWithholding - serviceWithholding, 0)
   }
+
+  const isLeaseInvoiceableForPeriod = (lease: Lease) => (
+    isBillingPeriodOnCadence(lease.start_date, billingYear, billingMonth, lease.billing_frequency) &&
+    isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency)
+  )
+
+  useEffect(() => {
+    setSelectedLeases(new Set(leases.filter(isLeaseInvoiceableForPeriod).map((lease) => lease.id)))
+  }, [billingMonth, billingYear, leases])
 
   const generateInvoices = async () => {
     if (selectedLeases.size === 0) {
@@ -231,7 +256,13 @@ export default function GenerateInvoicesPage() {
       return
     }
 
-    const selectedLeasesList = leases.filter(l => selectedLeases.has(l.id))
+    const selectedLeasesList = leases.filter(l => selectedLeases.has(l.id) && isLeaseInvoiceableForPeriod(l))
+    if (selectedLeasesList.length === 0) {
+      setError('Please select at least one lease that matches this billing period.')
+      setLoading(false)
+      return
+    }
+
     let generated = 0
     let skipped = 0
     let failed = 0
@@ -397,27 +428,35 @@ export default function GenerateInvoicesPage() {
             <tbody className="table-body">
               {leases.map((lease) => {
                 const leaseCharges = charges[lease.id] || []
-                const recurringAdditionalTotal = leaseCharges.filter((charge) => charge.frequency !== 'one_time').reduce((sum, c) => sum + c.amount, 0)
+                const recurringAdditionalTotal = leaseCharges
+                  .filter((charge) => charge.frequency !== 'one_time')
+                  .reduce((sum, c) => sum + calculateChargeAmountForPeriod(c.amount, c.frequency, lease.billing_frequency), 0)
                 const oneTimeTotal = leaseCharges.filter((charge) => charge.frequency === 'one_time').reduce((sum, c) => sum + c.amount, 0)
                 const additionalTotal = recurringAdditionalTotal + oneTimeTotal
                 const total = calculateInvoiceTotal(lease)
                 const hasWithholding = lease.rent_withholding_tax_enabled || lease.service_charge_withholding_tax_enabled
                 const isGenerating = generating.has(lease.id)
+                const isInvoiceable = isLeaseInvoiceableForPeriod(lease)
 
                 return (
-                  <tr key={lease.id} className={`hover:bg-gray-50 ${isGenerating ? 'opacity-50' : ''}`}>
+                  <tr key={lease.id} className={`hover:bg-gray-50 ${isGenerating || !isInvoiceable ? 'opacity-50' : ''}`}>
                     <td className="table-cell">
                       <input
                         type="checkbox"
                         checked={selectedLeases.has(lease.id)}
                         onChange={() => toggleLease(lease.id)}
-                        disabled={isGenerating}
+                        disabled={isGenerating || !isInvoiceable}
                         className="h-4 w-4 text-primary-600 rounded border-gray-300"
                       />
                     </td>
                     <td className="table-cell">
                       <p className="font-medium text-gray-900">{lease.tenant_name}</p>
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
+                      {!isInvoiceable && (
+                        <p className="text-xs font-medium text-warning-700">
+                          Outside {lease.billing_frequency.replace('_', ' ')} billing cadence
+                        </p>
+                      )}
                       {hasWithholding && (
                         <p className="text-xs font-medium text-warning-700">
                           WHT: {[

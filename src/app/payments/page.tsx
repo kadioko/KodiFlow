@@ -14,6 +14,8 @@ async function getPayments() {
   
   if (!user) return []
 
+  await supabase.rpc('refresh_overdue_invoices')
+
   const { data: payments, error } = await supabase
     .from('payments')
     .select(`
@@ -157,4 +159,3 @@ export default async function PaymentsPage() {
     </div>
   )
 }
-

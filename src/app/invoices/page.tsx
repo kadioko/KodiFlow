@@ -15,6 +15,8 @@ async function getInvoices() {
   
   if (!user) return []
 
+  await supabase.rpc('refresh_overdue_invoices')
+
   const { month, year } = getCurrentMonthYear()
 
   const { data: invoices, error } = await supabase
@@ -199,4 +201,3 @@ export default async function InvoicesPage() {
     </div>
   )
 }
-
