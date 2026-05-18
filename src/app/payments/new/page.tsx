@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react'
 import { DateInput } from '@/components/ui/DateInput'
 import { PAYMENT_METHODS } from '@/utils/constants'
-import { formatCurrency, formatDate } from '@/utils/currency'
+import { formatCurrency, formatDate, parseCurrencyInput } from '@/utils/currency'
 import { firstRelation } from '@/utils/supabase-relations'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -54,6 +54,11 @@ function createClientRequestId() {
   )
 }
 
+function formatAmountInput(amount: number) {
+  if (!amount) return ''
+  return amount.toLocaleString('en-TZ', { maximumFractionDigits: 0 })
+}
+
 function NewPaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -67,6 +72,7 @@ function NewPaymentPageContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([])
+  const [amountInput, setAmountInput] = useState('')
 
   const [formData, setFormData] = useState<{
     invoice_id: string
@@ -153,6 +159,7 @@ function NewPaymentPageContent() {
                 ...prev,
                 amount: selected.balance,
               }))
+              setAmountInput(formatAmountInput(selected.balance))
             }
           }
         }
@@ -177,6 +184,7 @@ function NewPaymentPageContent() {
         invoice_id: invoiceId,
         amount: selected.balance,
       }))
+      setAmountInput(formatAmountInput(selected.balance))
     } else {
       setSelectedInvoice(null)
       setInvoiceItems([])
@@ -185,6 +193,7 @@ function NewPaymentPageContent() {
         invoice_id: '',
         amount: 0,
       }))
+      setAmountInput('')
     }
   }
 
@@ -372,27 +381,37 @@ function NewPaymentPageContent() {
             </label>
             <input
               id="amount"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               required
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+              value={amountInput}
+              onChange={(e) => {
+                const amount = parseCurrencyInput(e.target.value)
+                setAmountInput(e.target.value ? amount.toLocaleString('en-TZ', { maximumFractionDigits: 0 }) : '')
+                setFormData({ ...formData, amount })
+              }}
               className="input"
-              placeholder="0.00"
+              placeholder="Enter amount"
             />
             {selectedInvoice && (
               <div className="flex space-x-2 mt-2">
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance })}
+                  onClick={() => {
+                    setFormData({ ...formData, amount: selectedInvoice.balance })
+                    setAmountInput(formatAmountInput(selectedInvoice.balance))
+                  }}
                   className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded hover:bg-primary-200"
                 >
                   Full Balance
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, amount: selectedInvoice.balance / 2 })}
+                  onClick={() => {
+                    const halfBalance = selectedInvoice.balance / 2
+                    setFormData({ ...formData, amount: halfBalance })
+                    setAmountInput(formatAmountInput(halfBalance))
+                  }}
                   className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
                 >
                   50%
