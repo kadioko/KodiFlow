@@ -89,6 +89,14 @@ export default function GenerateInvoicesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        const todayIso = new Date().toISOString().split('T')[0]
+        await supabase
+          .from('leases')
+          .update({ status: 'expired', updated_at: new Date().toISOString() })
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .lt('end_date', todayIso)
+
         // Fetch active leases
         const { data: leasesData } = await supabase
           .from('leases')

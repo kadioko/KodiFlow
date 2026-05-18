@@ -22,6 +22,15 @@ async function getDashboardMetrics() {
 
   const { month, year } = getCurrentMonthYear()
 
+  const todayIso = new Date().toISOString().split('T')[0]
+
+  await supabase
+    .from('leases')
+    .update({ status: 'expired', updated_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .lt('end_date', todayIso)
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('dashboard_hidden_property_ids')
@@ -68,7 +77,7 @@ async function getDashboardMetrics() {
     .eq('user_id', user.id)
     .eq('status', 'active')
     .lte('end_date', ninetyDaysFromNow.toISOString().split('T')[0])
-    .gte('end_date', new Date().toISOString().split('T')[0])
+    .gte('end_date', todayIso)
 
   // Calculate metrics
   const totalProperties = properties?.length || 0

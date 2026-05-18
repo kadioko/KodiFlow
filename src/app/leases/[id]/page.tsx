@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { DateInput } from '@/components/ui/DateInput'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { 
   ArrowLeft, 
   FileText, 
@@ -54,6 +55,11 @@ interface Payment {
   invoice_number: string
 }
 
+type LeaseInvoiceBalance = {
+  balance: number | null
+  status: string
+}
+
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
@@ -71,6 +77,7 @@ export default function LeaseDetailPage() {
   
   const [lease, setLease] = useState<Lease | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
+  const [outstandingBalance, setOutstandingBalance] = useState(0)
   const [renewData, setRenewData] = useState({
     new_end_date: '',
     new_rent: 0,
@@ -114,8 +121,20 @@ export default function LeaseDetailPage() {
       return
     }
 
+    const today = new Date().toISOString().split('T')[0]
+    const isPastActiveLease = leaseData.status === 'active' && leaseData.end_date < today
+
+    if (isPastActiveLease) {
+      await supabase
+        .from('leases')
+        .update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('id', leaseId)
+        .eq('user_id', user.id)
+    }
+
     setLease({
       ...leaseData,
+      status: isPastActiveLease ? 'expired' : leaseData.status,
       tenant_name: leaseData.tenants?.full_name || leaseData.tenants?.business_name,
       tenant_type: leaseData.tenants?.tenant_type,
       unit_name: leaseData.units?.unit_name,
@@ -148,6 +167,16 @@ export default function LeaseDetailPage() {
         invoice_number: p.rent_invoices?.invoice_number,
       })))
     }
+
+    const { data: invoiceBalances } = await supabase
+      .from('rent_invoices')
+      .select('balance, status')
+      .eq('lease_id', leaseId)
+      .eq('user_id', user.id)
+      .not('status', 'in', '("paid","cancelled")')
+
+    const oldBalance = ((invoiceBalances || []) as LeaseInvoiceBalance[]).reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)
+    setOutstandingBalance(oldBalance)
 
     setLoading(false)
   }
@@ -201,6 +230,10 @@ export default function LeaseDetailPage() {
     
     if (!user || !lease) return
 
+    const nextStartDate = new Date(`${lease.end_date}T00:00:00`)
+    nextStartDate.setDate(nextStartDate.getDate() + 1)
+    const nextStartDateIso = nextStartDate.toISOString().split('T')[0]
+
     // Mark current lease as renewed
     const { error: updateError } = await supabase
       .from('leases')
@@ -225,7 +258,7 @@ export default function LeaseDetailPage() {
         tenant_id: lease.tenant_id,
         unit_id: lease.unit_id,
         property_id: lease.property_id,
-        start_date: lease.end_date, // Start from old end date
+        start_date: nextStartDateIso,
         end_date: renewData.new_end_date,
         monthly_rent: renewData.new_rent,
         deposit_amount: lease.deposit_amount,
@@ -241,6 +274,27 @@ export default function LeaseDetailPage() {
     if (createError) {
       setError(createError.message)
     } else {
+      if (outstandingBalance > 0) {
+        const { error: openingBalanceError } = await supabase
+          .from('charges')
+          .insert({
+            user_id: user.id,
+            lease_id: newLease.id,
+            charge_name: 'Opening Balance',
+            charge_type: 'other',
+            amount: outstandingBalance,
+            frequency: 'one_time',
+            is_active: true,
+            notes: `Outstanding balance carried from renewed lease ${leaseId}`,
+          })
+
+        if (openingBalanceError) {
+          setError(openingBalanceError.message)
+          setActionLoading(false)
+          return
+        }
+      }
+
       setSuccess('Lease renewed successfully')
       setShowRenewModal(false)
       router.push(`/leases/${newLease.id}`)
@@ -309,6 +363,7 @@ export default function LeaseDetailPage() {
 
   const isActive = lease.status === 'active'
   const isExpired = new Date(lease.end_date) < new Date()
+  const canRenew = lease.status === 'active' || lease.status === 'expired'
   const daysUntilExpiry = Math.ceil((new Date(lease.end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
 
   return (
@@ -350,7 +405,7 @@ export default function LeaseDetailPage() {
             <Trash2 className="h-4 w-4 mr-2" />
             Delete
           </button>
-          {isActive && (
+          {canRenew && (
             <>
               <button 
                 onClick={() => setShowRenewModal(true)}
@@ -359,6 +414,7 @@ export default function LeaseDetailPage() {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Renew
               </button>
+              {isActive && (
               <button 
                 onClick={() => setShowTerminateConfirm(true)}
                 className="btn-danger"
@@ -366,9 +422,10 @@ export default function LeaseDetailPage() {
                 <XCircle className="h-4 w-4 mr-2" />
                 Terminate
               </button>
+              )}
             </>
           )}
-          {!isActive && (
+          {!canRenew && (
             <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${lease.unit_id}`} className="btn-primary">
               <RefreshCw className="h-4 w-4 mr-2" />
               Renew / New Lease
@@ -602,16 +659,16 @@ export default function LeaseDetailPage() {
                 />
               </div>
               
-              <div className="form-group">
-                <label className="label">New Monthly Rent (TZS)</label>
-                <input
-                  type="number"
-                  value={renewData.new_rent}
-                  onChange={(e) => setRenewData({ ...renewData, new_rent: parseFloat(e.target.value) || 0 })}
-                  className="input"
-                  min="0"
-                />
-              </div>
+              <CurrencyInput id="renew_new_rent" label="New Monthly Rent (TZS)" value={renewData.new_rent} onChange={(value) => setRenewData({ ...renewData, new_rent: value })} />
+
+              {outstandingBalance > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-800">Opening Balance</p>
+                  <p className="mt-1 text-sm text-amber-700">
+                    {formatCurrency(outstandingBalance)} unpaid from this lease will be carried to the renewed lease.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-3">
