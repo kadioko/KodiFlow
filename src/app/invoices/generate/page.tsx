@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Receipt, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
-import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import {
   calculateChargeAmountForPeriod,
   calculateInvoiceTotal as calculateBillingInvoiceTotal,
@@ -454,7 +454,7 @@ export default function GenerateInvoicesPage() {
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
                       {!isInvoiceable && (
                         <p className="text-xs font-medium text-warning-700">
-                          Outside {lease.billing_frequency.replace('_', ' ')} billing cadence
+                          Not a {lease.billing_frequency.replace('_', ' ')} cycle from {formatDate(lease.start_date)}
                         </p>
                       )}
                       {hasWithholding && (

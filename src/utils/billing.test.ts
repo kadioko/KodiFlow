@@ -5,6 +5,7 @@ import {
   calculatePaymentBalance,
   createProfileInsert,
   getBillingPeriod,
+  getLeaseBillingPeriod,
   getRenewalTerm,
   isBillingPeriodOnCadence,
   isBillingPeriodWithinLease,
@@ -49,6 +50,21 @@ describe('billing helpers', () => {
     expect(isBillingPeriodOnCadence('2026-01-01', 2026, 2, 'quarterly')).toBe(false)
     expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 1, 'quarterly')).toBe(true)
     expect(isBillingPeriodWithinLease('2026-01-01', '2026-03-31', 2026, 2, 'quarterly')).toBe(false)
+  })
+
+  it('anchors invoice billing periods to the original lease start day', () => {
+    const quarterlyPeriod = getLeaseBillingPeriod('2026-05-15', 2026, 8, 'quarterly')
+
+    expect(quarterlyPeriod?.periodStart.toISOString().split('T')[0]).toBe('2026-08-15')
+    expect(quarterlyPeriod?.periodEnd.toISOString().split('T')[0]).toBe('2026-11-14')
+    expect(isBillingPeriodWithinLease('2026-05-15', '2026-11-14', 2026, 8, 'quarterly')).toBe(true)
+  })
+
+  it('handles end-of-month lease anchors without skipping short months', () => {
+    const monthlyPeriod = getLeaseBillingPeriod('2026-01-31', 2026, 2, 'monthly')
+
+    expect(monthlyPeriod?.periodStart.toISOString().split('T')[0]).toBe('2026-02-28')
+    expect(monthlyPeriod?.periodEnd.toISOString().split('T')[0]).toBe('2026-03-27')
   })
 
   it('calculates payment balance after recording payment', () => {

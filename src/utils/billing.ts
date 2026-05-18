@@ -12,7 +12,12 @@ function toIsoDate(date: Date) {
 }
 
 export function addUtcMonths(date: Date, months: number) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()))
+  const targetYear = date.getUTCFullYear()
+  const targetMonth = date.getUTCMonth() + months
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+  const targetDay = Math.min(date.getUTCDate(), lastDayOfTargetMonth)
+
+  return new Date(Date.UTC(targetYear, targetMonth, targetDay))
 }
 
 export function getBillingPeriod(billingYear: number, billingMonth: number, billingFrequency: string) {
@@ -29,15 +34,33 @@ export function isBillingPeriodOnCadence(leaseStartDate: string, billingYear: nu
   const leaseStartIndex = leaseStart.getUTCFullYear() * 12 + leaseStart.getUTCMonth()
   const billingIndex = billingYear * 12 + (billingMonth - 1)
 
-  return (billingIndex - leaseStartIndex) % months === 0
+  return billingIndex >= leaseStartIndex && (billingIndex - leaseStartIndex) % months === 0
+}
+
+export function getLeaseBillingPeriod(leaseStartDate: string, billingYear: number, billingMonth: number, billingFrequency: string) {
+  if (!isBillingPeriodOnCadence(leaseStartDate, billingYear, billingMonth, billingFrequency)) {
+    return null
+  }
+
+  const months = billingFrequencyMonths[billingFrequency] || 1
+  const leaseStart = new Date(`${leaseStartDate}T00:00:00Z`)
+  const leaseStartIndex = leaseStart.getUTCFullYear() * 12 + leaseStart.getUTCMonth()
+  const billingIndex = billingYear * 12 + (billingMonth - 1)
+  const monthsSinceStart = billingIndex - leaseStartIndex
+  const periodStart = addUtcMonths(leaseStart, monthsSinceStart)
+  const periodEnd = addUtcMonths(periodStart, months)
+  periodEnd.setUTCDate(periodEnd.getUTCDate() - 1)
+
+  return { months, periodStart, periodEnd }
 }
 
 export function isBillingPeriodWithinLease(leaseStartDate: string, leaseEndDate: string, billingYear: number, billingMonth: number, billingFrequency: string) {
-  const { periodStart, periodEnd } = getBillingPeriod(billingYear, billingMonth, billingFrequency)
-  const leaseStart = new Date(`${leaseStartDate}T00:00:00Z`)
+  const period = getLeaseBillingPeriod(leaseStartDate, billingYear, billingMonth, billingFrequency)
+  if (!period) return false
+
   const leaseEnd = new Date(`${leaseEndDate}T00:00:00Z`)
 
-  return periodStart >= leaseStart && periodEnd <= leaseEnd
+  return period.periodEnd <= leaseEnd
 }
 
 export function getRenewalTerm(previousEndDate: string, billingFrequency: string) {
