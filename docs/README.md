@@ -48,10 +48,14 @@ The maintained docs now cover:
 - Mobile navigation through the header menu and desktop navigation through the sidebar.
 - PWA installation from Settings, including mobile add-to-home-screen help.
 - Light and dark appearance modes.
-- Lease editing, lease renewal, unit occupancy links, and tenant/unit/property detail navigation.
+- Lease editing, lease deletion, lease renewal, unit occupancy links, and tenant/unit/property detail navigation.
+- Tenant list/detail assigned-unit links and occupied unit current-tenant links for occupancy audits.
+- Unit deletion with confirmation and cleanup of related leases, charges, invoices, invoice items, and payments.
 - Unit ID/door-number capture and search.
 - Monthly, quarterly, six-month, and annual billing frequencies.
-- Separate monthly rent and service charge entry, invoice line items, and payment charge breakdowns.
+- Separate monthly rent and service charge entry, invoice line items, invoice owed breakdown toggles, and payment charge breakdowns.
+- Invoice edit/delete, invoice print/PDF sharing, and payment view/edit/delete workflows.
+- Comma-formatted monetary input and whole-shilling TZS display.
 - Tenant-level withholding tax toggles for rent and service charge deductions.
 - Dora Tower client import SQL for `doratower2020@gmail.com`.
 
