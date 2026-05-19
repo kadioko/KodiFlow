@@ -9,6 +9,7 @@ import {
   Receipt, 
   Printer,
   Share2,
+  Download,
   Edit2,
   Trash2,
   CheckCircle,
@@ -72,6 +73,7 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [itemFilter, setItemFilter] = useState<ItemFilter>('all')
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [items, setItems] = useState<InvoiceItem[]>([])
@@ -153,14 +155,10 @@ export default function InvoiceDetailPage() {
     window.print()
   }
 
-  const handleSharePdf = async () => {
-    if (!invoice) return
+  const createInvoicePdf = async () => {
+    if (!invoice) return null
 
-    setSharingPdf(true)
-    setError('')
-
-    try {
-      const { default: jsPDF } = await import('jspdf')
+    const { default: jsPDF } = await import('jspdf')
       const pdf = new jsPDF('p', 'mm', 'a4')
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
@@ -287,14 +285,27 @@ export default function InvoiceDetailPage() {
       const pdfBlob = pdf.output('blob')
       const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' })
 
-      if (navigator.canShare?.({ files: [pdfFile] })) {
+    return { pdf, fileName, pdfFile }
+  }
+
+  const handleSharePdf = async () => {
+    if (!invoice) return
+
+    setSharingPdf(true)
+    setError('')
+
+    try {
+      const pdfResult = await createInvoicePdf()
+      if (!pdfResult) return
+
+      if (navigator.canShare?.({ files: [pdfResult.pdfFile] })) {
         await navigator.share({
           title: invoice.invoice_number,
           text: `Invoice ${invoice.invoice_number}`,
-          files: [pdfFile],
+          files: [pdfResult.pdfFile],
         })
       } else {
-        pdf.save(fileName)
+        pdfResult.pdf.save(pdfResult.fileName)
       }
     } catch (shareError) {
       if (shareError instanceof Error && shareError.name !== 'AbortError') {
@@ -302,6 +313,25 @@ export default function InvoiceDetailPage() {
       }
     } finally {
       setSharingPdf(false)
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!invoice) return
+
+    setDownloadingPdf(true)
+    setError('')
+
+    try {
+      const pdfResult = await createInvoicePdf()
+      if (!pdfResult) return
+      pdfResult.pdf.save(pdfResult.fileName)
+    } catch (downloadError) {
+      if (downloadError instanceof Error) {
+        setError(downloadError.message)
+      }
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -408,6 +438,10 @@ export default function InvoiceDetailPage() {
           <button onClick={handleSharePdf} disabled={sharingPdf} className="btn-secondary">
             {sharingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Share2 className="h-4 w-4 mr-2" />}
             {sharingPdf ? 'Preparing...' : 'Share PDF'}
+          </button>
+          <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="btn-secondary">
+            {downloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+            {downloadingPdf ? 'Downloading...' : 'Download PDF'}
           </button>
           <button onClick={deleteInvoice} disabled={deleting} className="btn-danger">
             <Trash2 className="h-4 w-4 mr-2" />
