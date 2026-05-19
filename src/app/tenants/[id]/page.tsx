@@ -13,12 +13,8 @@ import {
   MapPin, 
   Edit2, 
   Trash2, 
-  FileText,
-  Receipt,
-  CreditCard,
   Loader2,
-  AlertCircle,
-  Home
+  AlertCircle
 } from 'lucide-react'
 import { TENANT_TYPES } from '@/utils/constants'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
@@ -73,6 +69,24 @@ interface Payment {
   payment_date: string
   payment_method: string
   invoice_number: string
+}
+
+type LeaseRow = Omit<Lease, 'unit_name' | 'property_name'> & {
+  units: { unit_name: string } | { unit_name: string }[] | null
+  properties: { name: string } | { name: string }[] | null
+}
+
+type InvoiceRow = Omit<Invoice, 'unit_name'> & {
+  amount_paid: number
+  units: { unit_name: string } | { unit_name: string }[] | null
+}
+
+type PaymentRow = Omit<Payment, 'invoice_number'> & {
+  rent_invoices: { invoice_number: string } | { invoice_number: string }[] | null
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function getRouteParam(value: string | string[] | undefined) {
@@ -149,17 +163,17 @@ export default function TenantDetailPage() {
       .order('created_at', { ascending: false })
 
     if (leasesData) {
-      const formattedLeases = leasesData.map((l: any) => ({
-        ...l,
-        unit_name: l.units?.unit_name,
-        property_name: l.properties?.name,
+      const formattedLeases = (leasesData as LeaseRow[]).map((lease) => ({
+        ...lease,
+        unit_name: firstRelation(lease.units)?.unit_name || 'Unknown unit',
+        property_name: firstRelation(lease.properties)?.name || 'Unknown property',
       }))
       setLeases(formattedLeases)
       
       setStats(prev => ({
         ...prev,
         totalLeases: formattedLeases.length,
-        activeLeases: formattedLeases.filter((l: any) => l.status === 'active').length,
+        activeLeases: formattedLeases.filter((lease) => lease.status === 'active').length,
       }))
     }
 
@@ -175,14 +189,14 @@ export default function TenantDetailPage() {
       .order('created_at', { ascending: false })
 
     if (invoicesData) {
-      const formattedInvoices = invoicesData.map((inv: any) => ({
-        ...inv,
-        unit_name: inv.units?.unit_name,
+      const formattedInvoices = (invoicesData as InvoiceRow[]).map((invoice) => ({
+        ...invoice,
+        unit_name: firstRelation(invoice.units)?.unit_name || 'Unknown unit',
       }))
       setInvoices(formattedInvoices)
 
-      const totalInv = formattedInvoices.reduce((sum: number, inv: any) => sum + inv.subtotal, 0)
-      const totalPaid = formattedInvoices.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0)
+      const totalInv = formattedInvoices.reduce((sum, invoice) => sum + invoice.subtotal, 0)
+      const totalPaid = formattedInvoices.reduce((sum, invoice) => sum + invoice.amount_paid, 0)
       
       setStats(prev => ({
         ...prev,
@@ -204,9 +218,9 @@ export default function TenantDetailPage() {
       .order('payment_date', { ascending: false })
 
     if (paymentsData) {
-      setPayments(paymentsData.map((p: any) => ({
-        ...p,
-        invoice_number: p.rent_invoices?.invoice_number,
+      setPayments((paymentsData as PaymentRow[]).map((payment) => ({
+        ...payment,
+        invoice_number: firstRelation(payment.rent_invoices)?.invoice_number || 'N/A',
       })))
     }
 
