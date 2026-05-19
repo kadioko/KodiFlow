@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -8,6 +8,7 @@ import {
   ArrowLeft, 
   Receipt, 
   Printer,
+  Share2,
   Edit2,
   Trash2,
   CheckCircle,
@@ -70,10 +71,12 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [sharingPdf, setSharingPdf] = useState(false)
   const [itemFilter, setItemFilter] = useState<ItemFilter>('all')
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [items, setItems] = useState<InvoiceItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const invoiceContentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!invoiceId) {
@@ -149,6 +152,67 @@ export default function InvoiceDetailPage() {
 
   const handlePrint = () => {
     window.print()
+  }
+
+  const handleSharePdf = async () => {
+    if (!invoice || !invoiceContentRef.current) return
+
+    setSharingPdf(true)
+    const previousFilter = itemFilter
+    setItemFilter('all')
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+
+      const canvas = await html2canvas(invoiceContentRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      })
+      const imageData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imageWidth = pageWidth
+      const imageHeight = (canvas.height * imageWidth) / canvas.width
+      let heightLeft = imageHeight
+      let position = 0
+
+      pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - imageHeight
+        pdf.addPage()
+        pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight)
+        heightLeft -= pageHeight
+      }
+
+      const fileName = `${invoice.invoice_number}.pdf`
+      const pdfBlob = pdf.output('blob')
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' })
+
+      if (navigator.canShare?.({ files: [pdfFile] })) {
+        await navigator.share({
+          title: invoice.invoice_number,
+          text: `Invoice ${invoice.invoice_number}`,
+          files: [pdfFile],
+        })
+      } else {
+        pdf.save(fileName)
+      }
+    } catch (shareError) {
+      if (shareError instanceof Error && shareError.name !== 'AbortError') {
+        setError(shareError.message)
+      }
+    } finally {
+      setItemFilter(previousFilter)
+      setSharingPdf(false)
+    }
   }
 
   const deleteInvoice = async () => {
@@ -251,6 +315,10 @@ export default function InvoiceDetailPage() {
             <Printer className="h-4 w-4 mr-2" />
             Print
           </button>
+          <button onClick={handleSharePdf} disabled={sharingPdf} className="btn-secondary">
+            {sharingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Share2 className="h-4 w-4 mr-2" />}
+            {sharingPdf ? 'Preparing...' : 'Share PDF'}
+          </button>
           <button onClick={deleteInvoice} disabled={deleting} className="btn-danger">
             <Trash2 className="h-4 w-4 mr-2" />
             {deleting ? 'Deleting...' : 'Delete'}
@@ -266,8 +334,14 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg print:hidden">
+          {error}
+        </div>
+      )}
+
       {/* Invoice Display */}
-      <div className="card print:shadow-none">
+      <div ref={invoiceContentRef} className="card print:shadow-none">
         <div className="p-8">
           {/* Invoice Header */}
           <div className="flex justify-between items-start mb-8">

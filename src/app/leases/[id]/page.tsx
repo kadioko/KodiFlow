@@ -521,7 +521,7 @@ export default function LeaseDetailPage() {
                 </span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-500">Deposit</span>
+                <span className="text-gray-500">Security Deposit</span>
                 <span className="font-medium">{formatCurrency(lease.deposit_amount)}</span>
               </div>
             </div>

@@ -737,7 +737,7 @@ export default function EditTenantPage() {
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <CurrencyInput id="assignment_monthly_rent" label="Monthly Rent" required value={assignmentData.monthly_rent} onChange={(value) => setAssignmentData({ ...assignmentData, monthly_rent: value })} />
                         <CurrencyInput id="assignment_service_charge" label="Service Charge" value={assignmentData.service_charge} onChange={(value) => setAssignmentData({ ...assignmentData, service_charge: value })} />
-                        <CurrencyInput id="assignment_deposit" label="Deposit" value={assignmentData.deposit_amount} onChange={(value) => setAssignmentData({ ...assignmentData, deposit_amount: value })} />
+                        <CurrencyInput id="assignment_deposit" label="Security Deposit" value={assignmentData.deposit_amount} onChange={(value) => setAssignmentData({ ...assignmentData, deposit_amount: value })} />
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

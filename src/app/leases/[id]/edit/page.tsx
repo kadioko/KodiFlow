@@ -491,7 +491,7 @@ export default function EditLeasePage() {
         <div className="grid gap-4 md:grid-cols-3">
           <CurrencyInput id="monthly_rent" label="Monthly Rent" required value={formData.monthly_rent} onChange={(value) => setFormData({ ...formData, monthly_rent: value })} />
           <CurrencyInput id="service_charge" label="Service Charge" value={formData.service_charge} onChange={(value) => setFormData({ ...formData, service_charge: value })} />
-          <CurrencyInput id="deposit_amount" label="Deposit" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} />
+          <CurrencyInput id="deposit_amount" label="Security Deposit" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} helperText="For the initial lease agreement; not added to rent invoices." />
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">

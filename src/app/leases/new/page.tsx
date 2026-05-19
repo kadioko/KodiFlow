@@ -368,11 +368,11 @@ function NewLeasePageContent() {
             <DateInput id="end_date" label="End Date" required value={formData.end_date} onChange={(value) => setFormData({ ...formData, end_date: value })} />
           </div>
 
-          {/* Rent, Service Charge & Deposit */}
+          {/* Rent, Service Charge & Security Deposit */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <CurrencyInput id="monthly_rent" label="Monthly Rent (TZS)" required value={formData.monthly_rent} onChange={(value) => setFormData({ ...formData, monthly_rent: value })} />
             <CurrencyInput id="service_charge" label="Service Charge (TZS)" value={formData.service_charge} onChange={(value) => setFormData({ ...formData, service_charge: value })} />
-            <CurrencyInput id="deposit_amount" label="Deposit (TZS)" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} />
+            <CurrencyInput id="deposit_amount" label="Security Deposit (TZS)" value={formData.deposit_amount} onChange={(value) => setFormData({ ...formData, deposit_amount: value })} helperText="For the initial lease agreement; not added to rent invoices." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
