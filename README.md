@@ -17,7 +17,8 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Individual, business, and organization tenants.
 - Residential details such as full name, ID number, and emergency contact.
 - Commercial details such as business name, TIN, business license, and contact person.
-- Tenant detail pages with linked leases, invoices, payments, and balance history.
+- Tenant list and detail pages show active assigned units with direct unit links.
+- Tenant detail pages with linked leases, invoices, payments, assigned units, and balance history.
 - Tenant-level withholding tax toggles for 10% rent WHT and 5% service charge WHT.
 - Tenant portal foundation scoped by the logged-in tenant email.
 
@@ -25,6 +26,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 
 - Lease records connect one tenant to one unit, with unit identifiers visible in selection flows.
 - Detail and edit pages for tenants, units, properties, and leases.
+- Occupied unit pages show the current tenant with a direct tenant link, helping identify falsely occupied units.
 - Lease renewal entry points from lease, tenant, unit, and property history.
 - Monthly, quarterly, six-month, and annual billing frequencies.
 - Separate monthly rent, service charge, deposit, due day, dates, and lease status.
@@ -36,11 +38,16 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Multi-line invoices with automatic status tracking.
 - Invoice items for rent, service charge, utilities, parking, tax, penalty, and other charges.
 - Withholding tax deductions as negative invoice tax lines where enabled for the tenant.
+- Invoice detail pages support edit, delete, print, and PDF sharing/download workflows.
+- Invoice detail pages can toggle rent, service charge, and full owed breakdown views.
 - Payment recording with full and partial payment support.
 - Payment screen shows invoice charge breakdown before recording money received.
+- Payment records can be viewed, edited, and deleted.
+- Payment amount inputs use comma-formatted text entry to reduce number-entry mistakes.
 - Expense tracking by property and category.
 - Water and electricity meter readings with charge previews.
 - TZS default currency with USD, EUR, and GBP preference support.
+- TZS money displays as whole shillings with comma separators.
 
 ### Dashboard, Reports, And Productivity
 
@@ -185,18 +192,20 @@ kodiflow/
 | `/properties` | Property list and management |
 | `/properties/[id]` | Property details with related sections, units, leases, invoices, and payments |
 | `/tenants` | Tenant management |
-| `/tenants/[id]` | Tenant details, lease history, invoices, payments, and balance |
+| `/tenants/[id]` | Tenant details, active assigned unit links, lease history, invoices, payments, and balance |
 | `/units` | Unit management |
-| `/units/[id]` | Unit details with active tenant/lease links |
+| `/units/[id]` | Unit details with active tenant/lease links and cascade delete confirmation |
 | `/leases` | Lease agreements |
 | `/leases/new` | Create a lease with rent, service charge, deposit, and billing frequency |
 | `/leases/[id]` | Lease detail, linked records, renew, terminate, and edit actions |
 | `/leases/[id]/edit` | Edit lease tenant, unit, rent, service charge, dates, billing, and status |
 | `/invoices` | Invoice management |
-| `/invoices/[id]` | Invoice details, line items, and payments |
+| `/invoices/[id]` | Invoice details, owed breakdown toggles, line items, payments, edit/delete, print, and PDF sharing |
+| `/invoices/[id]/edit` | Edit invoice dates, notes, line items, subtotal, and status |
 | `/payments` | Payment list |
 | `/payments/new` | Record payment with invoice charge breakdown |
 | `/payments/[id]` | Payment details |
+| `/payments/[id]/edit` | Edit or delete an existing payment |
 | `/documents` | Uploads and document metadata |
 | `/utilities` | Water/electricity readings |
 | `/tenant-portal` | Tenant self-service portal |
