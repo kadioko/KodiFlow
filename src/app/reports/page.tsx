@@ -13,12 +13,17 @@ import {
   Calendar,
   Filter
 } from 'lucide-react'
-import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Area,
+  AreaChart,
+  Cell,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -53,6 +58,8 @@ interface TenantBalanceReport {
   tenant_id: string
   tenant_name: string
   outstanding: number
+  overdue: number
+  invoice_count: number
 }
 
 interface DepositReport {
@@ -73,20 +80,48 @@ interface UtilityReport {
   total_amount: number
 }
 
+interface InvoiceAnalytics {
+  statusData: { status: string; count: number; amount: number }[]
+  outstandingByAge: { bucket: string; amount: number }[]
+  topOutstandingTenants: TenantBalanceReport[]
+}
+
+type InvoiceWithTenant = {
+  id: string
+  tenant_id: string
+  subtotal: number | null
+  amount_paid: number | null
+  balance: number | null
+  due_date: string
+  status: string
+  billing_month: number
+  billing_year: number
+  tenants: { full_name: string | null; business_name: string | null } | { full_name: string | null; business_name: string | null }[] | null
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+const chartColors = ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#7c3aed']
+
 const currentYear = new Date().getFullYear()
 const reportYears = Array.from({ length: 7 }, (_, index) => currentYear - 3 + index)
 
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthYear().month)
   const [selectedYear, setSelectedYear] = useState(getCurrentMonthYear().year)
   
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [propertyReports, setPropertyReports] = useState<PropertyReport[]>([])
-  const [tenantBalances, setTenantBalances] = useState<TenantBalanceReport[]>([])
   const [tenantMix, setTenantMix] = useState<TenantMixReport[]>([])
   const [utilityReports, setUtilityReports] = useState<UtilityReport[]>([])
+  const [invoiceAnalytics, setInvoiceAnalytics] = useState<InvoiceAnalytics>({
+    statusData: [],
+    outstandingByAge: [],
+    topOutstandingTenants: [],
+  })
   const [depositReport, setDepositReport] = useState<DepositReport>({
     expected: 0,
     paid: 0,
@@ -107,6 +142,8 @@ export default function ReportsPage() {
     totalExpenses: 0,
     netIncome: 0,
     lateFeesEstimated: 0,
+    allOutstanding: 0,
+    allOverdue: 0,
   })
 
   useEffect(() => {
@@ -133,10 +170,17 @@ export default function ReportsPage() {
     // Fetch invoices for selected month
     const { data: invoices } = await supabase
       .from('rent_invoices')
-      .select('*')
+      .select('*, tenants(full_name, business_name)')
       .eq('user_id', user.id)
       .eq('billing_month', selectedMonth)
       .eq('billing_year', selectedYear)
+
+    const { data: allInvoicesData } = await supabase
+      .from('rent_invoices')
+      .select('id, tenant_id, subtotal, amount_paid, balance, due_date, status, billing_month, billing_year, tenants(full_name, business_name)')
+      .eq('user_id', user.id)
+
+    const allInvoices = (allInvoicesData || []) as InvoiceWithTenant[]
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -219,17 +263,58 @@ export default function ReportsPage() {
     }, 0)
 
     const tenantBalanceMap = new Map<string, TenantBalanceReport>()
-    invoices?.forEach((invoice: any) => {
+    allInvoices.forEach((invoice) => {
       if ((invoice.balance || 0) <= 0) return
+      const tenant = firstRelation(invoice.tenants)
       const current = tenantBalanceMap.get(invoice.tenant_id) || {
         tenant_id: invoice.tenant_id,
-        tenant_name: invoice.tenant_id,
+        tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
         outstanding: 0,
+        overdue: 0,
+        invoice_count: 0,
       }
       current.outstanding += invoice.balance || 0
+      current.invoice_count += 1
+      if (invoice.status === 'overdue') {
+        current.overdue += invoice.balance || 0
+      }
       tenantBalanceMap.set(invoice.tenant_id, current)
     })
-    setTenantBalances(Array.from(tenantBalanceMap.values()).sort((a, b) => b.outstanding - a.outstanding))
+    const tenantBalanceRows = Array.from(tenantBalanceMap.values()).sort((a, b) => b.outstanding - a.outstanding)
+
+    const statusMap = new Map<string, { status: string; count: number; amount: number }>()
+    allInvoices.forEach((invoice) => {
+      const current = statusMap.get(invoice.status) || { status: invoice.status.replace('_', ' '), count: 0, amount: 0 }
+      current.count += 1
+      current.amount += invoice.balance || 0
+      statusMap.set(invoice.status, current)
+    })
+
+    const today = new Date()
+    const agingBuckets = [
+      { bucket: 'Not due', amount: 0 },
+      { bucket: '1-30 days', amount: 0 },
+      { bucket: '31-60 days', amount: 0 },
+      { bucket: '60+ days', amount: 0 },
+    ]
+
+    allInvoices.forEach((invoice) => {
+      const balance = invoice.balance || 0
+      if (balance <= 0) return
+      const dueDate = new Date(`${invoice.due_date}T00:00:00`)
+      const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / 86400000)
+
+      if (daysOverdue <= 0) agingBuckets[0].amount += balance
+      else if (daysOverdue <= 30) agingBuckets[1].amount += balance
+      else if (daysOverdue <= 60) agingBuckets[2].amount += balance
+      else agingBuckets[3].amount += balance
+    })
+
+    setInvoiceAnalytics({
+      statusData: Array.from(statusMap.values()),
+      outstandingByAge: agingBuckets,
+      topOutstandingTenants: tenantBalanceRows.slice(0, 8),
+    })
 
     const tenantMixMap = new Map<string, number>()
     tenants?.forEach((tenant: any) => {
@@ -268,6 +353,27 @@ export default function ReportsPage() {
       return sum + (p.units?.filter((u: any) => u.status === 'occupied').length || 0)
     }, 0) || 0
 
+    const allOutstanding = allInvoices.reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)
+    const allOverdue = allInvoices
+      .filter((invoice) => invoice.status === 'overdue')
+      .reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)
+
+    const trendData = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(selectedYear, selectedMonth - 1 - (5 - index), 1)
+      const trendMonth = date.getMonth() + 1
+      const trendYear = date.getFullYear()
+      const trendInvoices = allInvoices.filter((invoice) => invoice.billing_month === trendMonth && invoice.billing_year === trendYear)
+
+      return {
+        month: trendMonth,
+        year: trendYear,
+        expected: trendInvoices.reduce((sum, invoice) => sum + (invoice.subtotal || 0), 0),
+        collected: trendInvoices.reduce((sum, invoice) => sum + (invoice.amount_paid || 0), 0),
+        outstanding: trendInvoices.reduce((sum, invoice) => sum + (invoice.balance || 0), 0),
+      }
+    })
+    setMonthlyData(trendData)
+
     setSummary({
       totalProperties: properties?.length || 0,
       totalUnits: totalUnits,
@@ -282,6 +388,8 @@ export default function ReportsPage() {
       totalExpenses,
       netIncome: calculateNetIncome(totalCollected, totalExpenses),
       lateFeesEstimated,
+      allOutstanding,
+      allOverdue,
     })
 
     setLoading(false)
@@ -483,6 +591,83 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Outstanding Analytics */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="card p-6 xl:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Collection Trend</h3>
+              <p className="text-sm text-gray-500">Last six billing periods up to {getMonthName(selectedMonth)} {selectedYear}</p>
+            </div>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthlyData.map((item) => ({
+                ...item,
+                label: `${getMonthName(item.month).slice(0, 3)} ${item.year}`,
+              }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Legend />
+                <Area type="monotone" dataKey="expected" name="Expected" stroke="#2563eb" fill="#bfdbfe" />
+                <Area type="monotone" dataKey="collected" name="Collected" stroke="#16a34a" fill="#bbf7d0" />
+                <Area type="monotone" dataKey="outstanding" name="Outstanding" stroke="#dc2626" fill="#fecaca" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-gray-900">Invoice Status Mix</h3>
+          <p className="mt-1 text-sm text-gray-500">All open and closed invoices</p>
+          <div className="mt-4 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={invoiceAnalytics.statusData}
+                  dataKey="count"
+                  nameKey="status"
+                  innerRadius={55}
+                  outerRadius={95}
+                  paddingAngle={3}
+                >
+                  {invoiceAnalytics.statusData.map((entry, index) => (
+                    <Cell key={entry.status} fill={chartColors[index % chartColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value, name) => [value, name]} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="card p-6">
+          <p className="text-sm text-gray-500">Total Outstanding Across All Periods</p>
+          <p className="mt-2 text-3xl font-bold text-danger-600">{formatCurrency(summary.allOutstanding)}</p>
+          <p className="mt-2 text-sm text-gray-500">Overdue: {formatCurrency(summary.allOverdue)}</p>
+        </div>
+
+        <div className="card p-6 xl:col-span-2">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Outstanding Aging</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={invoiceAnalytics.outstandingByAge}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="bucket" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Bar dataKey="amount" name="Outstanding" fill="#dc2626" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="card p-6">
@@ -566,16 +751,19 @@ export default function ReportsPage() {
       {/* Outstanding Balances by Tenant */}
       <div className="card">
         <div className="card-header">
-          <h3 className="text-lg font-semibold">Outstanding Balances by Tenant</h3>
+          <h3 className="text-lg font-semibold">Top Outstanding Tenants</h3>
         </div>
         <div className="card-body">
-          {tenantBalances.length === 0 ? (
-            <p className="text-gray-500">No outstanding tenant balances for this period.</p>
+          {invoiceAnalytics.topOutstandingTenants.length === 0 ? (
+            <p className="text-gray-500">No outstanding tenant balances.</p>
           ) : (
             <div className="space-y-3">
-              {tenantBalances.slice(0, 10).map((tenant) => (
+              {invoiceAnalytics.topOutstandingTenants.map((tenant) => (
                 <div key={tenant.tenant_id} className="flex items-center justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-700">{tenant.tenant_name}</span>
+                  <div>
+                    <span className="text-gray-700">{tenant.tenant_name}</span>
+                    <p className="text-xs text-gray-500">{tenant.invoice_count} open invoice(s), overdue {formatCurrency(tenant.overdue)}</p>
+                  </div>
                   <span className="font-semibold text-danger-600">{formatCurrency(tenant.outstanding)}</span>
                 </div>
               ))}

@@ -5,11 +5,90 @@ import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/cons
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
+type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid'
+type InvoiceSort = 'status' | 'balance_desc' | 'amount_desc' | 'paid_desc' | 'due_asc' | 'newest'
+
+type InvoiceListItem = {
+  id: string
+  invoice_number: string
+  tenant_name: string
+  unit_name: string
+  property_name: string
+  billing_month: number
+  billing_year: number
+  subtotal: number
+  amount_paid: number
+  balance: number
+  due_date: string
+  status: string
+}
+
+type InvoiceRow = Omit<InvoiceListItem, 'tenant_name' | 'unit_name' | 'property_name'> & {
+  tenants: { full_name: string | null; business_name: string | null } | { full_name: string | null; business_name: string | null }[] | null
+  units: { unit_name: string | null } | { unit_name: string | null }[] | null
+  properties: { name: string | null } | { name: string | null }[] | null
+}
+
 function firstRelation<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
 
-async function getInvoices() {
+function getQueryValue(value: string | string[] | undefined, fallback: string) {
+  return Array.isArray(value) ? value[0] || fallback : value || fallback
+}
+
+function getStatusFilter(value: string | string[] | undefined): InvoiceStatusFilter {
+  const status = getQueryValue(value, 'all')
+  return ['all', 'unpaid', 'overdue', 'partially_paid', 'paid'].includes(status) ? status as InvoiceStatusFilter : 'all'
+}
+
+function getSort(value: string | string[] | undefined): InvoiceSort {
+  const sort = getQueryValue(value, 'status')
+  return ['status', 'balance_desc', 'amount_desc', 'paid_desc', 'due_asc', 'newest'].includes(sort) ? sort as InvoiceSort : 'status'
+}
+
+function createInvoiceHref(status: InvoiceStatusFilter, sort: InvoiceSort) {
+  const params = new URLSearchParams()
+  if (status !== 'all') params.set('status', status)
+  if (sort !== 'status') params.set('sort', sort)
+  const query = params.toString()
+  return query ? `/invoices?${query}` : '/invoices'
+}
+
+function statusRank(status: string) {
+  switch (status) {
+    case 'overdue': return 0
+    case 'unpaid': return 1
+    case 'partially_paid': return 2
+    case 'paid': return 3
+    default: return 4
+  }
+}
+
+function sortInvoices(invoices: InvoiceListItem[], sort: InvoiceSort) {
+  return [...invoices].sort((a, b) => {
+    switch (sort) {
+      case 'balance_desc':
+        return (b.balance || 0) - (a.balance || 0)
+      case 'amount_desc':
+        return (b.subtotal || 0) - (a.subtotal || 0)
+      case 'paid_desc':
+        return (b.amount_paid || 0) - (a.amount_paid || 0)
+      case 'due_asc':
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      case 'newest':
+        return (b.billing_year - a.billing_year) || (b.billing_month - a.billing_month)
+      case 'status':
+      default:
+        return statusRank(a.status) - statusRank(b.status)
+          || (b.balance || 0) - (a.balance || 0)
+          || (b.billing_year - a.billing_year)
+          || (b.billing_month - a.billing_month)
+    }
+  })
+}
+
+async function getInvoices(): Promise<InvoiceListItem[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -35,28 +114,64 @@ async function getInvoices() {
     return []
   }
 
-  return (invoices || []).map((invoice: any) => {
+  return ((invoices || []) as InvoiceRow[]).map((invoice) => {
     const tenant = firstRelation(invoice.tenants)
     const unit = firstRelation(invoice.units)
     const property = firstRelation(invoice.properties)
 
     return {
-      ...invoice,
-      tenant_name: tenant?.full_name || tenant?.business_name,
-      unit_name: unit?.unit_name,
-      property_name: property?.name,
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
+      unit_name: unit?.unit_name || 'Unknown unit',
+      property_name: property?.name || 'Unknown property',
+      billing_month: invoice.billing_month,
+      billing_year: invoice.billing_year,
+      subtotal: invoice.subtotal || 0,
+      amount_paid: invoice.amount_paid || 0,
+      balance: invoice.balance || 0,
+      due_date: invoice.due_date,
+      status: invoice.status,
     }
   })
 }
 
-export default async function InvoicesPage() {
-  const invoices = await getInvoices()
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const statusFilter = getStatusFilter(params?.status)
+  const sort = getSort(params?.sort)
+  const allInvoices = await getInvoices()
+  const filteredInvoices = statusFilter === 'all'
+    ? allInvoices
+    : allInvoices.filter((invoice) => invoice.status === statusFilter)
+  const invoices = sortInvoices(filteredInvoices, sort)
 
-  const totalExpected = invoices.reduce((sum: number, inv: { subtotal: number }) => sum + (inv.subtotal || 0), 0)
-  const totalPaid = invoices.reduce((sum: number, inv: { amount_paid: number }) => sum + (inv.amount_paid || 0), 0)
-  const totalBalance = invoices.reduce((sum: number, inv: { balance: number }) => sum + (inv.balance || 0), 0)
-  const overdueCount = invoices.filter((inv: { status: string }) => inv.status === 'overdue').length
-  const paidCount = invoices.filter((inv: { status: string }) => inv.status === 'paid').length
+  const totalExpected = allInvoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
+  const totalPaid = allInvoices.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0)
+  const totalBalance = allInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0)
+  const overdueCount = allInvoices.filter((inv) => inv.status === 'overdue').length
+  const paidCount = allInvoices.filter((inv) => inv.status === 'paid').length
+  const unpaidCount = allInvoices.filter((inv) => inv.status === 'unpaid').length
+  const partialCount = allInvoices.filter((inv) => inv.status === 'partially_paid').length
+  const statusOptions: { value: InvoiceStatusFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: allInvoices.length },
+    { value: 'unpaid', label: 'Unpaid', count: unpaidCount },
+    { value: 'overdue', label: 'Overdue', count: overdueCount },
+    { value: 'partially_paid', label: 'Partial', count: partialCount },
+    { value: 'paid', label: 'Paid', count: paidCount },
+  ]
+  const sortOptions: { value: InvoiceSort; label: string }[] = [
+    { value: 'status', label: 'Unpaid first' },
+    { value: 'balance_desc', label: 'Highest balance' },
+    { value: 'amount_desc', label: 'Highest amount' },
+    { value: 'paid_desc', label: 'Highest paid' },
+    { value: 'due_asc', label: 'Due soonest' },
+    { value: 'newest', label: 'Newest period' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -113,6 +228,54 @@ export default async function InvoicesPage() {
         </div>
       </div>
 
+      <div className="card p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Invoice View</h2>
+            <p className="text-sm text-gray-500">
+              Showing {invoices.length} of {allInvoices.length} invoice{allInvoices.length === 1 ? '' : 's'}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((option) => (
+                <Link
+                  key={option.value}
+                  href={createInvoiceHref(option.value, sort)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                    statusFilter === option.value
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {option.label} ({option.count})
+                </Link>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label htmlFor="invoice_sort_links" className="text-sm font-medium text-gray-500">Sort</label>
+              <div id="invoice_sort_links" className="flex flex-wrap gap-2">
+                {sortOptions.map((option) => (
+                  <Link
+                    key={option.value}
+                    href={createInvoiceHref(statusFilter, option.value)}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                      sort === option.value
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {option.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {invoices.length === 0 ? (
         <div className="card p-12 text-center">
           <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -142,7 +305,7 @@ export default async function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="table-body">
-                {invoices.map((invoice: any) => (
+                {invoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{invoice.invoice_number}</td>
                     <td className="table-cell">{invoice.tenant_name}</td>
