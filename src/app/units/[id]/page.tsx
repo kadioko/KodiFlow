@@ -377,7 +377,9 @@ export default function UnitDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Current Tenant</p>
-                  <p className="text-lg font-semibold">{currentLease.tenant_name}</p>
+                  <Link href={`/tenants/${currentLease.tenant_id}`} className="text-lg font-semibold text-primary-600 hover:underline">
+                    {currentLease.tenant_name}
+                  </Link>
                   <p className="text-sm text-gray-500">
                     Lease until {formatDate(currentLease.end_date)}
                   </p>

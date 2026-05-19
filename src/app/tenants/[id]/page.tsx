@@ -375,16 +375,18 @@ export default function TenantDetailPage() {
         </div>
       </div>
 
-      {activeLeases.length > 0 && (
-        <div className="card border-l-4 border-success-500">
-          <div className="p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Assigned Unit</p>
-                <h2 className="text-lg font-semibold text-gray-900">Current active assignment</h2>
-              </div>
-              <span className="badge bg-success-100 text-success-800">{activeLeases.length} active</span>
+      <div className={`card border-l-4 ${activeLeases.length > 0 ? 'border-success-500' : 'border-gray-300'}`}>
+        <div className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Assigned Unit</p>
+              <h2 className="text-lg font-semibold text-gray-900">Current active assignment</h2>
             </div>
+            <span className={`badge ${activeLeases.length > 0 ? 'bg-success-100 text-success-800' : 'bg-gray-100 text-gray-800'}`}>
+              {activeLeases.length > 0 ? `${activeLeases.length} active` : 'No active unit'}
+            </span>
+          </div>
+          {activeLeases.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-2">
               {activeLeases.map((lease) => (
                 <div key={lease.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -398,9 +400,11 @@ export default function TenantDetailPage() {
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <p className="text-sm text-gray-500">No active unit is assigned to this tenant.</p>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
