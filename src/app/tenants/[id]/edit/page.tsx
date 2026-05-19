@@ -4,8 +4,45 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, User, Building2, Loader2 } from 'lucide-react'
-import { TENANT_TYPES } from '@/utils/constants'
+import { ArrowLeft, User, Building2, Loader2, Home, CalendarDays } from 'lucide-react'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { DateInput } from '@/components/ui/DateInput'
+import { BILLING_FREQUENCIES, LEASE_TYPES } from '@/utils/constants'
+import { addUtcMonths, billingFrequencyMonths } from '@/utils/billing'
+import { formatCurrency } from '@/utils/currency'
+
+type AssignmentUnit = {
+  id: string
+  unit_name: string
+  unit_identifier: string | null
+  property_id: string
+  property_name: string
+  monthly_rent: number
+  usage_type: string
+}
+
+type VacantUnitRow = Omit<AssignmentUnit, 'property_name'> & {
+  properties: { name: string | null } | { name: string | null }[] | null
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+type BillingFrequency = 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
+type LeaseType = 'residential' | 'commercial'
+
+function toIsoDate(date: Date) {
+  return date.toISOString().split('T')[0]
+}
+
+function getDefaultEndDate(startDate: string, billingFrequency: BillingFrequency) {
+  const months = billingFrequencyMonths[billingFrequency] || 1
+  const start = new Date(`${startDate}T00:00:00Z`)
+  const end = addUtcMonths(start, months)
+  end.setUTCDate(end.getUTCDate() - 1)
+  return toIsoDate(end)
+}
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
@@ -19,6 +56,9 @@ export default function EditTenantPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tenantType, setTenantType] = useState<'individual' | 'business' | 'organization'>('individual')
+  const [hasActiveLease, setHasActiveLease] = useState(false)
+  const [vacantUnits, setVacantUnits] = useState<AssignmentUnit[]>([])
+  const [assignUnit, setAssignUnit] = useState(false)
 
   const [formData, setFormData] = useState<{
     tenant_type: 'individual' | 'business' | 'organization'
@@ -52,6 +92,32 @@ export default function EditTenantPage() {
     emergency_contact_phone: '',
     address: '',
     notes: '',
+  })
+  const [assignmentData, setAssignmentData] = useState<{
+    unit_id: string
+    property_id: string
+    start_date: string
+    end_date: string
+    monthly_rent: number
+    service_charge: number
+    deposit_amount: number
+    rent_due_day: number
+    lease_type: LeaseType
+    billing_frequency: BillingFrequency
+  }>(() => {
+    const startDate = new Date().toISOString().split('T')[0]
+    return {
+      unit_id: '',
+      property_id: '',
+      start_date: startDate,
+      end_date: getDefaultEndDate(startDate, 'monthly'),
+      monthly_rent: 0,
+      service_charge: 0,
+      deposit_amount: 0,
+      rent_due_day: 1,
+      lease_type: 'residential',
+      billing_frequency: 'monthly',
+    }
   })
 
   useEffect(() => {
@@ -104,7 +170,84 @@ export default function EditTenantPage() {
       address: data.address || '',
       notes: data.notes || '',
     })
+
+    const { data: activeLease } = await supabase
+      .from('leases')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    setHasActiveLease(Boolean(activeLease))
+
+    if (!activeLease) {
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select(`
+          id,
+          unit_name,
+          unit_identifier,
+          property_id,
+          monthly_rent,
+          usage_type,
+          properties(name)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'vacant')
+        .order('unit_name')
+
+      const units = ((unitsData || []) as VacantUnitRow[]).map((unit) => ({
+        id: unit.id,
+        unit_name: unit.unit_name,
+        unit_identifier: unit.unit_identifier,
+        property_id: unit.property_id,
+        property_name: firstRelation(unit.properties)?.name || 'Unknown property',
+        monthly_rent: unit.monthly_rent || 0,
+        usage_type: unit.usage_type,
+      }))
+
+      setVacantUnits(units)
+    }
+
     setLoading(false)
+  }
+
+  const handleAssignmentUnitChange = (unitId: string) => {
+    const selectedUnit = vacantUnits.find((unit) => unit.id === unitId)
+    if (!selectedUnit) {
+      setAssignmentData((previous) => ({
+        ...previous,
+        unit_id: '',
+        property_id: '',
+        monthly_rent: 0,
+      }))
+      return
+    }
+
+    setAssignmentData((previous) => ({
+      ...previous,
+      unit_id: selectedUnit.id,
+      property_id: selectedUnit.property_id,
+      monthly_rent: selectedUnit.monthly_rent,
+      lease_type: selectedUnit.usage_type === 'commercial' ? 'commercial' : 'residential',
+    }))
+  }
+
+  const handleAssignmentStartDateChange = (startDate: string) => {
+    setAssignmentData((previous) => ({
+      ...previous,
+      start_date: startDate,
+      end_date: getDefaultEndDate(startDate, previous.billing_frequency),
+    }))
+  }
+
+  const handleAssignmentBillingFrequencyChange = (billingFrequency: BillingFrequency) => {
+    setAssignmentData((previous) => ({
+      ...previous,
+      billing_frequency: billingFrequency,
+      end_date: getDefaultEndDate(previous.start_date, billingFrequency),
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,7 +289,90 @@ export default function EditTenantPage() {
 
     if (updateError) {
       setError(updateError.message)
-    } else {
+      setSaving(false)
+      return
+    }
+
+    if (assignUnit && !hasActiveLease) {
+      if (!assignmentData.unit_id || !assignmentData.property_id || !assignmentData.start_date || !assignmentData.end_date) {
+        setError('Choose a unit and lease dates before assigning this tenant.')
+        setSaving(false)
+        return
+      }
+
+      if (new Date(`${assignmentData.end_date}T00:00:00Z`) < new Date(`${assignmentData.start_date}T00:00:00Z`)) {
+        setError('Lease end date must be after the start date.')
+        setSaving(false)
+        return
+      }
+
+      const { data: existingLease } = await supabase
+        .from('leases')
+        .select('id')
+        .eq('unit_id', assignmentData.unit_id)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (existingLease) {
+        setError('That unit already has an active lease. Refresh and choose another vacant unit.')
+        setSaving(false)
+        return
+      }
+
+      const { data: createdLease, error: leaseError } = await supabase
+        .from('leases')
+        .insert({
+          user_id: user.id,
+          tenant_id: tenantId,
+          unit_id: assignmentData.unit_id,
+          property_id: assignmentData.property_id,
+          start_date: assignmentData.start_date,
+          end_date: assignmentData.end_date,
+          monthly_rent: assignmentData.monthly_rent,
+          deposit_amount: assignmentData.deposit_amount,
+          rent_due_day: assignmentData.rent_due_day,
+          lease_type: assignmentData.lease_type,
+          billing_frequency: assignmentData.billing_frequency,
+          status: 'active',
+        })
+        .select('id')
+        .single()
+
+      if (leaseError || !createdLease) {
+        setError(leaseError?.message || 'Tenant was saved, but the unit assignment could not be created.')
+        setSaving(false)
+        return
+      }
+
+      if (assignmentData.service_charge > 0) {
+        const { error: chargeError } = await supabase
+          .from('charges')
+          .insert({
+            user_id: user.id,
+            lease_id: createdLease.id,
+            charge_name: 'Service Charge',
+            charge_type: 'service_charge',
+            amount: assignmentData.service_charge,
+            frequency: 'monthly',
+            is_active: true,
+          })
+
+        if (chargeError) {
+          setError(chargeError.message)
+          setSaving(false)
+          return
+        }
+      }
+
+      await supabase
+        .from('units')
+        .update({ status: 'occupied', updated_at: new Date().toISOString() })
+        .eq('id', assignmentData.unit_id)
+        .eq('user_id', user.id)
+    }
+
+    {
       router.push(`/tenants/${tenantId}`)
       router.refresh()
     }
@@ -417,6 +643,147 @@ export default function EditTenantPage() {
               className="input"
             />
           </div>
+
+          {!hasActiveLease && (
+            <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-600">
+                    <Home className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Assign this tenant to a vacant unit</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Create the active lease while saving tenant changes.
+                    </p>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={assignUnit}
+                    onChange={(event) => setAssignUnit(event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  />
+                  Assign now
+                </label>
+              </div>
+
+              {assignUnit && (
+                <div className="mt-4 space-y-4 rounded-lg bg-white p-4">
+                  {vacantUnits.length === 0 ? (
+                    <p className="text-sm text-gray-500">No vacant units are available right now.</p>
+                  ) : (
+                    <>
+                      <div className="form-group">
+                        <label htmlFor="assignment_unit_id" className="label">
+                          Vacant Unit <span className="text-danger-500">*</span>
+                        </label>
+                        <select
+                          id="assignment_unit_id"
+                          required={assignUnit}
+                          value={assignmentData.unit_id}
+                          onChange={(event) => handleAssignmentUnitChange(event.target.value)}
+                          className="input"
+                        >
+                          <option value="">Select a vacant unit</option>
+                          {vacantUnits.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                              {unit.property_name} - {unit.unit_identifier ? `${unit.unit_identifier} / ` : ''}{unit.unit_name} ({formatCurrency(unit.monthly_rent)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="form-group">
+                          <label htmlFor="assignment_lease_type" className="label">Lease Type</label>
+                          <select
+                            id="assignment_lease_type"
+                            value={assignmentData.lease_type}
+                            onChange={(event) => setAssignmentData({ ...assignmentData, lease_type: event.target.value as LeaseType })}
+                            className="input"
+                          >
+                            {LEASE_TYPES.map((type) => (
+                              <option key={type.value} value={type.value}>
+                                {type.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="assignment_billing_frequency" className="label">Billing Frequency</label>
+                          <select
+                            id="assignment_billing_frequency"
+                            value={assignmentData.billing_frequency}
+                            onChange={(event) => handleAssignmentBillingFrequencyChange(event.target.value as BillingFrequency)}
+                            className="input"
+                          >
+                            {BILLING_FREQUENCIES.map((frequency) => (
+                              <option key={frequency.value} value={frequency.value}>
+                                {frequency.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <DateInput id="assignment_start_date" label="Start Date" required value={assignmentData.start_date} onChange={handleAssignmentStartDateChange} />
+                        <DateInput id="assignment_end_date" label="End Date" required value={assignmentData.end_date} onChange={(value) => setAssignmentData({ ...assignmentData, end_date: value })} />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <CurrencyInput id="assignment_monthly_rent" label="Monthly Rent" required value={assignmentData.monthly_rent} onChange={(value) => setAssignmentData({ ...assignmentData, monthly_rent: value })} />
+                        <CurrencyInput id="assignment_service_charge" label="Service Charge" value={assignmentData.service_charge} onChange={(value) => setAssignmentData({ ...assignmentData, service_charge: value })} />
+                        <CurrencyInput id="assignment_deposit" label="Deposit" value={assignmentData.deposit_amount} onChange={(value) => setAssignmentData({ ...assignmentData, deposit_amount: value })} />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="form-group">
+                          <label htmlFor="assignment_rent_due_day" className="label">Rent Due Day</label>
+                          <select
+                            id="assignment_rent_due_day"
+                            value={assignmentData.rent_due_day}
+                            onChange={(event) => setAssignmentData({ ...assignmentData, rent_due_day: parseInt(event.target.value) })}
+                            className="input"
+                          >
+                            {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
+                              <option key={day} value={day}>
+                                {day}th
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                            <CalendarDays className="h-4 w-4" />
+                            Assignment Preview
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                            <div>
+                              <p className="text-slate-500">Rent</p>
+                              <p className="font-bold text-slate-900">{formatCurrency(assignmentData.monthly_rent)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Service</p>
+                              <p className="font-bold text-slate-900">{formatCurrency(assignmentData.service_charge)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Monthly Total</p>
+                              <p className="font-bold text-primary-700">{formatCurrency(assignmentData.monthly_rent + assignmentData.service_charge)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-end space-x-4 pt-4">
             <Link href={`/tenants/${tenantId}`} className="btn-secondary">
