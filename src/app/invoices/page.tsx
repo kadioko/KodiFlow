@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'lucide-react'
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
-import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
 function firstRelation<T>(value: T | T[] | null | undefined) {
@@ -17,8 +17,6 @@ async function getInvoices() {
 
   await supabase.rpc('refresh_overdue_invoices')
 
-  const { month, year } = getCurrentMonthYear()
-
   const { data: invoices, error } = await supabase
     .from('rent_invoices')
     .select(`
@@ -28,8 +26,8 @@ async function getInvoices() {
       properties(name)
     `)
     .eq('user_id', user.id)
-    .eq('billing_month', month)
-    .eq('billing_year', year)
+    .order('billing_year', { ascending: false })
+    .order('billing_month', { ascending: false })
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -53,7 +51,6 @@ async function getInvoices() {
 
 export default async function InvoicesPage() {
   const invoices = await getInvoices()
-  const { month, year } = getCurrentMonthYear()
 
   const totalExpected = invoices.reduce((sum: number, inv: { subtotal: number }) => sum + (inv.subtotal || 0), 0)
   const totalPaid = invoices.reduce((sum: number, inv: { amount_paid: number }) => sum + (inv.amount_paid || 0), 0)
@@ -66,7 +63,7 @@ export default async function InvoicesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Invoices</h1>
-          <p className="text-gray-500">{getMonthName(month)} {year} rent invoices</p>
+          <p className="text-gray-500">All rent invoices across billing periods</p>
         </div>
         <div className="flex space-x-3">
           <Link href="/invoices/generate" className="btn-success">
@@ -119,7 +116,7 @@ export default async function InvoicesPage() {
       {invoices.length === 0 ? (
         <div className="card p-12 text-center">
           <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices this month</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices yet</h3>
           <p className="text-gray-500 mb-6">Generate invoices for your active leases</p>
           <Link href="/invoices/generate" className="btn-success">
             <Plus className="h-5 w-5 mr-2" />
@@ -135,6 +132,7 @@ export default async function InvoicesPage() {
                   <th className="table-header-cell">Invoice #</th>
                   <th className="table-header-cell">Tenant</th>
                   <th className="table-header-cell">Property/Unit</th>
+                  <th className="table-header-cell">Period</th>
                   <th className="table-header-cell">Amount</th>
                   <th className="table-header-cell">Paid</th>
                   <th className="table-header-cell">Balance</th>
@@ -152,6 +150,7 @@ export default async function InvoicesPage() {
                       <p className="text-sm text-gray-900">{invoice.property_name}</p>
                       <p className="text-xs text-gray-500">{invoice.unit_name}</p>
                     </td>
+                    <td className="table-cell">{getMonthName(invoice.billing_month)} {invoice.billing_year}</td>
                     <td className="table-cell">{formatCurrency(invoice.subtotal)}</td>
                     <td className="table-cell text-success-600">{formatCurrency(invoice.amount_paid)}</td>
                     <td className={`table-cell font-medium ${invoice.balance > 0 ? 'text-danger-600' : 'text-success-600'}`}>
