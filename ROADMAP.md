@@ -4,7 +4,7 @@
 
 KodiFlow is a modern property management system for residential and commercial rental operations.
 
-**Current Status**: v0.6.0 - Core platform, linked property/tenant/unit/lease workflows, financial workflows, reporting, utilities, documents, mobile navigation, PWA, and tenant self-service foundation complete  
+**Current Status**: v0.6.1 - Core platform, linked property/tenant/unit/lease workflows, edit/delete financial workflows, occupancy audit links, reporting, utilities, documents, mobile navigation, PWA, and tenant self-service foundation complete  
 **Stack**: Next.js 16 + React 19 + TypeScript 6 + Tailwind CSS 4 + Supabase PostgreSQL/Auth/Storage
 
 ---
@@ -35,6 +35,8 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Tenant-level withholding tax toggles for rent and service charge deductions
 - [x] Detail/edit route stabilization for tenants, units, properties, and leases
 - [x] Cross-links between properties, units, tenants, leases, invoices, and payments
+- [x] Occupied units show linked current tenants and tenants show linked active assigned units
+- [x] Confirmed unit deletion cleanup for related leases, charges, invoices, invoice items, and payments
 - [x] Tenant portal foundation for tenant-linked accounts
 - [x] Dashboard property visibility controls persisted to user profile
 
@@ -42,6 +44,7 @@ KodiFlow is a modern property management system for residential and commercial r
 
 - [x] Lease creation and detail pages
 - [x] Lease edit page
+- [x] Lease delete action from lease detail pages
 - [x] Active, expired, terminated, renewed, and pending lease statuses
 - [x] Lease expiry warnings
 - [x] Lease renewal workflow
@@ -63,6 +66,11 @@ KodiFlow is a modern property management system for residential and commercial r
 - [x] Full and partial payment recording
 - [x] Invoice charge breakdown on payment recording
 - [x] Payment prefill from invoice pages
+- [x] Invoice detail edit/delete actions
+- [x] Invoice rent/service/full owed breakdown toggles
+- [x] Invoice print and PDF sharing/download workflow
+- [x] Payment detail/list edit links and payment edit/delete workflow
+- [x] Comma-formatted payment amount entry and whole-shilling TZS display
 - [x] Automatic invoice balance calculations
 - [x] Invoice statuses: unpaid, partially paid, paid, overdue, cancelled
 - [x] Payment reminder action links

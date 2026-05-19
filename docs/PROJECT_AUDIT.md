@@ -1,6 +1,6 @@
 # KodiFlow Project Audit
 
-Last reviewed: 2026-05-14
+Last reviewed: 2026-05-19
 
 ## Improvements completed
 
@@ -16,6 +16,11 @@ Last reviewed: 2026-05-14
 - Connected units, tenants, leases, invoices, and payments more clearly across detail pages.
 - Added lease editing, lease renewal entry points, and six-month billing frequency support.
 - Added separate service charge entry on leases and charge breakdown visibility while recording payments.
+- Added edit/delete workflows for payments, leases, and invoices.
+- Added invoice rent/service/full owed breakdown toggles and PDF sharing from invoice detail pages.
+- Added tenant/unit cross-links so occupied units show current tenants and tenants show assigned active units.
+- Added confirmed unit deletion cleanup for related leases, charges, invoices, invoice items, and payments.
+- Improved monetary entry/display with comma-formatted payment inputs and whole-shilling TZS formatting.
 
 ## High-priority next improvements
 
@@ -23,7 +28,7 @@ Last reviewed: 2026-05-14
 - Review dashboard preference sync behavior across browsers and users.
 - Add automated tests for Supabase data flows, especially registration, invoice generation, and payments.
 - Regenerate `database.types.ts` from Supabase after every schema change.
-- Add browser/E2E coverage for mobile navigation, lease renewal, invoice generation, and payment recording.
+- Add browser/E2E coverage for mobile navigation, lease renewal, invoice generation, invoice PDF sharing, payment editing, unit deletion cleanup, occupancy cross-links, and payment recording.
 
 ## Documentation cleanup decisions
 
