@@ -2,10 +2,11 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { PwaProvider } from '@/components/pwa/PwaProvider'
 import { AppShell } from '@/components/layout/AppShell'
-import { ThemeProvider, THEME_STORAGE_KEY } from '@/components/theme/ThemeProvider'
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+const THEME_STORAGE_KEY = 'kodiflow-theme'
 
 export const metadata: Metadata = {
   title: 'KodiFlow - Property Management',
@@ -33,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <script
           dangerouslySetInnerHTML={{

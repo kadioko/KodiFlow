@@ -19,6 +19,8 @@ export interface Database {
           dashboard_hidden_property_ids: Json
           language_preference: 'en' | 'sw'
           late_fee_rate: number
+          invoice_payment_instructions: string | null
+          invoice_footer_note: string | null
           created_at: string
           updated_at: string
         }
@@ -31,6 +33,8 @@ export interface Database {
           dashboard_hidden_property_ids?: Json
           language_preference?: 'en' | 'sw'
           late_fee_rate?: number
+          invoice_payment_instructions?: string | null
+          invoice_footer_note?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -43,6 +47,8 @@ export interface Database {
           dashboard_hidden_property_ids?: Json
           language_preference?: 'en' | 'sw'
           late_fee_rate?: number
+          invoice_payment_instructions?: string | null
+          invoice_footer_note?: string | null
           created_at?: string
           updated_at?: string
         }

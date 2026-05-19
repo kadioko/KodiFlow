@@ -21,6 +21,7 @@ import {
   CreditCard
 } from 'lucide-react'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
+import { createInvoicePdf as buildInvoicePdf, type InvoicePdfSettings } from '@/utils/invoice-pdf'
 
 interface InvoiceItem {
   id: string
@@ -78,6 +79,7 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [items, setItems] = useState<InvoiceItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [pdfSettings, setPdfSettings] = useState<InvoicePdfSettings>({})
 
   useEffect(() => {
     if (!invoiceId) {
@@ -124,6 +126,19 @@ export default function InvoiceDetailPage() {
       property_name: invoiceData.properties?.name,
     })
 
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('invoice_payment_instructions, invoice_footer_note')
+      .eq('id', user.id)
+      .single()
+
+    if (profileData) {
+      setPdfSettings({
+        paymentInstructions: profileData.invoice_payment_instructions,
+        footerNote: profileData.invoice_footer_note,
+      })
+    }
+
     // Fetch invoice items
     const { data: itemsData } = await supabase
       .from('invoice_items')
@@ -157,135 +172,7 @@ export default function InvoiceDetailPage() {
 
   const createInvoicePdf = async () => {
     if (!invoice) return null
-
-    const { default: jsPDF } = await import('jspdf')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 16
-      const contentWidth = pageWidth - margin * 2
-      let y = 18
-
-      const ensureSpace = (needed: number) => {
-        if (y + needed <= pageHeight - margin) return
-        pdf.addPage()
-        y = margin
-      }
-
-      const text = (value: string, x: number, options?: { size?: number; style?: 'normal' | 'bold'; color?: [number, number, number]; align?: 'left' | 'right' | 'center' }) => {
-        pdf.setFont('helvetica', options?.style || 'normal')
-        pdf.setFontSize(options?.size || 10)
-        const color = options?.color || [17, 24, 39]
-        pdf.setTextColor(color[0], color[1], color[2])
-        pdf.text(value, x, y, { align: options?.align || 'left' })
-      }
-
-      pdf.setFillColor(15, 23, 42)
-      pdf.rect(0, 0, pageWidth, 38, 'F')
-      y = 18
-      text('RENT INVOICE', margin, { size: 18, style: 'bold', color: [255, 255, 255] })
-      y += 8
-      text(invoice.invoice_number, margin, { size: 10, color: [203, 213, 225] })
-      y = 18
-      text(invoice.status.replace('_', ' ').toUpperCase(), pageWidth - margin, { size: 10, style: 'bold', color: [255, 255, 255], align: 'right' })
-      y = 50
-
-      text('Invoice Date', margin, { size: 9, color: [100, 116, 139] })
-      text('Due Date', pageWidth / 2, { size: 9, color: [100, 116, 139] })
-      y += 6
-      text(formatDate(invoice.created_at), margin, { style: 'bold' })
-      text(formatDate(invoice.due_date), pageWidth / 2, { style: 'bold', color: invoice.status === 'overdue' ? [220, 38, 38] : [17, 24, 39] })
-      y += 16
-
-      pdf.setDrawColor(226, 232, 240)
-      pdf.line(margin, y, pageWidth - margin, y)
-      y += 10
-
-      text('BILL TO', margin, { size: 9, style: 'bold', color: [100, 116, 139] })
-      text('PROPERTY', pageWidth / 2, { size: 9, style: 'bold', color: [100, 116, 139] })
-      y += 6
-      text(invoice.tenant_name || 'Unknown tenant', margin, { style: 'bold' })
-      text(invoice.property_name || 'Unknown property', pageWidth / 2, { style: 'bold' })
-      y += 6
-      text(`Unit: ${invoice.unit_name || 'Unknown unit'}`, pageWidth / 2, { color: [71, 85, 105] })
-      y += 14
-
-      pdf.setFillColor(248, 250, 252)
-      pdf.roundedRect(margin, y, contentWidth, 24, 2, 2, 'F')
-      y += 8
-      text(`Period: ${formatDate(invoice.billing_period_start)} to ${formatDate(invoice.billing_period_end)}`, margin + 4, { style: 'bold' })
-      text(`Balance Due: ${formatCurrency(invoice.balance)}`, pageWidth - margin - 4, { style: 'bold', color: invoice.balance > 0 ? [220, 38, 38] : [22, 163, 74], align: 'right' })
-      y += 24
-
-      text('Description', margin, { size: 9, style: 'bold', color: [100, 116, 139] })
-      text('Amount', pageWidth - margin, { size: 9, style: 'bold', color: [100, 116, 139], align: 'right' })
-      y += 4
-      pdf.line(margin, y, pageWidth - margin, y)
-      y += 8
-
-      items.forEach((item) => {
-        const lines = pdf.splitTextToSize(item.item_name, contentWidth - 42)
-        ensureSpace(8 + lines.length * 5 + (item.notes ? 6 : 0))
-        pdf.setFont('helvetica', 'normal')
-        pdf.setFontSize(10)
-        pdf.setTextColor(17, 24, 39)
-        pdf.text(lines, margin, y)
-        text(formatCurrency(item.amount), pageWidth - margin, { align: 'right' })
-        y += lines.length * 5
-        if (item.notes) {
-          const noteLines = pdf.splitTextToSize(item.notes, contentWidth - 42)
-          pdf.setFontSize(8)
-          pdf.setTextColor(100, 116, 139)
-          pdf.text(noteLines, margin, y)
-          y += noteLines.length * 4
-        }
-        y += 4
-        pdf.setDrawColor(241, 245, 249)
-        pdf.line(margin, y, pageWidth - margin, y)
-        y += 5
-      })
-
-      ensureSpace(34)
-      const totalsX = pageWidth - margin
-      text('Subtotal', totalsX - 42, { align: 'right', style: 'bold' })
-      text(formatCurrency(invoice.subtotal), totalsX, { align: 'right', style: 'bold' })
-      y += 7
-
-      if (invoice.amount_paid > 0) {
-        text('Amount Paid', totalsX - 42, { align: 'right', style: 'bold', color: [22, 163, 74] })
-        text(`-${formatCurrency(invoice.amount_paid)}`, totalsX, { align: 'right', style: 'bold', color: [22, 163, 74] })
-        y += 7
-      }
-
-      text('Balance Due', totalsX - 42, { align: 'right', size: 12, style: 'bold' })
-      text(formatCurrency(invoice.balance), totalsX, { align: 'right', size: 12, style: 'bold', color: invoice.balance > 0 ? [220, 38, 38] : [22, 163, 74] })
-      y += 12
-
-      if (payments.length > 0) {
-        ensureSpace(20)
-        text('Payment History', margin, { size: 12, style: 'bold' })
-        y += 8
-        payments.forEach((payment) => {
-          ensureSpace(10)
-          text(`${formatDate(payment.payment_date)} - ${payment.payment_method}${payment.reference ? ` - Ref: ${payment.reference}` : ''}`, margin, { color: [71, 85, 105] })
-          text(formatCurrency(payment.amount), pageWidth - margin, { align: 'right', style: 'bold', color: [22, 163, 74] })
-          y += 7
-        })
-      }
-
-      ensureSpace(18)
-      pdf.setDrawColor(226, 232, 240)
-      pdf.line(margin, y, pageWidth - margin, y)
-      y += 8
-      text('Thank you for your business.', pageWidth / 2, { align: 'center', color: [100, 116, 139] })
-      y += 5
-      text('For questions about this invoice, please contact your property manager.', pageWidth / 2, { align: 'center', size: 8, color: [100, 116, 139] })
-
-      const fileName = `${invoice.invoice_number}.pdf`
-      const pdfBlob = pdf.output('blob')
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' })
-
-    return { pdf, fileName, pdfFile }
+    return buildInvoicePdf(invoice, items, payments, pdfSettings)
   }
 
   const handleSharePdf = async () => {
@@ -400,6 +287,7 @@ export default function InvoiceDetailPage() {
   const rentTotal = rentItems.reduce((sum, item) => sum + item.amount, 0)
   const serviceTotal = serviceItems.reduce((sum, item) => sum + item.amount, 0)
   const otherTotal = items.reduce((sum, item) => sum + item.amount, 0) - rentTotal - serviceTotal
+  const balanceLabel = invoice.balance < 0 ? 'Credit Balance' : invoice.balance === 0 ? 'Settled Balance' : 'Balance Due'
 
   return (
     <div className="space-y-6">
@@ -544,7 +432,7 @@ export default function InvoiceDetailPage() {
               <div><p className="text-slate-500">Rent</p><p className="font-bold text-slate-900">{formatCurrency(rentTotal)}</p></div>
               <div><p className="text-slate-500">Service Charge</p><p className="font-bold text-slate-900">{formatCurrency(serviceTotal)}</p></div>
               <div><p className="text-slate-500">Other / Tax</p><p className="font-bold text-slate-900">{formatCurrency(otherTotal)}</p></div>
-              <div><p className="text-slate-500">Balance Due</p><p className="font-bold text-primary-700">{formatCurrency(invoice.balance)}</p></div>
+              <div><p className="text-slate-500">{balanceLabel}</p><p className={`font-bold ${invoice.balance < 0 ? 'text-success-700' : 'text-primary-700'}`}>{formatCurrency(Math.abs(invoice.balance))}</p></div>
             </div>
           </div>
 
@@ -583,13 +471,27 @@ export default function InvoiceDetailPage() {
               </tr>
               )}
               <tr className="text-lg font-bold">
-                <td className="py-3 text-right">Balance Due</td>
+                <td className="py-3 text-right">{balanceLabel}</td>
                 <td className={`py-3 text-right ${invoice.balance > 0 ? 'text-danger-600' : 'text-success-600'}`}>
-                  {formatCurrency(invoice.balance)}
+                  {formatCurrency(Math.abs(invoice.balance))}
                 </td>
               </tr>
             </tfoot>
           </table>
+
+          {(pdfSettings.paymentInstructions || pdfSettings.footerNote) && (
+            <div className="mt-8 rounded-xl border border-primary-100 bg-primary-50 p-4 text-sm">
+              {pdfSettings.paymentInstructions && (
+                <>
+                  <h3 className="font-semibold text-primary-900">Payment Instructions</h3>
+                  <p className="mt-1 text-primary-800">{pdfSettings.paymentInstructions}</p>
+                </>
+              )}
+              {pdfSettings.footerNote && (
+                <p className="mt-3 font-semibold text-slate-700">{pdfSettings.footerNote}</p>
+              )}
+            </div>
+          )}
 
           {/* Payment History */}
           {payments.length > 0 && (

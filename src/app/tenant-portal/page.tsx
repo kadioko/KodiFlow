@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Calendar, FileText, Home, Receipt } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/utils/currency'
 import { relationField } from '@/utils/supabase-relations'
+import TenantInvoiceActions from './TenantInvoiceActions'
 
 type PortalLease = {
   id: string
@@ -23,8 +24,18 @@ type PortalInvoice = {
   status: string
   billing_month: number
   billing_year: number
+  billing_period_start: string
+  billing_period_end: string
+  created_at: string
+  user_id: string
   properties: { name: string } | { name: string }[] | null
   units: { unit_name: string } | { unit_name: string }[] | null
+}
+
+type InvoiceProfile = {
+  id: string
+  invoice_payment_instructions: string | null
+  invoice_footer_note: string | null
 }
 
 export default async function TenantPortalPage() {
@@ -65,7 +76,7 @@ export default async function TenantPortalPage() {
       .order('created_at', { ascending: false }),
     supabase
       .from('rent_invoices')
-      .select('id, invoice_number, subtotal, amount_paid, balance, due_date, status, billing_month, billing_year, properties(name), units(unit_name)')
+      .select('id, user_id, invoice_number, subtotal, amount_paid, balance, due_date, status, billing_month, billing_year, billing_period_start, billing_period_end, created_at, properties(name), units(unit_name)')
       .eq('tenant_id', tenant.id)
       .order('due_date', { ascending: false }),
   ])
@@ -77,6 +88,22 @@ export default async function TenantPortalPage() {
       ? 'overdue'
       : invoice.status,
   }))
+  const ownerIds = Array.from(new Set(portalInvoices.map((invoice) => invoice.user_id)))
+  const { data: profileRows } = ownerIds.length > 0
+    ? await supabase
+      .from('profiles')
+      .select('id, invoice_payment_instructions, invoice_footer_note')
+      .in('id', ownerIds)
+    : { data: [] }
+  const settingsByOwner = new Map(
+    ((profileRows || []) as InvoiceProfile[]).map((profile) => [
+      profile.id,
+      {
+        paymentInstructions: profile.invoice_payment_instructions,
+        footerNote: profile.invoice_footer_note,
+      },
+    ])
+  )
   const outstanding = portalInvoices.reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
   const activeLease = portalLeases.find((lease) => lease.status === 'active')
 
@@ -123,6 +150,7 @@ export default async function TenantPortalPage() {
                 <th className="table-header-cell">Paid</th>
                 <th className="table-header-cell">Balance</th>
                 <th className="table-header-cell">Status</th>
+                <th className="table-header-cell">Download</th>
               </tr>
             </thead>
             <tbody className="table-body">
@@ -135,6 +163,26 @@ export default async function TenantPortalPage() {
                   <td className="table-cell text-success-600">{formatCurrency(invoice.amount_paid)}</td>
                   <td className="table-cell font-medium">{formatCurrency(invoice.balance)}</td>
                   <td className="table-cell capitalize">{invoice.status.replace('_', ' ')}</td>
+                  <td className="table-cell">
+                    <TenantInvoiceActions
+                      invoiceId={invoice.id}
+                      invoice={{
+                        invoice_number: invoice.invoice_number,
+                        status: invoice.status,
+                        created_at: invoice.created_at,
+                        due_date: invoice.due_date,
+                        billing_period_start: invoice.billing_period_start,
+                        billing_period_end: invoice.billing_period_end,
+                        subtotal: invoice.subtotal,
+                        amount_paid: invoice.amount_paid,
+                        balance: invoice.balance,
+                        tenant_name: tenant.full_name || tenant.business_name || 'Tenant',
+                        property_name: relationField(invoice.properties, 'name') || 'Property',
+                        unit_name: relationField(invoice.units, 'unit_name') || 'Unit',
+                      }}
+                      settings={settingsByOwner.get(invoice.user_id) || {}}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

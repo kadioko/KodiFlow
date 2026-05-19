@@ -16,6 +16,8 @@ CREATE TABLE profiles (
   dashboard_hidden_property_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   language_preference TEXT DEFAULT 'en' CHECK (language_preference IN ('en', 'sw')),
   late_fee_rate DECIMAL(5, 2) DEFAULT 0,
+  invoice_payment_instructions TEXT DEFAULT 'Please pay at CRDB Bank, Ac: 01J2026378300 (Godfrey Daniel Mariki)',
+  invoice_footer_note TEXT DEFAULT 'E.&.O.E.',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -218,13 +218,6 @@ function NewPaymentPageContent() {
       return
     }
 
-    if (formData.amount > selectedInvoice.balance) {
-      setError('Payment amount cannot exceed the invoice balance')
-      setLoading(false)
-      submitLockedRef.current = false
-      return
-    }
-
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -369,6 +362,11 @@ function NewPaymentPageContent() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+              {formData.amount > selectedInvoice.balance && (
+                <div className="mt-4 rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-800">
+                  This payment is above the invoice balance. Extra credit created: {formatCurrency(formData.amount - selectedInvoice.balance)}. It can carry into the renewed lease as Opening Credit.
                 </div>
               )}
             </div>

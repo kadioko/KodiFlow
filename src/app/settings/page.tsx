@@ -12,6 +12,8 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState('TZS')
   const [language, setLanguage] = useState('en')
   const [lateFeeRate, setLateFeeRate] = useState(0)
+  const [invoicePaymentInstructions, setInvoicePaymentInstructions] = useState('Please pay at CRDB Bank, Ac: 01J2026378300 (Godfrey Daniel Mariki)')
+  const [invoiceFooterNote, setInvoiceFooterNote] = useState('E.&.O.E.')
   const [theme, setTheme] = useState<AppTheme>('light')
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isStandalone, setIsStandalone] = useState(false)
@@ -32,7 +34,7 @@ export default function SettingsPage() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('currency_preference, language_preference, late_fee_rate')
+        .select('currency_preference, language_preference, late_fee_rate, invoice_payment_instructions, invoice_footer_note')
         .eq('id', user.id)
         .single()
 
@@ -40,6 +42,8 @@ export default function SettingsPage() {
         setCurrency(data.currency_preference || 'TZS')
         setLanguage(data.language_preference || 'en')
         setLateFeeRate(Number(data.late_fee_rate || 0))
+        setInvoicePaymentInstructions(data.invoice_payment_instructions || 'Please pay at CRDB Bank, Ac: 01J2026378300 (Godfrey Daniel Mariki)')
+        setInvoiceFooterNote(data.invoice_footer_note || 'E.&.O.E.')
       }
       setLoading(false)
     }
@@ -111,7 +115,13 @@ export default function SettingsPage() {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ currency_preference: currency, language_preference: language, late_fee_rate: lateFeeRate })
+      .update({
+        currency_preference: currency,
+        language_preference: language,
+        late_fee_rate: lateFeeRate,
+        invoice_payment_instructions: invoicePaymentInstructions,
+        invoice_footer_note: invoiceFooterNote,
+      })
       .eq('id', user.id)
 
     if (error) {
@@ -233,6 +243,28 @@ export default function SettingsPage() {
             onChange={(event) => setLateFeeRate(parseFloat(event.target.value) || 0)}
           />
           <p className="text-sm text-gray-500 mt-1">Used to estimate penalty amounts for overdue invoices in reports.</p>
+        </div>
+
+        <div className="form-group">
+          <label className="label" htmlFor="invoice_payment_instructions">Invoice Payment Instructions</label>
+          <textarea
+            id="invoice_payment_instructions"
+            className="input min-h-24"
+            value={invoicePaymentInstructions}
+            onChange={(event) => setInvoicePaymentInstructions(event.target.value)}
+          />
+          <p className="text-sm text-gray-500 mt-1">Shown on invoice pages and PDF downloads.</p>
+        </div>
+
+        <div className="form-group">
+          <label className="label" htmlFor="invoice_footer_note">Invoice Footer Note</label>
+          <input
+            id="invoice_footer_note"
+            className="input"
+            value={invoiceFooterNote}
+            onChange={(event) => setInvoiceFooterNote(event.target.value)}
+          />
+          <p className="text-sm text-gray-500 mt-1">Use this for short notes such as E.&amp;.O.E.</p>
         </div>
 
         <button type="submit" disabled={saving} className="btn-primary">

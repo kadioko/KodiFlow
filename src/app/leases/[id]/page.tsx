@@ -171,9 +171,9 @@ export default function LeaseDetailPage() {
       .select('balance, status')
       .eq('lease_id', leaseId)
       .eq('user_id', user.id)
-      .not('status', 'in', '("paid","cancelled")')
+      .neq('status', 'cancelled')
 
-    const oldBalance = ((invoiceBalances || []) as LeaseInvoiceBalance[]).reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)
+    const oldBalance = ((invoiceBalances || []) as LeaseInvoiceBalance[]).reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
     setOutstandingBalance(oldBalance)
 
     const { data: chargeData } = await supabase
@@ -322,11 +322,19 @@ export default function LeaseDetailPage() {
     (sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency),
     0
   )
-  const renewalFirstInvoiceTotal = (
-    renewData.new_rent * renewalTerm.months +
-    renewalRecurringCharges +
-    outstandingBalance
-  )
+  const renewalBaseInvoiceTotal = renewData.new_rent * renewalTerm.months + renewalRecurringCharges
+  const renewalFirstInvoiceTotal = Math.max(renewalBaseInvoiceTotal + outstandingBalance, 0)
+  const carryForwardType = outstandingBalance > 0 ? 'Opening Balance' : outstandingBalance < 0 ? 'Opening Credit' : 'No Carry Forward'
+  const carryForwardDescription = outstandingBalance > 0
+    ? 'Unpaid invoice balances from this lease will be added to the renewed lease.'
+    : outstandingBalance < 0
+      ? 'Overpaid invoice credit from this lease will reduce the renewed lease.'
+      : 'This lease is settled, so renewal will start clean.'
+  const carryForwardTone = outstandingBalance > 0
+    ? 'border-amber-200 bg-amber-50 text-amber-800'
+    : outstandingBalance < 0
+      ? 'border-success-200 bg-success-50 text-success-800'
+      : 'border-slate-200 bg-slate-50 text-slate-700'
 
   return (
     <div className="space-y-6">
@@ -419,6 +427,23 @@ export default function LeaseDetailPage() {
             <p className="text-sm text-warning-600">
               Consider renewing the lease or preparing for tenant change.
             </p>
+          </div>
+        </div>
+      )}
+
+      {canRenew && (
+        <div className={`rounded-xl border p-4 ${carryForwardTone}`}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Renewal Carry-Forward Status</p>
+              <p className="mt-1 text-sm">{carryForwardDescription}</p>
+            </div>
+            <div className="rounded-lg bg-white/70 px-4 py-3 text-right shadow-sm ring-1 ring-black/5">
+              <p className="text-xs font-semibold uppercase tracking-wide">{carryForwardType}</p>
+              <p className="text-lg font-bold">
+                {outstandingBalance === 0 ? formatCurrency(0) : formatCurrency(Math.abs(outstandingBalance))}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -628,6 +653,23 @@ export default function LeaseDetailPage() {
                   <p className="font-semibold text-primary-700">{formatCurrency(renewalFirstInvoiceTotal)}</p>
                 </div>
               </div>
+              <div className="mt-4 rounded-lg bg-white p-3 text-xs text-slate-600 ring-1 ring-slate-200">
+                <div className="flex justify-between py-1">
+                  <span>New lease charges before carry-forward</span>
+                  <span className="font-semibold text-slate-900">{formatCurrency(renewalBaseInvoiceTotal)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span>{carryForwardType}</span>
+                  <span className={`font-semibold ${outstandingBalance > 0 ? 'text-amber-700' : outstandingBalance < 0 ? 'text-success-700' : 'text-slate-700'}`}>
+                    {outstandingBalance > 0 ? '+' : outstandingBalance < 0 ? '-' : ''}
+                    {formatCurrency(Math.abs(outstandingBalance))}
+                  </span>
+                </div>
+                <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold">
+                  <span>Expected first invoice after renewal</span>
+                  <span className="text-primary-700">{formatCurrency(renewalFirstInvoiceTotal)}</span>
+                </div>
+              </div>
             </div>
             
             <div className="space-y-4 mb-6">
@@ -643,11 +685,15 @@ export default function LeaseDetailPage() {
               
               <CurrencyInput id="renew_new_rent" label="New Monthly Rent (TZS)" value={renewData.new_rent} onChange={(value) => setRenewData({ ...renewData, new_rent: value })} />
 
-              {outstandingBalance > 0 && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-800">Opening Balance</p>
-                  <p className="mt-1 text-sm text-amber-700">
-                    {formatCurrency(outstandingBalance)} unpaid from this lease will be carried to the renewed lease.
+              {outstandingBalance !== 0 && (
+                <div className={`rounded-xl border p-4 ${outstandingBalance > 0 ? 'border-amber-200 bg-amber-50' : 'border-success-200 bg-success-50'}`}>
+                  <p className={`text-sm font-semibold ${outstandingBalance > 0 ? 'text-amber-800' : 'text-success-800'}`}>
+                    {outstandingBalance > 0 ? 'Opening Balance' : 'Opening Credit'}
+                  </p>
+                  <p className={`mt-1 text-sm ${outstandingBalance > 0 ? 'text-amber-700' : 'text-success-700'}`}>
+                    {outstandingBalance > 0
+                      ? `${formatCurrency(outstandingBalance)} unpaid from this lease will be carried to the renewed lease.`
+                      : `${formatCurrency(Math.abs(outstandingBalance))} overpaid on this lease will be credited to the renewed lease.`}
                   </p>
                 </div>
               )}
