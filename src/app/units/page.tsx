@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, DoorOpen, MapPin, Users, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
+import { Plus, DoorOpen } from 'lucide-react'
 import { getLabelByValue, getColorByValue, UNIT_TYPES, UNIT_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
@@ -55,6 +55,7 @@ async function getUnits() {
         ...unit,
         property_name: property?.name,
         section_name: section?.name,
+        current_tenant_id: lease?.tenant_id || null,
         current_tenant_name: tenant?.full_name || tenant?.business_name || null,
         lease_end_date: lease?.end_date || null,
       }
@@ -179,7 +180,13 @@ export default async function UnitsPage() {
                     <td className="table-cell">
                       {unit.current_tenant_name ? (
                         <div>
-                          <p className="text-sm text-gray-900">{unit.current_tenant_name}</p>
+                          {unit.current_tenant_id ? (
+                            <Link href={`/tenants/${unit.current_tenant_id}`} className="text-sm font-medium text-primary-600 hover:underline">
+                              {unit.current_tenant_name}
+                            </Link>
+                          ) : (
+                            <p className="text-sm text-gray-900">{unit.current_tenant_name}</p>
+                          )}
                           {unit.lease_end_date && (
                             <p className="text-xs text-gray-500">
                               Until {formatDate(unit.lease_end_date)}

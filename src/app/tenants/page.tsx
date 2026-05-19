@@ -18,10 +18,23 @@ type TenantListItem = TenantRow & {
   total_balance: number
   active_leases_count: number
   display_name: string | null
+  assigned_units: {
+    lease_id: string
+    unit_id: string
+    unit_name: string
+    property_name: string
+  }[]
 }
 
 type InvoiceBalance = {
   balance: number | null
+}
+
+type ActiveLeaseAssignment = {
+  id: string
+  unit_id: string
+  units: { unit_name: string } | { unit_name: string }[] | null
+  properties: { name: string } | { name: string }[] | null
 }
 
 async function getTenants(): Promise<TenantListItem[]> {
@@ -52,17 +65,30 @@ async function getTenants(): Promise<TenantListItem[]> {
       
       const totalBalance = ((invoices || []) as InvoiceBalance[]).reduce((sum, inv) => sum + (inv.balance || 0), 0)
 
-      // Get active leases count
-      const { count: activeLeases } = await supabase
+      const { data: activeLeases } = await supabase
         .from('leases')
-        .select('*', { count: 'exact', head: true })
+        .select('id, unit_id, units(unit_name), properties(name)')
         .eq('tenant_id', tenant.id)
         .eq('status', 'active')
+        .eq('user_id', user.id)
+
+      const assignedUnits = ((activeLeases || []) as ActiveLeaseAssignment[]).map((lease) => {
+        const unit = Array.isArray(lease.units) ? lease.units[0] : lease.units
+        const property = Array.isArray(lease.properties) ? lease.properties[0] : lease.properties
+
+        return {
+          lease_id: lease.id,
+          unit_id: lease.unit_id,
+          unit_name: unit?.unit_name || 'Unknown unit',
+          property_name: property?.name || 'Unknown property',
+        }
+      })
 
       return {
         ...tenant,
         total_balance: totalBalance,
-        active_leases_count: activeLeases || 0,
+        active_leases_count: assignedUnits.length,
+        assigned_units: assignedUnits,
         display_name: tenant.tenant_type === 'individual'
           ? tenant.full_name
           : tenant.business_name,
@@ -108,6 +134,7 @@ export default async function TenantsPage() {
                   <th className="table-header-cell">Name</th>
                   <th className="table-header-cell">Type</th>
                   <th className="table-header-cell">Contact</th>
+                  <th className="table-header-cell">Assigned Unit</th>
                   <th className="table-header-cell">Active Leases</th>
                   <th className="table-header-cell">Balance</th>
                   <th className="table-header-cell">Actions</th>
@@ -145,6 +172,22 @@ export default async function TenantsPage() {
                       </div>
                       {tenant.email && (
                         <p className="text-sm text-gray-500 mt-1">{tenant.email}</p>
+                      )}
+                    </td>
+                    <td className="table-cell">
+                      {tenant.assigned_units.length > 0 ? (
+                        <div className="space-y-1">
+                          {tenant.assigned_units.map((assignedUnit) => (
+                            <div key={assignedUnit.lease_id}>
+                              <Link href={`/units/${assignedUnit.unit_id}`} className="text-sm font-medium text-primary-600 hover:underline">
+                                {assignedUnit.unit_name}
+                              </Link>
+                              <p className="text-xs text-gray-500">{assignedUnit.property_name}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">No active unit</span>
                       )}
                     </td>
                     <td className="table-cell">

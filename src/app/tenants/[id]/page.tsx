@@ -285,6 +285,7 @@ export default function TenantDetailPage() {
   const displayName = tenant.tenant_type === 'individual' 
     ? tenant.full_name 
     : tenant.business_name
+  const activeLeases = leases.filter((lease) => lease.status === 'active')
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -359,6 +360,33 @@ export default function TenantDetailPage() {
           </p>
         </div>
       </div>
+
+      {activeLeases.length > 0 && (
+        <div className="card border-l-4 border-success-500">
+          <div className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Assigned Unit</p>
+                <h2 className="text-lg font-semibold text-gray-900">Current active assignment</h2>
+              </div>
+              <span className="badge bg-success-100 text-success-800">{activeLeases.length} active</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {activeLeases.map((lease) => (
+                <div key={lease.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <Link href={`/units/${lease.unit_id}`} className="text-base font-semibold text-primary-600 hover:underline">
+                    {lease.unit_name}
+                  </Link>
+                  <p className="mt-1 text-sm text-gray-500">{lease.property_name}</p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Lease until {formatDate(lease.end_date)} • {formatCurrency(lease.monthly_rent)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -528,7 +556,11 @@ export default function TenantDetailPage() {
                   {leases.map((lease) => (
                     <tr key={lease.id} className="hover:bg-gray-50">
                       <td className="table-cell">{lease.property_name}</td>
-                      <td className="table-cell">{lease.unit_name}</td>
+                      <td className="table-cell">
+                        <Link href={`/units/${lease.unit_id}`} className="font-medium text-primary-600 hover:underline">
+                          {lease.unit_name}
+                        </Link>
+                      </td>
                       <td className="table-cell">{formatDate(lease.start_date)}</td>
                       <td className="table-cell">{formatDate(lease.end_date)}</td>
                       <td className="table-cell">{formatCurrency(lease.monthly_rent)}</td>
