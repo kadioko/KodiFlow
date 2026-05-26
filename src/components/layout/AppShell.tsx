@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { MobileSidebar, Sidebar } from '@/components/layout/Sidebar'
@@ -16,7 +16,6 @@ const publicPrefixes = ['/auth']
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -46,9 +45,9 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {
-      router.replace(`/auth/login?next=${encodeURIComponent(pathname)}`)
+      window.location.replace(`/auth/login?next=${encodeURIComponent(pathname)}`)
     }
-  }, [isPublicPage, loading, pathname, router, user])
+  }, [isPublicPage, loading, pathname, user])
 
   if (isPublicPage) {
     return <>{children}</>
