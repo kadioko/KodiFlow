@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kodiflow-v1'
+const CACHE_NAME = 'kodiflow-v2'
 const OFFLINE_URLS = ['/', '/auth/login', '/manifest.webmanifest', '/icons/icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -16,14 +16,33 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
+  const url = new URL(event.request.url)
+  const isNavigation = event.request.mode === 'navigate'
+  const canCache = url.origin === self.location.origin && (
+    url.pathname === '/'
+    || url.pathname.startsWith('/auth/')
+    || url.pathname === '/manifest.webmanifest'
+    || url.pathname.startsWith('/icons/')
+    || url.pathname.startsWith('/_next/static/')
+  )
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
+        if (canCache && response.ok) {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
+        }
         return response
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/auth/login')))
+      .catch(async () => {
+        if (canCache) {
+          const cached = await caches.match(event.request)
+          if (cached) return cached
+        }
+        if (isNavigation) return caches.match('/auth/login')
+        return Response.error()
+      })
   )
 })
 
