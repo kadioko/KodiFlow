@@ -29,7 +29,7 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-white/70 bg-white/85 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="safe-area-top flex min-h-16 shrink-0 items-center justify-between border-b border-white/70 bg-white/85 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"

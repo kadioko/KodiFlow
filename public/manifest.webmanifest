@@ -2,7 +2,7 @@
   "name": "KodiFlow Property Management",
   "short_name": "KodiFlow",
   "description": "Property management for residential and commercial rentals",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f9fafb",

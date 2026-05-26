@@ -129,7 +129,7 @@ export function MobileSidebar({ user, open, onClose }: MobileSidebarProps) {
         onClick={onClose}
         aria-label="Close navigation menu"
       />
-      <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-slate-950 text-white shadow-2xl">
+      <aside className="safe-area-top safe-area-bottom relative flex h-full w-[min(20rem,85vw)] flex-col bg-slate-950 text-white shadow-2xl">
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
           <BrandLogo href="/dashboard" size="sm" tone="light" priorityLabel="KodiFlow dashboard" />
           <button
