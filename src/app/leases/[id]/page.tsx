@@ -64,6 +64,7 @@ type LeaseInvoiceBalance = {
 type RecurringCharge = {
   id: string
   charge_name: string
+  charge_type: string
   amount: number
   frequency: string
 }
@@ -90,6 +91,7 @@ export default function LeaseDetailPage() {
   const [renewData, setRenewData] = useState({
     new_end_date: '',
     new_rent: 0,
+    new_service_charge: null as number | null,
   })
 
   useEffect(() => {
@@ -143,10 +145,11 @@ export default function LeaseDetailPage() {
 
     // Set default renew data
     const renewalTerm = getRenewalTerm(leaseData.end_date, leaseData.billing_frequency)
-    setRenewData({
+    setRenewData(prev => ({
+      ...prev,
       new_end_date: renewalTerm.endDate,
       new_rent: leaseData.monthly_rent,
-    })
+    }))
 
     // Fetch payments
     const { data: paymentsData } = await supabase
@@ -178,13 +181,20 @@ export default function LeaseDetailPage() {
 
     const { data: chargeData } = await supabase
       .from('charges')
-      .select('id, charge_name, amount, frequency')
+      .select('id, charge_name, charge_type, amount, frequency')
       .eq('lease_id', leaseId)
       .eq('user_id', user.id)
       .eq('is_active', true)
       .neq('frequency', 'one_time')
 
-    setRecurringCharges((chargeData || []) as RecurringCharge[])
+    const typedCharges = (chargeData || []) as RecurringCharge[]
+    setRecurringCharges(typedCharges)
+
+    const existingServiceCharge = typedCharges.find(c => c.charge_type === 'service_charge')
+    setRenewData(prev => ({
+      ...prev,
+      new_service_charge: existingServiceCharge ? existingServiceCharge.amount : null,
+    }))
 
     setLoading(false)
   }
@@ -242,6 +252,7 @@ export default function LeaseDetailPage() {
       p_lease_id: lease.id,
       p_new_end_date: renewData.new_end_date,
       p_new_rent: renewData.new_rent,
+      p_new_service_charge: renewData.new_service_charge,
     })
 
     if (renewError || !renewalResult?.[0]) {
@@ -319,7 +330,12 @@ export default function LeaseDetailPage() {
   const daysUntilExpiry = Math.ceil((new Date(lease.end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
   const renewalTerm = getRenewalTerm(lease.end_date, lease.billing_frequency)
   const renewalRecurringCharges = recurringCharges.reduce(
-    (sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency),
+    (sum, charge) => {
+      const amount = charge.charge_type === 'service_charge' && renewData.new_service_charge !== null
+        ? renewData.new_service_charge
+        : charge.amount
+      return sum + calculateChargeAmountForPeriod(amount, charge.frequency, lease.billing_frequency)
+    },
     0
   )
   const renewalBaseInvoiceTotal = renewData.new_rent * renewalTerm.months + renewalRecurringCharges
@@ -684,6 +700,10 @@ export default function LeaseDetailPage() {
               </div>
               
               <CurrencyInput id="renew_new_rent" label="New Monthly Rent (TZS)" value={renewData.new_rent} onChange={(value) => setRenewData({ ...renewData, new_rent: value })} />
+
+              {renewData.new_service_charge !== null && (
+                <CurrencyInput id="renew_new_service_charge" label="New Service Charge (TZS)" value={renewData.new_service_charge} onChange={(value) => setRenewData({ ...renewData, new_service_charge: value })} />
+              )}
 
               {outstandingBalance !== 0 && (
                 <div className={`rounded-xl border p-4 ${outstandingBalance > 0 ? 'border-amber-200 bg-amber-50' : 'border-success-200 bg-success-50'}`}>

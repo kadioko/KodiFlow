@@ -709,6 +709,7 @@ export interface Database {
           p_lease_id: string
           p_new_end_date: string
           p_new_rent: number
+          p_new_service_charge?: number | null
         }
         Returns: {
           new_lease_id: string
