@@ -716,6 +716,7 @@ export interface Database {
           p_new_end_date: string
           p_new_rent: number
           p_new_service_charge?: number | null
+          p_new_billing_frequency?: 'monthly' | 'quarterly' | 'semi_annually' | 'annually' | null
         }
         Returns: {
           new_lease_id: string

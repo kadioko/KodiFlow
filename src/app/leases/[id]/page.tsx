@@ -15,17 +15,17 @@ import {
   Loader2,
   AlertCircle,
   User,
-  Home,
   Building2,
-  Calendar,
   DollarSign,
   CreditCard,
   Edit2,
   Trash2
 } from 'lucide-react'
-import { LEASE_TYPES, LEASE_STATUSES, BILLING_FREQUENCIES, getLabelByValue } from '@/utils/constants'
+import { LEASE_TYPES, BILLING_FREQUENCIES, getLabelByValue } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 import { calculateChargeAmountForPeriod, getRenewalTerm } from '@/utils/billing'
+
+type LeaseBillingFrequency = 'monthly' | 'quarterly' | 'semi_annually' | 'annually'
 
 interface Lease {
   id: string
@@ -54,6 +54,10 @@ interface Payment {
   payment_date: string
   payment_method: string
   invoice_number: string
+}
+
+type PaymentQueryRow = Omit<Payment, 'invoice_number'> & {
+  rent_invoices: { invoice_number: string | null } | null
 }
 
 type LeaseInvoiceBalance = {
@@ -104,6 +108,7 @@ export default function LeaseDetailPage() {
   const [renewData, setRenewData] = useState({
     new_end_date: '',
     new_rent: 0,
+    new_billing_frequency: 'monthly' as LeaseBillingFrequency,
     new_service_charge: null as number | null,
   })
 
@@ -162,6 +167,7 @@ export default function LeaseDetailPage() {
       ...prev,
       new_end_date: renewalTerm.endDate,
       new_rent: leaseData.monthly_rent,
+      new_billing_frequency: leaseData.billing_frequency as LeaseBillingFrequency,
     }))
 
     // Fetch payments
@@ -176,9 +182,9 @@ export default function LeaseDetailPage() {
       .order('payment_date', { ascending: false })
 
     if (paymentsData) {
-      setPayments(paymentsData.map((p: any) => ({
+      setPayments((paymentsData as PaymentQueryRow[]).map((p) => ({
         ...p,
-        invoice_number: p.rent_invoices?.invoice_number,
+        invoice_number: p.rent_invoices?.invoice_number ?? '',
       })))
     }
 
@@ -271,6 +277,7 @@ export default function LeaseDetailPage() {
         p_lease_id: lease.id,
         p_new_end_date: renewData.new_end_date,
         p_new_rent: renewData.new_rent,
+        p_new_billing_frequency: renewData.new_billing_frequency,
         p_new_service_charge: renewData.new_service_charge,
       })
 
@@ -348,13 +355,13 @@ export default function LeaseDetailPage() {
   const isExpired = new Date(lease.end_date) < new Date()
   const canRenew = lease.status === 'active' || lease.status === 'expired'
   const daysUntilExpiry = Math.ceil((new Date(lease.end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-  const renewalTerm = getRenewalTerm(lease.end_date, lease.billing_frequency)
+  const renewalTerm = getRenewalTerm(lease.end_date, renewData.new_billing_frequency)
   const renewalRecurringCharges = recurringCharges.reduce(
     (sum, charge) => {
       const amount = charge.charge_type === 'service_charge' && renewData.new_service_charge !== null
         ? renewData.new_service_charge
         : charge.amount
-      return sum + calculateChargeAmountForPeriod(amount, charge.frequency, lease.billing_frequency)
+      return sum + calculateChargeAmountForPeriod(amount, charge.frequency, renewData.new_billing_frequency)
     },
     0
   )
@@ -848,8 +855,8 @@ export default function LeaseDetailPage() {
                   <p className="font-semibold text-slate-900">{formatDate(renewalTerm.startDate)}</p>
                 </div>
                 <div>
-                  <p className="text-slate-500">Billing</p>
-                  <p className="font-semibold text-slate-900">{getLabelByValue(BILLING_FREQUENCIES, lease.billing_frequency)}</p>
+                  <p className="text-slate-500">Renewal billing</p>
+                  <p className="font-semibold text-slate-900">{getLabelByValue(BILLING_FREQUENCIES, renewData.new_billing_frequency)}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Recurring charges</p>
@@ -880,6 +887,32 @@ export default function LeaseDetailPage() {
             </div>
             
             <div className="space-y-4 mb-6">
+              <div className="form-group">
+                <label htmlFor="renew_billing_frequency" className="label">Renewal Billing Frequency</label>
+                <select
+                  id="renew_billing_frequency"
+                  className="input"
+                  value={renewData.new_billing_frequency}
+                  onChange={(event) => {
+                    const nextFrequency = event.target.value as LeaseBillingFrequency
+                    const nextTerm = getRenewalTerm(lease.end_date, nextFrequency)
+                    setRenewData({
+                      ...renewData,
+                      new_billing_frequency: nextFrequency,
+                      new_end_date: nextTerm.endDate,
+                    })
+                  }}
+                >
+                  {BILLING_FREQUENCIES.map((frequency) => (
+                    <option key={frequency.value} value={frequency.value}>
+                      {frequency.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  Defaults to the old lease. Change this when a tenant wants to renew for 1, 3, 6, or 12 months.
+                </p>
+              </div>
               <div className="form-group">
                 <DateInput
                   id="renew_end_date"
