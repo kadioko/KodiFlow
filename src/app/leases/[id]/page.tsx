@@ -61,6 +61,18 @@ type LeaseInvoiceBalance = {
   status: string
 }
 
+type LeaseInvoiceBreakdown = {
+  id: string
+  invoice_number: string | null
+  billing_period_start: string
+  billing_period_end: string
+  subtotal: number | null
+  amount_paid: number | null
+  balance: number | null
+  due_date: string
+  status: string
+}
+
 type RecurringCharge = {
   id: string
   charge_name: string
@@ -87,6 +99,7 @@ export default function LeaseDetailPage() {
   const [lease, setLease] = useState<Lease | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [outstandingBalance, setOutstandingBalance] = useState(0)
+  const [invoiceBreakdown, setInvoiceBreakdown] = useState<LeaseInvoiceBreakdown[]>([])
   const [recurringCharges, setRecurringCharges] = useState<RecurringCharge[]>([])
   const [renewData, setRenewData] = useState({
     new_end_date: '',
@@ -171,13 +184,15 @@ export default function LeaseDetailPage() {
 
     const { data: invoiceBalances } = await supabase
       .from('rent_invoices')
-      .select('balance, status')
+      .select('id, invoice_number, billing_period_start, billing_period_end, subtotal, amount_paid, balance, due_date, status')
       .eq('lease_id', leaseId)
       .eq('user_id', user.id)
       .neq('status', 'cancelled')
+      .order('billing_period_start', { ascending: false })
 
     const oldBalance = ((invoiceBalances || []) as LeaseInvoiceBalance[]).reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
     setOutstandingBalance(oldBalance)
+    setInvoiceBreakdown((invoiceBalances || []) as LeaseInvoiceBreakdown[])
 
     const { data: chargeData } = await supabase
       .from('charges')
@@ -351,6 +366,22 @@ export default function LeaseDetailPage() {
     : outstandingBalance < 0
       ? 'border-success-200 bg-success-50 text-success-800'
       : 'border-slate-200 bg-slate-50 text-slate-700'
+  const openInvoiceBreakdown = invoiceBreakdown.filter((invoice) => (invoice.balance || 0) !== 0 || invoice.status === 'transferred')
+  const totalInvoiced = invoiceBreakdown
+    .filter((invoice) => !['cancelled', 'transferred'].includes(invoice.status))
+    .reduce((sum, invoice) => sum + (invoice.subtotal || 0), 0)
+  const totalPaid = invoiceBreakdown
+    .filter((invoice) => !['cancelled', 'transferred'].includes(invoice.status))
+    .reduce((sum, invoice) => sum + (invoice.amount_paid || 0), 0)
+  const getInvoiceStatusTone = (status: string) => {
+    switch (status) {
+      case 'paid': return 'bg-success-100 text-success-800'
+      case 'overdue': return 'bg-danger-100 text-danger-800'
+      case 'partially_paid': return 'bg-blue-100 text-blue-800'
+      case 'transferred': return 'bg-purple-100 text-purple-800'
+      default: return 'bg-warning-100 text-warning-800'
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -617,6 +648,87 @@ export default function LeaseDetailPage() {
               <p className="text-gray-400 text-center py-8">No payments recorded</p>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Remaining Balances</h3>
+              <p className="text-sm text-gray-500">Invoice balances still attached to this lease</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-right text-sm">
+              <div>
+                <p className="text-gray-500">Invoiced</p>
+                <p className="font-semibold text-slate-900">{formatCurrency(totalInvoiced)}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Paid</p>
+                <p className="font-semibold text-success-700">{formatCurrency(totalPaid)}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Remaining</p>
+                <p className={`font-semibold ${outstandingBalance > 0 ? 'text-danger-700' : outstandingBalance < 0 ? 'text-success-700' : 'text-slate-900'}`}>
+                  {formatCurrency(Math.abs(outstandingBalance))}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="card-body">
+          {openInvoiceBreakdown.length > 0 ? (
+            <div className="table-container">
+              <table className="table">
+                <thead className="table-header">
+                  <tr>
+                    <th className="table-header-cell">Invoice</th>
+                    <th className="table-header-cell">Payment Period</th>
+                    <th className="table-header-cell">Amount</th>
+                    <th className="table-header-cell">Paid</th>
+                    <th className="table-header-cell">Remaining</th>
+                    <th className="table-header-cell">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="table-body">
+                  {openInvoiceBreakdown.map((invoice) => {
+                    const remaining = invoice.balance || 0
+                    return (
+                      <tr key={invoice.id} className="hover:bg-gray-50">
+                        <td className="table-cell">
+                          <Link href={`/invoices/${invoice.id}`} className="font-medium text-primary-600 hover:underline">
+                            {invoice.invoice_number || 'Draft invoice'}
+                          </Link>
+                          <p className="text-xs text-gray-500">Due {formatDate(invoice.due_date)}</p>
+                        </td>
+                        <td className="table-cell">
+                          <p>{formatDate(invoice.billing_period_start)}</p>
+                          <p className="text-xs text-gray-500">to {formatDate(invoice.billing_period_end)}</p>
+                        </td>
+                        <td className="table-cell">{formatCurrency(invoice.subtotal || 0)}</td>
+                        <td className="table-cell text-success-700">{formatCurrency(invoice.amount_paid || 0)}</td>
+                        <td className={`table-cell font-semibold ${remaining > 0 ? 'text-danger-700' : remaining < 0 ? 'text-success-700' : 'text-slate-700'}`}>
+                          {remaining === 0 ? formatCurrency(0) : formatCurrency(Math.abs(remaining))}
+                          {remaining < 0 && <span className="ml-1 text-xs">credit</span>}
+                        </td>
+                        <td className="table-cell">
+                          <span className={`badge ${getInvoiceStatusTone(invoice.status)}`}>
+                            {invoice.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+              <CheckCircle className="mx-auto mb-3 h-8 w-8 text-success-600" />
+              <p className="font-semibold text-slate-900">No remaining balance on this lease</p>
+              <p className="mt-1 text-sm text-gray-500">All active invoice balances are settled or none have been generated yet.</p>
+            </div>
+          )}
         </div>
       </div>
 
