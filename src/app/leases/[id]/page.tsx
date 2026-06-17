@@ -787,7 +787,54 @@ export default function LeaseDetailPage() {
             <p className="text-gray-600 mb-4">
               Renew lease for <strong>{lease.tenant_name}</strong> at {lease.property_name} - {lease.unit_name}
             </p>
+            <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="font-semibold text-slate-900">Current Lease Details</p>
+                <span className={`badge ${
+                  lease.status === 'active' ? 'bg-success-100 text-success-800' :
+                  lease.status === 'expired' ? 'bg-danger-100 text-danger-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {lease.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-slate-500">Tenant</p>
+                  <p className="font-semibold text-slate-900">{lease.tenant_name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Unit</p>
+                  <p className="font-semibold text-slate-900">{lease.unit_name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Current period</p>
+                  <p className="font-semibold text-slate-900">{formatDate(lease.start_date)} to {formatDate(lease.end_date)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Billing</p>
+                  <p className="font-semibold text-slate-900">{getLabelByValue(BILLING_FREQUENCIES, lease.billing_frequency)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Monthly rent</p>
+                  <p className="font-semibold text-slate-900">{formatCurrency(lease.monthly_rent)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Service charge</p>
+                  <p className="font-semibold text-slate-900">{formatCurrency(renewData.new_service_charge || 0)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Security deposit</p>
+                  <p className="font-semibold text-slate-900">{formatCurrency(lease.deposit_amount)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Due day</p>
+                  <p className="font-semibold text-slate-900">Day {lease.rent_due_day}</p>
+                </div>
+              </div>
+            </div>
             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+              <p className="mb-3 font-semibold text-slate-900">Renewal Preview</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-slate-500">New start</p>
