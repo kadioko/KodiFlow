@@ -14,6 +14,8 @@ type InvoiceListItem = {
   tenant_name: string
   unit_name: string
   property_name: string
+  billing_period_start: string
+  billing_period_end: string
   billing_month: number
   billing_year: number
   subtotal: number
@@ -27,6 +29,39 @@ type InvoiceRow = Omit<InvoiceListItem, 'tenant_name' | 'unit_name' | 'property_
   tenants: { full_name: string | null; business_name: string | null } | { full_name: string | null; business_name: string | null }[] | null
   units: { unit_name: string | null } | { unit_name: string | null }[] | null
   properties: { name: string | null } | { name: string | null }[] | null
+}
+
+function addMonths(date: Date, months: number) {
+  const copy = new Date(date)
+  copy.setMonth(copy.getMonth() + months)
+  return copy
+}
+
+function getPeriodDurationLabel(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00Z`)
+  const endExclusive = new Date(`${endDate}T00:00:00Z`)
+  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1)
+
+  let months = 0
+  let cursor = new Date(start)
+
+  while (months < 120 && addMonths(cursor, 1) <= endExclusive) {
+    months += 1
+    cursor = addMonths(start, months)
+  }
+
+  if (months >= 12 && months % 12 === 0) {
+    const years = months / 12
+    return years === 1 ? 'Annual' : `${years} years`
+  }
+
+  if (months === 6) return '6 months'
+  if (months === 3) return '3 months'
+  if (months === 1) return '1 month'
+  if (months > 1) return `${months} months`
+
+  const days = Math.max(1, Math.round((endExclusive.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+  return `${days} day${days === 1 ? '' : 's'}`
 }
 
 function firstRelation<T>(value: T | T[] | null | undefined) {
@@ -126,6 +161,8 @@ async function getInvoices(): Promise<InvoiceListItem[]> {
       tenant_name: tenant?.full_name || tenant?.business_name || 'Unknown tenant',
       unit_name: unit?.unit_name || 'Unknown unit',
       property_name: property?.name || 'Unknown property',
+      billing_period_start: invoice.billing_period_start,
+      billing_period_end: invoice.billing_period_end,
       billing_month: invoice.billing_month,
       billing_year: invoice.billing_year,
       subtotal: invoice.subtotal || 0,
@@ -317,7 +354,13 @@ export default async function InvoicesPage({
                       <p className="text-sm text-gray-900">{invoice.property_name}</p>
                       <p className="text-xs text-gray-500">{invoice.unit_name}</p>
                     </td>
-                    <td className="table-cell">{getMonthName(invoice.billing_month)} {invoice.billing_year}</td>
+                    <td className="table-cell">
+                      <p className="font-medium text-gray-900">{getPeriodDurationLabel(invoice.billing_period_start, invoice.billing_period_end)}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatDate(invoice.billing_period_start)} to {formatDate(invoice.billing_period_end)}
+                      </p>
+                      <p className="text-xs text-gray-400">{getMonthName(invoice.billing_month)} {invoice.billing_year}</p>
+                    </td>
                     <td className="table-cell">{formatCurrency(invoice.subtotal)}</td>
                     <td className="table-cell text-success-600">{formatCurrency(invoice.amount_paid)}</td>
                     <td className={`table-cell font-medium ${invoice.balance > 0 ? 'text-danger-600' : 'text-success-600'}`}>
