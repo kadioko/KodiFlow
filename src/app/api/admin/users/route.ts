@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient, getCurrentAdmin, isAdminRole } from '@/lib/supabase/admin'
 
 type AdminRole = 'admin' | 'super_admin'
+type ManagedRole = 'none' | AdminRole
 
 function normalizeEmail(email: unknown) {
   return typeof email === 'string' ? email.trim().toLowerCase() : ''
@@ -19,10 +20,9 @@ export async function GET() {
   }
 
   const serviceClient = createServiceClient()
-  const { data, error } = await serviceClient
+  const { data: profiles, error } = await serviceClient
     .from('profiles')
     .select('id, email, full_name, admin_role, created_at, updated_at')
-    .in('admin_role', ['admin', 'super_admin'])
     .order('admin_role', { ascending: false })
     .order('email', { ascending: true })
 
@@ -30,7 +30,41 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ admins: data || [], currentRole: currentAdmin.role })
+  const visibleProfiles = currentAdmin.role === 'super_admin'
+    ? profiles || []
+    : (profiles || []).filter((profile) => ['admin', 'super_admin'].includes(profile.admin_role))
+
+  const { data: authUsers } = currentAdmin.role === 'super_admin'
+    ? await serviceClient.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    : { data: { users: [] } }
+
+  const usersById = new Map((authUsers?.users || []).map((user) => [user.id, user]))
+  const profileById = new Map(visibleProfiles.map((profile) => [profile.id, profile]))
+  const ids = new Set([...profileById.keys(), ...usersById.keys()])
+
+  const users = [...ids].map((id) => {
+    const profile = profileById.get(id)
+    const authUser = usersById.get(id)
+    return {
+      id,
+      email: profile?.email || authUser?.email || null,
+      full_name: profile?.full_name || (authUser?.user_metadata?.full_name as string | undefined) || null,
+      admin_role: (profile?.admin_role || 'none') as ManagedRole,
+      created_at: profile?.created_at || authUser?.created_at,
+      updated_at: profile?.updated_at || authUser?.updated_at,
+      last_sign_in_at: authUser?.last_sign_in_at || null,
+      confirmed_at: authUser?.confirmed_at || null,
+    }
+  }).sort((a, b) => {
+    const roleRank = (role: ManagedRole) => role === 'super_admin' ? 0 : role === 'admin' ? 1 : 2
+    return roleRank(a.admin_role) - roleRank(b.admin_role) || (a.email || '').localeCompare(b.email || '')
+  })
+
+  return NextResponse.json({
+    users,
+    admins: users.filter((user) => user.admin_role !== 'none'),
+    currentRole: currentAdmin.role,
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -103,26 +137,58 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json()
   const profileId = typeof body.id === 'string' ? body.id : ''
   const adminRole = body.adminRole === 'none' ? 'none' : normalizeRole(body.adminRole)
+  const newPassword = typeof body.password === 'string' ? body.password : ''
 
   if (!profileId) {
     return NextResponse.json({ error: 'Profile id is required' }, { status: 400 })
   }
 
-  if (profileId === currentAdmin.user?.id && adminRole !== 'super_admin') {
+  if (profileId === currentAdmin.user?.id && body.adminRole && adminRole !== 'super_admin') {
     return NextResponse.json({ error: 'You cannot remove your own super admin role' }, { status: 400 })
   }
 
   const serviceClient = createServiceClient()
-  const { data, error } = await serviceClient
-    .from('profiles')
-    .update({ admin_role: adminRole })
-    .eq('id', profileId)
-    .select('id, email, full_name, admin_role, updated_at')
-    .single()
+  if (newPassword) {
+    if (newPassword.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
+    }
+
+    const { error: passwordError } = await serviceClient.auth.admin.updateUserById(profileId, {
+      password: newPassword,
+    })
+
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError.message }, { status: 500 })
+    }
+  }
+
+  let data = null
+  let error = null
+
+  if (body.adminRole) {
+    const result = await serviceClient
+      .from('profiles')
+      .update({ admin_role: adminRole })
+      .eq('id', profileId)
+      .select('id, email, full_name, admin_role, updated_at')
+      .single()
+
+    data = result.data
+    error = result.error
+  } else {
+    const result = await serviceClient
+      .from('profiles')
+      .select('id, email, full_name, admin_role, updated_at')
+      .eq('id', profileId)
+      .single()
+
+    data = result.data
+    error = result.error
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ admin: data })
+  return NextResponse.json({ admin: data, passwordUpdated: Boolean(newPassword) })
 }
