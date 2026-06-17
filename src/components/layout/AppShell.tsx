@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/client'
 import { MobileSidebar, Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { LoadingState, PageSkeleton } from '@/components/ui/LoadingState'
@@ -24,24 +23,41 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     let mounted = true
-    const supabase = createClient()
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (!mounted) return
-      setUser(data.user)
+    if (isPublicPage) {
       setLoading(false)
-    })
+      return () => {
+        mounted = false
+      }
+    }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000)
+
+    fetch('/api/auth/session', {
+      signal: controller.signal,
     })
+      .then((response) => (response.ok ? response.json() : { user: null }))
+      .then((data) => {
+        if (!mounted) return
+        setUser(data.user ?? null)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setUser(null)
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId)
+        if (!mounted) return
+        setLoading(false)
+      })
 
     return () => {
       mounted = false
-      listener.subscription.unsubscribe()
+      window.clearTimeout(timeoutId)
+      controller.abort()
     }
-  }, [])
+  }, [isPublicPage])
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {

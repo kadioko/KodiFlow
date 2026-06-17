@@ -1,13 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -19,20 +16,39 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 20000)
 
-    if (error) {
-      setError(error.message)
-    } else {
-      router.push('/dashboard')
-      router.refresh()
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      })
+      window.clearTimeout(timeoutId)
+
+      const result = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        setError(result?.error || 'Unable to sign in right now. Please try again.')
+        return
+      }
+
+      const params = new URLSearchParams(window.location.search)
+      const nextPath = params.get('next')
+      window.location.assign(nextPath?.startsWith('/') ? nextPath : '/dashboard')
+    } catch (error) {
+      setError(
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'The sign-in request took too long. Please check your connection and try again.'
+          : 'We could not reach KodiFlow sign-in. Please check your connection and try again.'
+      )
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
