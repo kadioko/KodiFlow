@@ -2,5 +2,11 @@
   "buildCommand": "npm run build",
   "framework": "nextjs",
   "installCommand": "npm install",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/internal/supabase-heartbeat",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }
