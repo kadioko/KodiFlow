@@ -14,15 +14,39 @@ function getSafeErrorMessage(error: unknown) {
     return 'The sign-in service is taking too long to respond. Please check your connection and try again.'
   }
 
-  if (error instanceof Error && /fetch|network|request/i.test(error.message)) {
+  if (isDnsAuthError(error)) {
+    return 'KodiFlow cannot reach the configured sign-in service. Please contact support.'
+  }
+
+  if (isNetworkAuthError(error)) {
     return 'We could not reach the sign-in service. Please check your connection and try again.'
   }
 
   return 'Unable to sign in right now. Please try again.'
 }
 
-function isNetworkAuthError(errorMessage: string) {
-  return /fetch|network|request|timeout|econn|dns|getaddrinfo/i.test(errorMessage)
+function getErrorText(error: unknown): string {
+  if (!error) return ''
+
+  if (error instanceof Error) {
+    const cause = 'cause' in error ? getErrorText(error.cause) : ''
+    return `${error.message} ${cause}`
+  }
+
+  if (typeof error === 'object') {
+    const values = Object.values(error as Record<string, unknown>)
+    return values.map(getErrorText).join(' ')
+  }
+
+  return String(error)
+}
+
+function isDnsAuthError(error: unknown) {
+  return /enotfound|getaddrinfo|nxdomain|non-existent domain/i.test(getErrorText(error))
+}
+
+function isNetworkAuthError(error: unknown) {
+  return /fetch|network|request|timeout|econn|dns|getaddrinfo|enotfound/i.test(getErrorText(error))
 }
 
 async function wait(ms: number) {
@@ -48,7 +72,7 @@ export async function POST(request: NextRequest) {
     const { error } = await Promise.race([signIn, timeoutAfter(LOGIN_TIMEOUT_MS)])
 
     if (error) {
-      if (isNetworkAuthError(error.message)) {
+      if (isNetworkAuthError(error)) {
         await wait(750)
         const retry = await Promise.race([
           supabase.auth.signInWithPassword(credentials),
@@ -62,8 +86,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: isNetworkAuthError(error.message)
-            ? 'We could not reach the sign-in service. Please check your connection and try again.'
+          error: isDnsAuthError(error)
+            ? 'KodiFlow cannot reach the configured sign-in service. Please contact support.'
+            : isNetworkAuthError(error)
+              ? 'We could not reach the sign-in service. Please check your connection and try again.'
             : error.message,
         },
         { status: 401 }
