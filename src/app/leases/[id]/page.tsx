@@ -257,28 +257,33 @@ export default function LeaseDetailPage() {
   const handleRenew = async () => {
     setActionLoading(true)
     setError('')
-    
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user || !lease) return
 
-    const { data: renewalResult, error: renewError } = await supabase.rpc('renew_lease', {
-      p_lease_id: lease.id,
-      p_new_end_date: renewData.new_end_date,
-      p_new_rent: renewData.new_rent,
-      p_new_service_charge: renewData.new_service_charge,
-    })
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
 
-    if (renewError || !renewalResult?.[0]) {
-      setError(renewError?.message || 'Lease was not renewed')
-    } else {
-      setSuccess('Lease renewed successfully')
-      setShowRenewModal(false)
-      router.push(`/leases/${renewalResult[0].new_lease_id}`)
+      if (!user || !lease) {
+        setError('You must be logged in')
+        return
+      }
+
+      const { data: renewalResult, error: renewError } = await supabase.rpc('renew_lease', {
+        p_lease_id: lease.id,
+        p_new_end_date: renewData.new_end_date,
+        p_new_rent: renewData.new_rent,
+        p_new_service_charge: renewData.new_service_charge,
+      })
+
+      if (renewError || !renewalResult?.[0]) {
+        setError(renewError?.message || 'Lease was not renewed')
+      } else {
+        setSuccess('Lease renewed successfully')
+        setShowRenewModal(false)
+        router.push(`/leases/${renewalResult[0].new_lease_id}`)
+      }
+    } finally {
+      setActionLoading(false)
     }
-
-    setActionLoading(false)
   }
 
   const deleteLease = async () => {
@@ -778,12 +783,14 @@ export default function LeaseDetailPage() {
 
       {/* Renew Modal */}
       {showRenewModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center mb-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 px-4 py-6 safe-area-bottom safe-area-top sm:py-8">
+          <div className="mx-auto flex min-h-full w-full max-w-2xl items-start justify-center">
+          <div className="flex max-h-[calc(100dvh-3rem)] w-full flex-col overflow-hidden rounded-lg bg-white shadow-2xl sm:max-h-[calc(100dvh-4rem)]">
+            <div className="flex shrink-0 items-center border-b border-slate-200 px-5 py-4">
               <RefreshCw className="h-6 w-6 text-primary-500 mr-2" />
               <h3 className="text-lg font-medium text-gray-900">Renew Lease</h3>
             </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
             <p className="text-gray-600 mb-4">
               Renew lease for <strong>{lease.tenant_name}</strong> at {lease.property_name} - {lease.unit_name}
             </p>
@@ -903,7 +910,9 @@ export default function LeaseDetailPage() {
               )}
             </div>
 
-            <div className="flex justify-end space-x-3">
+            </div>
+
+            <div className="flex shrink-0 justify-end space-x-3 border-t border-slate-200 bg-white px-5 py-4">
               <button 
                 onClick={() => setShowRenewModal(false)}
                 className="btn-secondary"
@@ -919,6 +928,7 @@ export default function LeaseDetailPage() {
                 {actionLoading ? 'Renewing...' : 'Renew Lease'}
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}
