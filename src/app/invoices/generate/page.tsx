@@ -10,6 +10,7 @@ import {
   calculateChargeAmountForPeriod,
   calculateInvoiceTotal as calculateBillingInvoiceTotal,
   getBillingPeriod,
+  getLeaseBillingPeriod,
   isBillingPeriodOnCadence,
   isBillingPeriodWithinLease,
 } from '@/utils/billing'
@@ -43,6 +44,17 @@ interface Charge {
   amount: number
   frequency: string | null
   notes?: string
+}
+
+type ExistingInvoiceCoverage = {
+  id: string
+  lease_id: string
+  tenant_id: string
+  unit_id: string
+  invoice_number: string | null
+  billing_period_start: string
+  billing_period_end: string
+  status: string
 }
 
 type ActiveLeaseRow = {
@@ -89,6 +101,7 @@ export default function GenerateInvoicesPage() {
   
   const [leases, setLeases] = useState<Lease[]>([])
   const [charges, setCharges] = useState<Record<string, Charge[]>>({})
+  const [existingInvoices, setExistingInvoices] = useState<ExistingInvoiceCoverage[]>([])
   const [selectedLeases, setSelectedLeases] = useState<Set<string>>(new Set())
   const [generating, setGenerating] = useState<Set<string>>(new Set())
 
@@ -149,13 +162,24 @@ export default function GenerateInvoicesPage() {
             }
           })
           setLeases(formattedLeases)
+
+          const tenantIds = [...new Set(formattedLeases.map((lease) => lease.tenant_id))]
+          const unitIds = [...new Set(formattedLeases.map((lease) => lease.unit_id))]
+          if (tenantIds.length > 0 && unitIds.length > 0) {
+            const { data: existingInvoiceData } = await supabase
+              .from('rent_invoices')
+              .select('id, lease_id, tenant_id, unit_id, invoice_number, billing_period_start, billing_period_end, status')
+              .eq('user_id', user.id)
+              .in('tenant_id', tenantIds)
+              .in('unit_id', unitIds)
+              .neq('status', 'cancelled')
+
+            setExistingInvoices((existingInvoiceData || []) as ExistingInvoiceCoverage[])
+          }
           
           // Select invoiceable leases by default for the selected billing period.
           setSelectedLeases(new Set(formattedLeases
-            .filter((lease) => (
-              isBillingPeriodOnCadence(lease.start_date, billingYear, billingMonth, lease.billing_frequency) &&
-              isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency)
-            ))
+            .filter((lease) => isLeaseInvoiceableForPeriod(lease))
             .map(l => l.id)))
 
           // Fetch charges for each lease
@@ -228,14 +252,42 @@ export default function GenerateInvoicesPage() {
     return Math.max(grossTotal - rentWithholding - serviceWithholding, 0)
   }
 
+  const getInvoiceCoverage = (lease: Lease) => {
+    const coverage = getLeaseBillingPeriod(lease.start_date, billingYear, billingMonth, lease.billing_frequency)
+    if (!coverage) return null
+
+    const leaseEnd = new Date(`${lease.end_date}T00:00:00Z`)
+    const periodEnd = coverage.periodEnd > leaseEnd ? leaseEnd : coverage.periodEnd
+
+    return {
+      ...coverage,
+      periodEnd,
+    }
+  }
+
+  const getExistingCoverageForPeriod = (lease: Lease) => {
+    const coverage = getInvoiceCoverage(lease)
+    if (!coverage) return null
+
+    return existingInvoices.find((invoice) => {
+      if (invoice.tenant_id !== lease.tenant_id || invoice.unit_id !== lease.unit_id) return false
+
+      const existingStart = new Date(`${invoice.billing_period_start}T00:00:00Z`)
+      const existingEnd = new Date(`${invoice.billing_period_end}T00:00:00Z`)
+
+      return existingStart <= coverage.periodEnd && existingEnd >= coverage.periodStart
+    }) || null
+  }
+
   const isLeaseInvoiceableForPeriod = (lease: Lease) => (
     isBillingPeriodOnCadence(lease.start_date, billingYear, billingMonth, lease.billing_frequency) &&
-    isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency)
+    isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency) &&
+    !getExistingCoverageForPeriod(lease)
   )
 
   useEffect(() => {
     setSelectedLeases(new Set(leases.filter(isLeaseInvoiceableForPeriod).map((lease) => lease.id)))
-  }, [billingMonth, billingYear, leases])
+  }, [billingMonth, billingYear, leases, existingInvoices])
 
   const generateInvoices = async () => {
     if (selectedLeases.size === 0) {
@@ -420,6 +472,7 @@ export default function GenerateInvoicesPage() {
                 <th className="table-header-cell w-10"></th>
                 <th className="table-header-cell">Tenant</th>
                 <th className="table-header-cell">Property/Unit</th>
+                <th className="table-header-cell">Payment Period</th>
                 <th className="table-header-cell">Base Rent</th>
                 <th className="table-header-cell">Additional Charges</th>
                 <th className="table-header-cell">Total</th>
@@ -437,6 +490,8 @@ export default function GenerateInvoicesPage() {
                 const hasWithholding = lease.rent_withholding_tax_enabled || lease.service_charge_withholding_tax_enabled
                 const isGenerating = generating.has(lease.id)
                 const isInvoiceable = isLeaseInvoiceableForPeriod(lease)
+                const coverage = getInvoiceCoverage(lease)
+                const existingCoverage = getExistingCoverageForPeriod(lease)
 
                 return (
                   <tr key={lease.id} className={`hover:bg-gray-50 ${isGenerating || !isInvoiceable ? 'opacity-50' : ''}`}>
@@ -454,7 +509,9 @@ export default function GenerateInvoicesPage() {
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
                       {!isInvoiceable && (
                         <p className="text-xs font-medium text-warning-700">
-                          Selected period is outside {formatDate(lease.start_date)} - {formatDate(lease.end_date)}
+                          {existingCoverage
+                            ? `Already covered by ${existingCoverage.invoice_number || 'an existing invoice'}`
+                            : `Selected period is outside ${formatDate(lease.start_date)} - ${formatDate(lease.end_date)}`}
                         </p>
                       )}
                       {hasWithholding && (
@@ -469,6 +526,25 @@ export default function GenerateInvoicesPage() {
                     <td className="table-cell">
                       <p className="text-sm text-gray-900">{lease.property_name}</p>
                       <p className="text-xs text-gray-500">{lease.unit_name}</p>
+                    </td>
+                    <td className="table-cell">
+                      {coverage ? (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {formatDate(coverage.periodStart.toISOString())}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            to {formatDate(coverage.periodEnd.toISOString())}
+                          </p>
+                          {existingCoverage && (
+                            <p className="text-xs font-semibold text-warning-700">
+                              Covered: {formatDate(existingCoverage.billing_period_start)} - {formatDate(existingCoverage.billing_period_end)}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">Outside lease</span>
+                      )}
                     </td>
                     <td className="table-cell">{formatCurrency(lease.monthly_rent)}</td>
                     <td className="table-cell">
