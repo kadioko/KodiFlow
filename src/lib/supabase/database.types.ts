@@ -13,6 +13,8 @@ export interface Database {
         Row: {
           id: string
           full_name: string | null
+          email: string | null
+          admin_role: 'none' | 'admin' | 'super_admin'
           company_name: string | null
           phone: string | null
           currency_preference: string
@@ -27,6 +29,8 @@ export interface Database {
         Insert: {
           id: string
           full_name?: string | null
+          email?: string | null
+          admin_role?: 'none' | 'admin' | 'super_admin'
           company_name?: string | null
           phone?: string | null
           currency_preference?: string
@@ -41,6 +45,8 @@ export interface Database {
         Update: {
           id?: string
           full_name?: string | null
+          email?: string | null
+          admin_role?: 'none' | 'admin' | 'super_admin'
           company_name?: string | null
           phone?: string | null
           currency_preference?: string

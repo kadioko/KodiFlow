@@ -16,6 +16,7 @@ const publicPrefixes = ['/auth']
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
+  const [adminRole, setAdminRole] = useState<'none' | 'admin' | 'super_admin'>('none')
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -41,10 +42,12 @@ export function AppShell({ children }: AppShellProps) {
       .then((data) => {
         if (!mounted) return
         setUser(data.user ?? null)
+        setAdminRole(data.adminRole ?? 'none')
       })
       .catch(() => {
         if (!mounted) return
         setUser(null)
+        setAdminRole('none')
       })
       .finally(() => {
         window.clearTimeout(timeoutId)
@@ -88,8 +91,8 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-[100dvh] bg-gray-50">
       <div className="flex h-[100dvh] overflow-hidden">
-        <Sidebar user={user} />
-        <MobileSidebar user={user} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+        <Sidebar user={user} adminRole={adminRole} />
+        <MobileSidebar user={user} adminRole={adminRole} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto p-4 safe-area-bottom sm:p-6 lg:p-8">

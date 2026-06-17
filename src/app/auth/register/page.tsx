@@ -51,6 +51,7 @@ export default function RegisterPage() {
         const profile = {
           id: data.user.id,
           full_name: fullName,
+          email,
           currency_preference: 'TZS',
         }
 

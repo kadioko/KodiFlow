@@ -19,6 +19,7 @@ import {
   BarChart3,
   UserRound,
   Settings,
+  Shield,
   ChevronLeft,
   ChevronRight,
   X,
@@ -27,6 +28,7 @@ import { useState } from 'react'
 
 interface SidebarProps {
   user: User
+  adminRole: 'none' | 'admin' | 'super_admin'
 }
 
 export const navigation = [
@@ -46,9 +48,14 @@ export const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-export function Sidebar({ user }: SidebarProps) {
+const adminNavigation = [
+  { name: 'Admin', href: '/admin', icon: Shield },
+]
+
+export function Sidebar({ user, adminRole }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const visibleNavigation = adminRole === 'none' ? navigation : [...navigation, ...adminNavigation]
 
   return (
     <div className={`${collapsed ? 'w-16' : 'w-64'} hidden flex-shrink-0 bg-slate-950 text-white shadow-2xl shadow-slate-950/20 transition-all duration-300 lg:flex lg:flex-col`}>
@@ -69,7 +76,7 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
 
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
           return (
             <Link
@@ -112,12 +119,14 @@ export function Sidebar({ user }: SidebarProps) {
 
 interface MobileSidebarProps {
   user: User
+  adminRole: 'none' | 'admin' | 'super_admin'
   open: boolean
   onClose: () => void
 }
 
-export function MobileSidebar({ user, open, onClose }: MobileSidebarProps) {
+export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarProps) {
   const pathname = usePathname()
+  const visibleNavigation = adminRole === 'none' ? navigation : [...navigation, ...adminNavigation]
 
   if (!open) return null
 
@@ -143,7 +152,7 @@ export function MobileSidebar({ user, open, onClose }: MobileSidebarProps) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {navigation.map((item) => {
+          {visibleNavigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <Link
