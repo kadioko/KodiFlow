@@ -122,6 +122,7 @@ export const INVOICE_STATUSES = [
   { value: 'paid', label: 'Paid', color: 'bg-green-100 text-green-800' },
   { value: 'overdue', label: 'Overdue', color: 'bg-red-100 text-red-800' },
   { value: 'cancelled', label: 'Cancelled', color: 'bg-gray-100 text-gray-800' },
+  { value: 'transferred', label: 'Transferred', color: 'bg-purple-100 text-purple-800' },
 ] as const;
 
 // Payment methods

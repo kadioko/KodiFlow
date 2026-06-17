@@ -257,6 +257,7 @@ export default function InvoiceDetailPage() {
       case 'paid': return 'bg-success-100 text-success-800'
       case 'overdue': return 'bg-danger-100 text-danger-800'
       case 'partially_paid': return 'bg-blue-100 text-blue-800'
+      case 'transferred': return 'bg-purple-100 text-purple-800'
       default: return 'bg-warning-100 text-warning-800'
     }
   }

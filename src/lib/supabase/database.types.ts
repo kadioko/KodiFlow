@@ -376,7 +376,7 @@ export interface Database {
           amount_paid: number
           balance: number
           due_date: string
-          status: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
+          status: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'transferred'
           notes: string | null
           created_at: string
           updated_at: string
@@ -396,7 +396,7 @@ export interface Database {
           subtotal?: number
           amount_paid?: number
           due_date: string
-          status?: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
+          status?: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'transferred'
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -416,7 +416,7 @@ export interface Database {
           subtotal?: number
           amount_paid?: number
           due_date?: string
-          status?: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
+          status?: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'transferred'
           notes?: string | null
           created_at?: string
           updated_at?: string

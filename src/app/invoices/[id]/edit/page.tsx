@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
-type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
+type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'transferred'
 type InvoiceItemType = 'rent' | 'service_charge' | 'security' | 'water' | 'electricity' | 'garbage' | 'maintenance' | 'parking' | 'tax' | 'penalty' | 'other'
 
 type InvoiceItem = {

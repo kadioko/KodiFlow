@@ -163,7 +163,7 @@ CREATE TABLE rent_invoices (
   amount_paid DECIMAL(12, 2) DEFAULT 0,
   balance DECIMAL(12, 2) GENERATED ALWAYS AS (subtotal - amount_paid) STORED,
   due_date DATE NOT NULL,
-  status TEXT NOT NULL DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partially_paid', 'paid', 'overdue', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partially_paid', 'paid', 'overdue', 'cancelled', 'transferred')),
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

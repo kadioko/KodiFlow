@@ -5,7 +5,7 @@ import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/cons
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { createPaymentReminderMessage } from '@/utils/reminders'
 
-type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid'
+type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid' | 'transferred'
 type InvoiceSort = 'status' | 'balance_desc' | 'amount_desc' | 'paid_desc' | 'due_asc' | 'newest'
 
 type InvoiceListItem = {
@@ -39,7 +39,7 @@ function getQueryValue(value: string | string[] | undefined, fallback: string) {
 
 function getStatusFilter(value: string | string[] | undefined): InvoiceStatusFilter {
   const status = getQueryValue(value, 'all')
-  return ['all', 'unpaid', 'overdue', 'partially_paid', 'paid'].includes(status) ? status as InvoiceStatusFilter : 'all'
+  return ['all', 'unpaid', 'overdue', 'partially_paid', 'paid', 'transferred'].includes(status) ? status as InvoiceStatusFilter : 'all'
 }
 
 function getSort(value: string | string[] | undefined): InvoiceSort {
@@ -61,7 +61,8 @@ function statusRank(status: string) {
     case 'unpaid': return 1
     case 'partially_paid': return 2
     case 'paid': return 3
-    default: return 4
+    case 'transferred': return 4
+    default: return 5
   }
 }
 
@@ -150,19 +151,22 @@ export default async function InvoicesPage({
     : allInvoices.filter((invoice) => invoice.status === statusFilter)
   const invoices = sortInvoices(filteredInvoices, sort)
 
-  const totalExpected = allInvoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
-  const totalPaid = allInvoices.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0)
-  const totalBalance = allInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0)
+  const financialInvoices = allInvoices.filter((inv) => !['cancelled', 'transferred'].includes(inv.status))
+  const totalExpected = financialInvoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
+  const totalPaid = financialInvoices.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0)
+  const totalBalance = financialInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0)
   const overdueCount = allInvoices.filter((inv) => inv.status === 'overdue').length
   const paidCount = allInvoices.filter((inv) => inv.status === 'paid').length
   const unpaidCount = allInvoices.filter((inv) => inv.status === 'unpaid').length
   const partialCount = allInvoices.filter((inv) => inv.status === 'partially_paid').length
+  const transferredCount = allInvoices.filter((inv) => inv.status === 'transferred').length
   const statusOptions: { value: InvoiceStatusFilter; label: string; count: number }[] = [
     { value: 'all', label: 'All', count: allInvoices.length },
     { value: 'unpaid', label: 'Unpaid', count: unpaidCount },
     { value: 'overdue', label: 'Overdue', count: overdueCount },
     { value: 'partially_paid', label: 'Partial', count: partialCount },
     { value: 'paid', label: 'Paid', count: paidCount },
+    { value: 'transferred', label: 'Transferred', count: transferredCount },
   ]
   const sortOptions: { value: InvoiceSort; label: string }[] = [
     { value: 'status', label: 'Unpaid first' },
