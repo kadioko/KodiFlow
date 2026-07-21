@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { DateInput } from '@/components/ui/DateInput'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import { 
   ArrowLeft, 
   FileText, 
@@ -969,6 +970,8 @@ export default function LeaseDetailPage() {
           </div>
         </div>
       )}
+
+      <ActivityTimeline entityType="leases" entityId={lease.id} />
     </div>
   )
 }

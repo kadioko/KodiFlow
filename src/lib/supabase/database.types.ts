@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -138,6 +138,9 @@ export interface Database {
           size_unit: string
           status: 'vacant' | 'occupied' | 'reserved' | 'under_maintenance' | 'inactive'
           notes: string | null
+          voided_at: string | null
+          voided_by: string | null
+          void_reason: string | null
           created_at: string
           updated_at: string
         }
@@ -155,6 +158,9 @@ export interface Database {
           size_unit?: string
           status?: 'vacant' | 'occupied' | 'reserved' | 'under_maintenance' | 'inactive'
           notes?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -172,6 +178,9 @@ export interface Database {
           size_unit?: string
           status?: 'vacant' | 'occupied' | 'reserved' | 'under_maintenance' | 'inactive'
           notes?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -475,6 +484,12 @@ export interface Database {
           reference: string | null
           notes: string | null
           client_request_id: string | null
+          voided_at: string | null
+          voided_by: string | null
+          void_reason: string | null
+          reversal_payment_id: string | null
+          reverses_payment_id: string | null
+          is_reversal: boolean
           created_at: string
         }
         Insert: {
@@ -491,6 +506,12 @@ export interface Database {
           reference?: string | null
           notes?: string | null
           client_request_id?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
+          reversal_payment_id?: string | null
+          reverses_payment_id?: string | null
+          is_reversal?: boolean
           created_at?: string
         }
         Update: {
@@ -507,8 +528,29 @@ export interface Database {
           reference?: string | null
           notes?: string | null
           client_request_id?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
+          reversal_payment_id?: string | null
+          reverses_payment_id?: string | null
+          is_reversal?: boolean
           created_at?: string
         }
+      }
+      activity_log: {
+        Row: { id: string; user_id: string; actor_user_id: string | null; entity_type: string; entity_id: string; action: string; summary: string | null; metadata: Json; created_at: string }
+        Insert: { id?: string; user_id: string; actor_user_id?: string | null; entity_type: string; entity_id: string; action: string; summary?: string | null; metadata?: Json; created_at?: string }
+        Update: { id?: string; user_id?: string; actor_user_id?: string | null; entity_type?: string; entity_id?: string; action?: string; summary?: string | null; metadata?: Json; created_at?: string }
+      }
+      maintenance_requests: {
+        Row: { id: string; user_id: string; property_id: string; unit_id: string | null; tenant_id: string | null; title: string; description: string | null; status: 'new' | 'assigned' | 'in_progress' | 'waiting_for_tenant' | 'completed' | 'closed'; priority: 'low' | 'medium' | 'high' | 'urgent'; vendor_name: string | null; assigned_to: string | null; estimated_cost: number | null; actual_cost: number | null; expense_id: string | null; due_date: string | null; completed_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; user_id: string; property_id: string; unit_id?: string | null; tenant_id?: string | null; title: string; description?: string | null; status?: 'new' | 'assigned' | 'in_progress' | 'waiting_for_tenant' | 'completed' | 'closed'; priority?: 'low' | 'medium' | 'high' | 'urgent'; vendor_name?: string | null; assigned_to?: string | null; estimated_cost?: number | null; actual_cost?: number | null; expense_id?: string | null; due_date?: string | null; completed_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; user_id?: string; property_id?: string; unit_id?: string | null; tenant_id?: string | null; title?: string; description?: string | null; status?: 'new' | 'assigned' | 'in_progress' | 'waiting_for_tenant' | 'completed' | 'closed'; priority?: 'low' | 'medium' | 'high' | 'urgent'; vendor_name?: string | null; assigned_to?: string | null; estimated_cost?: number | null; actual_cost?: number | null; expense_id?: string | null; due_date?: string | null; completed_at?: string | null; created_at?: string; updated_at?: string }
+      }
+      maintenance_attachments: {
+        Row: { id: string; user_id: string; maintenance_request_id: string; file_name: string; file_url: string; mime_type: string | null; file_size: number | null; created_at: string }
+        Insert: { id?: string; user_id: string; maintenance_request_id: string; file_name: string; file_url: string; mime_type?: string | null; file_size?: number | null; created_at?: string }
+        Update: { id?: string; user_id?: string; maintenance_request_id?: string; file_name?: string; file_url?: string; mime_type?: string | null; file_size?: number | null; created_at?: string }
       }
       expenses: {
         Row: {
@@ -710,6 +752,10 @@ export interface Database {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      reverse_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: string
+      }
       renew_lease: {
         Args: {
           p_lease_id: string
@@ -724,6 +770,10 @@ export interface Database {
           new_start_date: string
           new_end_date: string
         }[]
+      }
+      void_invoice: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: undefined
       }
     }
     Enums: {

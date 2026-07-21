@@ -15,9 +15,11 @@ import {
   Trash2, 
   Loader2,
   AlertCircle
+  ,FileText
 } from 'lucide-react'
 import { TENANT_TYPES } from '@/utils/constants'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 
 interface Tenant {
   id: string
@@ -333,6 +335,10 @@ export default function TenantDetailPage() {
           </div>
         </div>
         <div className="flex space-x-3">
+          <Link href={`/tenants/${tenantId}/statement`} className="btn-secondary">
+            <FileText className="h-4 w-4 mr-2" />
+            Statement
+          </Link>
           <Link href={`/tenants/${tenantId}/edit`} className="btn-secondary">
             <Edit2 className="h-4 w-4 mr-2" />
             Edit
@@ -352,6 +358,8 @@ export default function TenantDetailPage() {
           {error}
         </div>
       )}
+
+      <ActivityTimeline entityType="tenants" entityId={tenant.id} />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

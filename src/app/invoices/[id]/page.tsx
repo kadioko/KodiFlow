@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { createInvoicePdf as buildInvoicePdf, type InvoicePdfSettings } from '@/utils/invoice-pdf'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 
 interface InvoiceItem {
   id: string
@@ -223,24 +224,13 @@ export default function InvoiceDetailPage() {
   }
 
   const deleteInvoice = async () => {
-    if (!confirm('Delete this invoice and all related invoice items and payments? This cannot be undone.')) return
+    const reason = prompt('Void this invoice without deleting its history. Enter the reason for the void:')
+    if (!reason?.trim()) return
 
     setDeleting(true)
     setError('')
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      setError('You must be logged in')
-      setDeleting(false)
-      return
-    }
-
-    const { error: deleteError } = await supabase
-      .from('rent_invoices')
-      .delete()
-      .eq('id', invoiceId)
-      .eq('user_id', user.id)
+    const { error: deleteError } = await supabase.rpc('void_invoice', { p_invoice_id: invoiceId, p_reason: reason.trim() })
 
     if (deleteError) {
       setError(deleteError.message)
@@ -334,7 +324,7 @@ export default function InvoiceDetailPage() {
           </button>
           <button onClick={deleteInvoice} disabled={deleting} className="btn-danger">
             <Trash2 className="h-4 w-4 mr-2" />
-            {deleting ? 'Deleting...' : 'Delete'}
+            {deleting ? 'Voiding...' : 'Void Invoice'}
           </button>
           <Link 
             href={`/payments/new?invoice=${invoiceId}`}
@@ -530,6 +520,8 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
       </div>
+
+      <ActivityTimeline entityType="rent_invoices" entityId={invoice.id} />
     </div>
   )
 }

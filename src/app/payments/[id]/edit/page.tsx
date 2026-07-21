@@ -145,24 +145,13 @@ export default function EditPaymentPage() {
   }
 
   const deletePayment = async () => {
-    if (!confirm('Delete this payment? The invoice balance will be recalculated.')) return
+    const reason = prompt('Reverse this payment without deleting its history. Enter the reversal reason:')
+    if (!reason?.trim()) return
 
     setDeleting(true)
     setError('')
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      setError('You must be logged in')
-      setDeleting(false)
-      return
-    }
-
-    const { error: deleteError } = await supabase
-      .from('payments')
-      .delete()
-      .eq('id', paymentId)
-      .eq('user_id', user.id)
+    const { error: deleteError } = await supabase.rpc('reverse_payment', { p_payment_id: paymentId, p_reason: reason.trim() })
 
     if (deleteError) {
       setError(deleteError.message)
@@ -244,7 +233,7 @@ export default function EditPaymentPage() {
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-between">
           <button type="button" onClick={deletePayment} disabled={deleting || saving} className="btn-danger">
             <Trash2 className="mr-2 h-5 w-5" />
-            {deleting ? 'Deleting...' : 'Delete Payment'}
+            {deleting ? 'Reversing...' : 'Reverse Payment'}
           </button>
           <div className="flex justify-end gap-3">
             <Link href={`/payments/${paymentId}`} className="btn-secondary">Cancel</Link>
