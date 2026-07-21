@@ -69,6 +69,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
+# Optional: automatic WhatsApp delivery. Otherwise reminders open pre-filled WhatsApp drafts.
+WHATSAPP_API_URL=https://graph.facebook.com/v22.0/your_phone_number_id/messages
+WHATSAPP_ACCESS_TOKEN=your_whatsapp_business_access_token
 ```
 
 Never commit `.env.local`.
@@ -128,6 +131,8 @@ src/
 |   |-- leases/             # Lease create, detail, edit, renewal
 |   |-- invoices/           # Invoice list, detail, generation
 |   |-- payments/           # Payment list, detail, recording
+|   |-- maintenance/        # Maintenance request lifecycle
+|   |-- admin/              # Team users and operational roles
 |   |-- settings/           # Preferences, install help, theme controls
 |   `-- reports/            # Financial and operational reports
 |-- components/
@@ -153,7 +158,7 @@ src/
 ## UI Testing Checklist
 
 - Desktop sidebar navigation works.
-- Mobile header menu opens and closes.
+- Mobile header drawer, bottom navigation, global search, and quick actions work.
 - Settings PWA install help appears on mobile.
 - Light and dark mode toggle correctly.
 - Tenant, unit, property, and lease detail/edit routes load from list links.
@@ -161,6 +166,8 @@ src/
 - Lease creation and editing preserve tenant, unit, rent, service charge, deposit, billing frequency, and status.
 - Invoice and payment screens show charge line items clearly.
 - Tenant withholding tax toggles create rent/service deduction lines during invoice generation.
+- Reminder buttons open a tenant-specific WhatsApp draft without provider credentials.
+- Invoice voids and payment reversals appear in financial history.
 
 ## Troubleshooting
 
@@ -196,4 +203,4 @@ npm install
 2. Read the [app user guide](../user-guides/app-user-guide.md).
 3. Review the [tech stack](../architecture/tech-stack.md).
 
-**Last Updated**: May 2026
+**Last Updated**: July 2026

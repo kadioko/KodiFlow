@@ -82,6 +82,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
+# Optional. Without these, reminder buttons open a WhatsApp draft for the tenant instead of sending automatically.
+WHATSAPP_API_URL=https://graph.facebook.com/v22.0/your_phone_number_id/messages
+WHATSAPP_ACCESS_TOKEN=your_whatsapp_business_access_token
 ```
 
 Never commit `.env.local`.
@@ -128,8 +131,19 @@ Seed data can include sample properties, sections, units, tenants, active leases
 - `payments` records full and partial payments against invoices.
 - `documents` and the `documents` storage bucket support uploads.
 - `utility_meter_readings` supports water/electricity tracking.
+- `activity_log` records sensitive financial actions such as voids and reversals.
+- `maintenance_requests` and `maintenance_attachments` support the maintenance lifecycle and evidence files.
+- Apply `202607210001_financial_history_and_maintenance.sql` and `202607210002_expand_operational_roles.sql` before using financial history, maintenance, or the expanded role labels.
 
-## Troubleshooting
+## 11. WhatsApp Reminders
+
+The reminder action uses the tenant phone number stored on the related invoice.
+
+- With no WhatsApp provider credentials, it opens a pre-filled WhatsApp draft for a manager to review and send.
+- With `WHATSAPP_API_URL` and `WHATSAPP_ACCESS_TOKEN` configured, KodiFlow posts the reminder to the provider automatically.
+- Configure an approved sender/template where your WhatsApp provider requires one. Do not store provider credentials in source control.
+
+## 12. Troubleshooting
 
 ### Failed To Fetch
 
@@ -167,4 +181,4 @@ Seed data can include sample properties, sections, units, tenants, active leases
 
 **Support**: [Supabase Documentation](https://supabase.com/docs)
 
-**Last Updated**: May 2026
+**Last Updated**: July 2026

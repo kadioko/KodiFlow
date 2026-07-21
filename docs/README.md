@@ -44,8 +44,8 @@ docs/
 
 The maintained docs now cover:
 
-- Property, section, unit, tenant, lease, invoice, payment, utility, document, report, search, and settings workflows.
-- Mobile navigation through the header menu and desktop navigation through the sidebar.
+- Property, section, unit, tenant, lease, invoice, payment, utility, document, report, maintenance, search, settings, and administration workflows.
+- Mobile navigation through the header menu, bottom bar, and quick-action sheet; desktop navigation through the sidebar.
 - PWA installation from Settings, including mobile add-to-home-screen help.
 - Light and dark appearance modes.
 - Lease editing, lease deletion, lease renewal, unit occupancy links, and tenant/unit/property detail navigation.
@@ -54,10 +54,11 @@ The maintained docs now cover:
 - Unit ID/door-number capture and search.
 - Monthly, quarterly, six-month, and annual billing frequencies.
 - Separate monthly rent and service charge entry, invoice line items, invoice owed breakdown toggles, and payment charge breakdowns.
-- Invoice edit/delete, invoice print/PDF sharing, and payment view/edit/delete workflows.
+- Invoice voiding, invoice print/PDF sharing, payment view/edit/reversal workflows, and activity timelines.
 - Comma-formatted monetary input and whole-shilling TZS display.
 - Tenant-level withholding tax toggles for rent and service charge deductions.
 - Dora Tower client import SQL for `doratower2020@gmail.com`.
+- Tenant statements, maintenance requests, owner report PDF/CSV exports, and WhatsApp reminder drafts or automatic delivery.
 
 ## Documentation Maintenance Rules
 

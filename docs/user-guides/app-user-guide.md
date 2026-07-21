@@ -10,7 +10,7 @@ This guide explains how to use KodiFlow day to day for property, tenant, unit, l
 
 The dashboard gives you a quick view of expected rent, collected rent, outstanding balances, overdue tenants, lease alerts, and property performance.
 
-Use the left sidebar on desktop to move between pages. On mobile, tap the menu button in the top bar to open the navigation drawer.
+Use the left sidebar on desktop to move between pages. On mobile, use the bottom navigation for Dashboard, Invoices, Payments, and Leases; tap **More** for the full drawer. The central add action opens common tasks.
 
 ## 2. Recommended Setup Order
 
@@ -153,7 +153,7 @@ From a lease detail page you can:
 - Renew an active lease.
 - Terminate an active lease.
 
-To renew a previous lease, open the lease, tenant, unit, or property history and use **Renew** or **New Lease**. KodiFlow preselects the tenant and unit where possible so the new lease stays connected to the right records.
+To renew a previous lease, open the lease, tenant, unit, or property history and use **Renew** or **New Lease**. KodiFlow preselects the tenant and unit, calculates the natural next term from the chosen billing frequency, and previews any carried Opening Balance or Opening Credit before you confirm.
 
 ## 8. Invoices And Rent
 
@@ -167,6 +167,9 @@ Use **Invoices** to:
 - Review withholding tax deduction lines where enabled for that tenant.
 - Track paid, partially paid, pending, and overdue invoices.
 - Record payments against invoices.
+- Download or share an invoice PDF.
+- Void an incorrect invoice with a reason instead of deleting financial history.
+- Use WhatsApp to prepare a payment reminder for the tenant's recorded phone number.
 
 Invoice balances feed tenant balances, reports, and dashboard metrics.
 
@@ -183,9 +186,17 @@ To record a payment:
 5. Enter amount, date, method, and reference details.
 6. Save.
 
-Payments update invoice balances and collection totals.
+Payments update invoice balances and collection totals. To correct a recorded payment, use **Reverse** so KodiFlow retains the original transaction and records the correction in the activity timeline.
 
-## 10. Expenses
+## 10. Tenant Statements And Financial History
+
+Open a tenant and choose **Statement** to review invoices, payments, opening balances, credits, voids, reversals, and the running balance in date order. Use this during renewal or when resolving a balance question.
+
+## 11. Maintenance
+
+Use **Maintenance** to record issues reported by a tenant or found at a unit. Set a priority, assign a person or vendor, add photos or documents, track the request from **New** through **Closed**, and link the final cost to an expense where needed.
+
+## 12. Expenses
 
 Use **Expenses** to record property costs such as maintenance, utilities, repairs, services, or operating costs.
 
@@ -199,7 +210,7 @@ To add an expense:
 
 Expenses are used in financial reporting.
 
-## 11. Utilities
+## 13. Utilities
 
 Use **Utilities** for meter readings and utility billing support.
 
@@ -210,7 +221,7 @@ Typical workflow:
 3. Review usage and charge calculations.
 4. Use the utility information when preparing invoices or reports.
 
-## 12. Documents
+## 14. Documents
 
 Use **Documents** to store files such as lease agreements, tenant IDs, receipts, property photos, inspection records, or supporting paperwork.
 
@@ -218,7 +229,7 @@ On supported mobile browsers, you can capture photos from the camera.
 
 Keep file names clear so documents are easy to find later.
 
-## 13. Reports
+## 15. Reports
 
 Use **Reports** to understand collection, income, balances, expenses, tenant mix, and property performance.
 
@@ -231,7 +242,7 @@ Important reports include:
 - Tenant mix.
 - Lease and occupancy insights.
 
-## 14. Search
+## 16. Search
 
 Use the search bar to find properties, tenants, units, and invoices quickly.
 
@@ -243,7 +254,7 @@ Good searches include:
 - Unit ID or door number
 - Invoice number
 
-## 15. Settings
+## 17. Settings
 
 Use **Settings** to configure app preferences.
 
@@ -274,13 +285,11 @@ After installation, KodiFlow opens like a standalone app from your phone app scr
 
 Your choice is saved on the current device.
 
-## 16. Notifications
+## 18. Notifications And WhatsApp Reminders
 
-KodiFlow can request browser notification permission for reminders such as overdue invoices and lease events.
+KodiFlow can request browser notification permission for reminders such as overdue invoices and lease events. The WhatsApp action creates a pre-filled payment reminder for the invoice's tenant phone number. When a WhatsApp provider is configured by the administrator, the same action sends automatically instead.
 
-If your browser asks for permission, allow notifications if you want alerts on that device.
-
-## 17. Common Workflows
+## 19. Common Workflows
 
 ### Add A New Tenant Into A Vacant Unit
 
@@ -318,7 +327,7 @@ If the tenant pays a service charge, enter it on the lease. Generated invoices w
 3. Review invoices, payments, and balance information.
 4. Open individual invoices or payments for more detail.
 
-## 18. Troubleshooting
+## 20. Troubleshooting
 
 ### A Tenant Or Unit Says "Not Found"
 
@@ -351,7 +360,7 @@ Some browsers do not expose the install prompt directly. Use the browser menu an
 
 Refresh the page. If it still looks wrong, go to **Settings**, switch to Light, then switch back to Dark.
 
-## 19. Good Habits
+## 21. Good Habits
 
 - Create properties and units before creating leases.
 - Use leases to connect tenants to units.

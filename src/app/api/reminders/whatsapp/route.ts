@@ -10,7 +10,6 @@ function normalizePhone(value: string | null) {
 export async function POST(request: Request) {
   const endpoint = process.env.WHATSAPP_API_URL
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-  if (!endpoint || !accessToken) return NextResponse.json({ error: 'WhatsApp delivery is not configured yet.' }, { status: 503 })
 
   const body = await request.json()
   const invoiceId = typeof body.invoiceId === 'string' ? body.invoiceId : ''
@@ -32,7 +31,12 @@ export async function POST(request: Request) {
   const phone = normalizePhone(tenant?.phone || null)
   if (!phone) return NextResponse.json({ error: 'This tenant does not have a valid phone number' }, { status: 400 })
   const message = createPaymentReminderMessage({ tenantName: tenant?.full_name || tenant?.business_name || 'Tenant', invoiceNumber: invoice.invoice_number, balance: invoice.balance, dueDate: invoice.due_date })
+
+  // Managers can send a ready-made reminder now; configured providers send it automatically.
+  const draftUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+  if (!endpoint || !accessToken) return NextResponse.json({ draft: true, draftUrl })
+
   const delivery = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: message } }) })
-  if (!delivery.ok) return NextResponse.json({ error: 'WhatsApp did not accept the reminder. Check the sender and approved template settings.' }, { status: 502 })
+  if (!delivery.ok) return NextResponse.json({ error: 'WhatsApp did not accept the reminder. Check the sender and approved template settings.', draftUrl }, { status: 502 })
   return NextResponse.json({ sent: true })
 }

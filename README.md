@@ -38,16 +38,18 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Multi-line invoices with automatic status tracking.
 - Invoice items for rent, service charge, utilities, parking, tax, penalty, and other charges.
 - Withholding tax deductions as negative invoice tax lines where enabled for the tenant.
-- Invoice detail pages support edit, delete, print, and PDF sharing/download workflows.
+- Invoice detail pages support edit, void-with-reason, print, and PDF sharing/download workflows.
 - Invoice detail pages can toggle rent, service charge, and full owed breakdown views.
 - Payment recording with full and partial payment support.
 - Payment screen shows invoice charge breakdown before recording money received.
-- Payment records can be viewed, edited, and deleted.
+- Payment records can be viewed, edited, and reversed with an auditable correction trail.
 - Payment amount inputs use comma-formatted text entry to reduce number-entry mistakes.
 - Expense tracking by property and category.
 - Water and electricity meter readings with charge previews.
 - TZS default currency with USD, EUR, and GBP preference support.
 - TZS money displays as whole shillings with comma separators.
+- Financial activity timelines show invoice voids, payment reversals, and maintenance events on related records.
+- Tenant statements show invoices, payments, adjustments, credits, and the running balance.
 
 ### Dashboard, Reports, And Productivity
 
@@ -55,13 +57,17 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Financial, occupancy, tenant mix, deposit, expense, and utility reporting.
 - Global search across properties, tenants, units, and invoices.
 - Document upload for PDFs and images with metadata, camera capture, downloads, and storage cleanup.
-- Notification permission flow for overdue invoice and lease event alerts.
+- Dashboard work queue for overdue balances, leases ending soon, vacancies, and unassigned tenants.
+- Owner report exports in CSV and PDF.
+- WhatsApp payment reminders open a pre-filled draft to the tenant's recorded phone number until a provider is configured; configured providers send automatically.
+- Maintenance request lifecycle with priorities, assignees, costs, attachments, and linked expenses.
 
 ### Mobile, Branding, And PWA
 
 - Shared KodiFlow brand/logo component and PWA icon assets.
 - Desktop sidebar navigation.
 - Mobile header menu drawer.
+- Mobile bottom navigation and quick actions for core daily workflows.
 - Installable PWA with add-to-home-screen help in Settings.
 - Light and dark mode controls in Settings.
 
@@ -71,6 +77,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Row Level Security on user-owned tables.
 - Server-side and database-level validation for financial records.
 - Private document storage through Supabase Storage.
+- Operational roles: viewer, property manager, accountant, maintenance manager, admin, and super admin.
 
 ## Tech Stack
 
@@ -107,6 +114,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
+# Optional: automatic WhatsApp delivery. Without these, KodiFlow opens a pre-filled WhatsApp draft instead.
+WHATSAPP_API_URL=https://graph.facebook.com/v22.0/your_phone_number_id/messages
+WHATSAPP_ACCESS_TOKEN=your_whatsapp_business_access_token
 ```
 
 For Vercel production, set these in the Vercel dashboard and redeploy after changing any `NEXT_PUBLIC_*` value.
@@ -143,6 +153,9 @@ Core tables:
 11. `expenses`
 12. `documents`
 13. `utility_meter_readings`
+14. `activity_log`
+15. `maintenance_requests`
+16. `maintenance_attachments`
 
 Important database behavior:
 
@@ -200,12 +213,15 @@ kodiflow/
 | `/leases/[id]` | Lease detail, linked records, renew, terminate, and edit actions |
 | `/leases/[id]/edit` | Edit lease tenant, unit, rent, service charge, dates, billing, and status |
 | `/invoices` | Invoice management |
-| `/invoices/[id]` | Invoice details, owed breakdown toggles, line items, payments, edit/delete, print, and PDF sharing |
+| `/invoices/[id]` | Invoice details, owed breakdown toggles, line items, payments, edit/void, print, and PDF sharing |
 | `/invoices/[id]/edit` | Edit invoice dates, notes, line items, subtotal, and status |
 | `/payments` | Payment list |
 | `/payments/new` | Record payment with invoice charge breakdown |
 | `/payments/[id]` | Payment details |
-| `/payments/[id]/edit` | Edit or delete an existing payment |
+| `/payments/[id]/edit` | Edit or reverse an existing payment |
+| `/maintenance` | Maintenance request queue, assignment, costs, attachments, and expense links |
+| `/tenants/[id]/statement` | Tenant account statement and running balance |
+| `/admin` | Team users, operational roles, and platform administration |
 | `/documents` | Uploads and document metadata |
 | `/utilities` | Water/electricity readings |
 | `/tenant-portal` | Tenant self-service portal |

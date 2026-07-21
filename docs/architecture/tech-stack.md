@@ -128,6 +128,8 @@ src/
     leases/             # Lease list/detail/create/edit pages
     invoices/           # Invoice list/detail/generation pages
     payments/           # Payment list/detail/record pages
+    maintenance/        # Maintenance request lifecycle
+    admin/              # Team users and operational role administration
     expenses/           # Expense list page
     documents/          # Storage-backed document uploads
     utilities/          # Utility meter readings
@@ -155,8 +157,10 @@ src/
 - **Units**: Unit identifiers, statuses, rent, section, property, linked current tenant display, cascade delete confirmation, and linked lease history.
 - **Tenants**: Tenant contact details, withholding tax settings, active lease counts, assigned unit links, invoices, payments, and outstanding balance summaries.
 - **Leases**: Tenant/unit/property links, active status tracking, editing, deletion, renewal entry points, rent, security deposits, service charges, and billing frequency.
-- **Invoices**: Monthly, quarterly, six-month, and annual invoice summaries, status filtering, reminders, rent/service/tax line items, owed breakdown toggles, edit/delete, print, PDF sharing, and payment links.
-- **Payments**: Payment list, payment details, edit/delete workflows, comma-formatted amount entry, invoice references, tenant/property context, and invoice charge breakdowns.
+- **Invoices**: Frequency-aware invoice summaries, status filtering, reminders, rent/service/tax line items, owed breakdown toggles, void-with-reason, print, PDF sharing, and payment links.
+- **Payments**: Payment list, payment details, edit/reversal workflows, comma-formatted amount entry, invoice references, tenant/property context, and invoice charge breakdowns.
+- **Maintenance**: Requests, priority, assignment, lifecycle status, costs, attachments, and linked expenses.
+- **Financial history**: Activity timelines and tenant statements make voids, reversals, transfers, credits, and balances traceable.
 - **Expenses**: Expense listing and financial reporting integration.
 - **Utilities**: Water/electricity readings with auto previous reading and charge previews.
 - **Documents**: PDF/image uploads, metadata editing, downloads, and delete cleanup.
@@ -335,4 +339,4 @@ NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
 
 ---
 
-**Last Updated**: May 2026
+**Last Updated**: July 2026

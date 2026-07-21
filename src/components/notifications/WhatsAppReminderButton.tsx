@@ -8,10 +8,21 @@ export function WhatsAppReminderButton({ invoiceId, compact = false }: { invoice
   const [message, setMessage] = useState('')
   const send = async () => {
     setSending(true); setMessage('')
-    const response = await fetch('/api/reminders/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId }) })
-    const data = await response.json()
-    setMessage(response.ok ? 'Sent' : data.error || 'Not sent')
-    setSending(false)
+    try {
+      const response = await fetch('/api/reminders/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId }) })
+      const data = await response.json()
+      if (data.draftUrl) {
+        // Direct navigation is more reliable than a delayed popup on iPhone/PWA browsers.
+        window.location.assign(data.draftUrl)
+        setMessage(response.ok ? 'Draft opened' : 'Draft opened instead')
+      } else {
+        setMessage(response.ok ? 'Sent' : data.error || 'Not sent')
+      }
+    } catch {
+      setMessage('Not sent')
+    } finally {
+      setSending(false)
+    }
   }
-  return <span className="inline-flex items-center gap-1"><button type="button" onClick={send} disabled={sending} className="inline-flex items-center gap-1 text-success-700 hover:text-success-800 disabled:opacity-50">{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}{compact ? '' : 'WhatsApp'}</button>{message && <span className={`text-xs ${message === 'Sent' ? 'text-success-700' : 'text-danger-700'}`}>{message}</span>}</span>
+  return <span className="inline-flex items-center gap-1"><button type="button" onClick={send} disabled={sending} className="inline-flex items-center gap-1 text-success-700 hover:text-success-800 disabled:opacity-50">{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}{compact ? '' : 'WhatsApp'}</button>{message && <span className={`text-xs ${message === 'Sent' || message.startsWith('Draft opened') ? 'text-success-700' : 'text-danger-700'}`}>{message}</span>}</span>
 }

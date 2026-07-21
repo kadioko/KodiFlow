@@ -43,6 +43,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_APP_NAME=KodiFlow
 NEXT_PUBLIC_DEFAULT_CURRENCY=TZS
+# Optional: enables automatic WhatsApp delivery. Without these, managers get pre-filled WhatsApp drafts.
+WHATSAPP_API_URL=https://graph.facebook.com/v22.0/your_phone_number_id/messages
+WHATSAPP_ACCESS_TOKEN=your_whatsapp_business_access_token
 ```
 
 **Important**: Never expose `SUPABASE_SERVICE_ROLE_KEY` to the browser. Vercel automatically handles this.
@@ -229,4 +232,4 @@ Supabase handles backups automatically:
 
 ---
 
-**Last Updated**: May 2026
+**Last Updated**: July 2026
