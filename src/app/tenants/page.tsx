@@ -127,7 +127,12 @@ export default async function TenantsPage() {
         </div>
       ) : (
         <div className="card">
-          <div className="table-container">
+          <div className="divide-y divide-slate-100 md:hidden">
+            {tenants.map((tenant) => (
+              <article key={tenant.id} className="p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-slate-950">{tenant.display_name}</p><p className="mt-0.5 text-sm text-slate-500">{tenant.phone}</p></div><p className={`text-right text-lg font-bold ${tenant.total_balance > 0 ? 'text-danger-600' : tenant.total_balance < 0 ? 'text-success-600' : 'text-slate-700'}`}>{formatCurrency(Math.abs(tenant.total_balance))}<span className="mt-0.5 block text-xs font-semibold uppercase tracking-wide">{tenant.total_balance > 0 ? 'Amount due' : tenant.total_balance < 0 ? 'Credit' : 'Settled'}</span></p></div><div className="mt-3 text-sm">{tenant.assigned_units.length > 0 ? tenant.assigned_units.map((unit) => <Link key={unit.lease_id} href={`/units/${unit.unit_id}`} className="mr-2 text-primary-700">{unit.unit_name}</Link>) : <span className="text-amber-700">No active unit</span>}</div><div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/tenants/${tenant.id}`} className="text-primary-700">View</Link><Link href={`/tenants/${tenant.id}/edit`} className="text-slate-700">Edit</Link></div></article>
+            ))}
+          </div>
+          <div className="hidden md:block table-container">
             <table className="table">
               <thead className="table-header">
                 <tr>
@@ -226,4 +231,3 @@ export default async function TenantsPage() {
     </div>
   )
 }
-

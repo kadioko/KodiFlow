@@ -129,7 +129,12 @@ export default async function UnitsPage() {
         </div>
       ) : (
         <div className="card">
-          <div className="table-container">
+          <div className="divide-y divide-slate-100 md:hidden">
+            {units.map((unit) => (
+              <article key={unit.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-950">{unit.unit_name}</p><p className="mt-0.5 text-sm text-slate-500">{unit.property_name}{unit.section_name ? ` · ${unit.section_name}` : ''}</p></div><span className={`badge ${getColorByValue(UNIT_STATUSES, unit.status)}`}>{getLabelByValue(UNIT_STATUSES, unit.status)}</span></div><div className="mt-3 flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current tenant</p>{unit.current_tenant_id ? <Link href={`/tenants/${unit.current_tenant_id}`} className="mt-1 block text-sm font-semibold text-primary-700">{unit.current_tenant_name}</Link> : <p className="mt-1 text-sm text-slate-500">Unassigned</p>}</div><p className="text-right text-lg font-bold text-slate-900">{formatCurrency(unit.monthly_rent)}<span className="mt-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Monthly rent</span></p></div><div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/units/${unit.id}`} className="text-primary-700">View</Link><Link href={`/units/${unit.id}/edit`} className="text-slate-700">Edit</Link></div></article>
+            ))}
+          </div>
+          <div className="hidden md:block table-container">
             <table className="table">
               <thead className="table-header">
                 <tr>

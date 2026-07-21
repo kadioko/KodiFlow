@@ -389,7 +389,7 @@ export default function LeaseDetailPage() {
     switch (status) {
       case 'paid': return 'bg-success-100 text-success-800'
       case 'overdue': return 'bg-danger-100 text-danger-800'
-      case 'partially_paid': return 'bg-blue-100 text-blue-800'
+      case 'partially_paid': return 'bg-amber-100 text-amber-800'
       case 'transferred': return 'bg-purple-100 text-purple-800'
       default: return 'bg-warning-100 text-warning-800'
     }
@@ -851,12 +851,16 @@ export default function LeaseDetailPage() {
               <p className="mb-3 font-semibold text-slate-900">Renewal Preview</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-slate-500">New start</p>
+                  <p className="text-slate-500">Natural new start</p>
                   <p className="font-semibold text-slate-900">{formatDate(renewalTerm.startDate)}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Renewal billing</p>
                   <p className="font-semibold text-slate-900">{getLabelByValue(BILLING_FREQUENCIES, renewData.new_billing_frequency)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Natural end date</p>
+                  <p className="font-semibold text-slate-900">{formatDate(renewalTerm.endDate)}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Recurring charges</p>
@@ -910,7 +914,7 @@ export default function LeaseDetailPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-sm text-gray-500">
-                  Defaults to the old lease. Change this when a tenant wants to renew for 1, 3, 6, or 12 months.
+                  Defaults to the old lease. Choosing a frequency calculates the natural end date; you can still set a different agreed end date below.
                 </p>
               </div>
               <div className="form-group">
@@ -936,8 +940,8 @@ export default function LeaseDetailPage() {
                   </p>
                   <p className={`mt-1 text-sm ${outstandingBalance > 0 ? 'text-amber-700' : 'text-success-700'}`}>
                     {outstandingBalance > 0
-                      ? `${formatCurrency(outstandingBalance)} unpaid from this lease will be carried to the renewed lease.`
-                      : `${formatCurrency(Math.abs(outstandingBalance))} overpaid on this lease will be credited to the renewed lease.`}
+                      ? `${formatCurrency(outstandingBalance)} unpaid from this lease becomes an Opening Balance on the new lease. The old open invoices are transferred so the balance is collected in one place.`
+                      : `${formatCurrency(Math.abs(outstandingBalance))} overpaid on this lease becomes an Opening Credit on the new lease and reduces its first invoice.`}
                   </p>
                 </div>
               )}

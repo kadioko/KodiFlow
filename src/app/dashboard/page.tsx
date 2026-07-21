@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
+import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import DashboardPropertyVisibility from '@/components/dashboard/DashboardPropertyVisibility'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -11,7 +11,6 @@ import {
   AlertCircle,
   TrendingUp,
   TrendingDown,
-  Clock,
 } from 'lucide-react'
 
 async function getDashboardMetrics() {
@@ -63,17 +62,16 @@ async function getDashboardMetrics() {
     .eq('billing_month', month)
     .eq('billing_year', year)
 
-  // Get leases ending soon (within 90 days)
-  const ninetyDaysFromNow = new Date()
-  ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90)
-  
-  const { data: endingLeases } = await supabase
+  const { data: allInvoices } = await supabase
+    .from('rent_invoices')
+    .select('id, tenant_id, balance, status, due_date')
+    .eq('user_id', user.id)
+
+  const { data: activeLeases } = await supabase
     .from('leases')
-    .select('id, end_date')
+    .select('id, tenant_id, end_date')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .lte('end_date', ninetyDaysFromNow.toISOString().split('T')[0])
-    .gte('end_date', todayIso)
 
   // Calculate metrics
   const totalProperties = properties?.length || 0
@@ -84,10 +82,26 @@ async function getDashboardMetrics() {
   
   const totalExpectedThisMonth = invoices?.reduce((sum, inv) => sum + (inv.subtotal || 0), 0) || 0
   const totalCollectedThisMonth = invoices?.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0) || 0
-  const totalOutstanding = invoices?.reduce((sum, inv) => sum + (inv.balance || 0), 0) || 0
-  const overdueInvoices = invoices?.filter(inv => inv.status === 'overdue') || []
+  const openInvoices = (allInvoices || []).filter((invoice) => !['cancelled', 'transferred', 'paid'].includes(invoice.status))
+  const totalOutstanding = openInvoices.reduce((sum, invoice) => sum + (invoice.balance || 0), 0)
+  const overdueInvoices = openInvoices.filter(invoice => invoice.status === 'overdue')
   const totalOverdue = overdueInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0)
-  const overdueTenantsCount = new Set(overdueInvoices.map(inv => inv.id)).size
+  const overdueTenantsCount = new Set(overdueInvoices.map(inv => inv.tenant_id)).size
+  const nextWeek = new Date()
+  nextWeek.setDate(nextWeek.getDate() + 7)
+  const invoicesDueThisWeek = openInvoices.filter((invoice) => invoice.due_date >= todayIso && invoice.due_date <= nextWeek.toISOString().split('T')[0])
+  const activeTenantIds = new Set((activeLeases || []).map((lease) => lease.tenant_id))
+  const tenantsWithoutActiveUnit = (tenants || []).filter((tenant) => !activeTenantIds.has(tenant.id)).length
+  const endingLeaseCounts = [30, 60, 90].map((days) => ({
+    days,
+    count: (activeLeases || []).filter((lease) => {
+      const end = lease.end_date
+      const threshold = new Date()
+      threshold.setDate(threshold.getDate() + days)
+      return end >= todayIso && end <= threshold.toISOString().split('T')[0]
+    }).length,
+  }))
+  const leasesEndingSoonCount = endingLeaseCounts[2].count
 
   // By property type
   const residentialUnits = units?.filter(u => u.usage_type === 'residential').length || 0
@@ -122,7 +136,11 @@ async function getDashboardMetrics() {
     totalOutstanding,
     totalOverdue,
     overdueTenantsCount,
-    leasesEndingSoonCount: endingLeases?.length || 0,
+    leasesEndingSoonCount,
+    invoicesDueThisWeekCount: invoicesDueThisWeek.length,
+    invoicesDueThisWeekAmount: invoicesDueThisWeek.reduce((sum, invoice) => sum + (invoice.balance || 0), 0),
+    tenantsWithoutActiveUnit,
+    endingLeaseCounts,
     residentialUnits,
     commercialUnits,
     mixedUnits,
@@ -140,32 +158,45 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-2xl shadow-slate-950/20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.35),transparent_28rem)]"></div>
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="border-b border-slate-200 pb-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary-200">Property command center</p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Dashboard</h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">
+            <p className="text-sm font-semibold text-primary-700">Property operations</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Dashboard</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500 sm:text-base">
               Overview for {metrics.month} {metrics.year}. Track collections, occupancy, overdue invoices, and upcoming lease events.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+          <div className="grid grid-cols-3 gap-3 rounded-lg border border-slate-200 bg-white p-3">
             <div className="px-3 py-2">
-              <p className="text-xs text-slate-300">Collection</p>
-              <p className="text-2xl font-black">{metrics.collectionRate}%</p>
+              <p className="text-xs text-slate-500">Collection</p>
+              <p className="text-xl font-bold text-slate-950">{metrics.collectionRate}%</p>
             </div>
             <div className="px-3 py-2">
-              <p className="text-xs text-slate-300">Occupancy</p>
-              <p className="text-2xl font-black">{metrics.occupancyRate}%</p>
+              <p className="text-xs text-slate-500">Occupancy</p>
+              <p className="text-xl font-bold text-slate-950">{metrics.occupancyRate}%</p>
             </div>
             <div className="px-3 py-2">
-              <p className="text-xs text-slate-300">Alerts</p>
-              <p className="text-2xl font-black">{metrics.overdueTenantsCount + metrics.leasesEndingSoonCount}</p>
+              <p className="text-xs text-slate-500">Alerts</p>
+              <p className="text-xl font-bold text-slate-950">{metrics.overdueTenantsCount + metrics.leasesEndingSoonCount}</p>
             </div>
           </div>
         </div>
       </div>
+
+      <section className="card">
+        <div className="card-header flex items-center justify-between">
+          <div><h2 className="text-lg font-semibold text-slate-950">Today&apos;s work queue</h2><p className="mt-1 text-sm text-slate-500">The records that need a decision or follow-up now.</p></div>
+          <span className="badge bg-slate-100 text-slate-700">{metrics.overdueTenantsCount + metrics.invoicesDueThisWeekCount + metrics.vacantUnits + metrics.tenantsWithoutActiveUnit} items</span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          <WorkQueueItem label="Overdue payments" detail={`${metrics.overdueTenantsCount} tenant${metrics.overdueTenantsCount === 1 ? '' : 's'} · ${formatCurrency(metrics.totalOverdue)} outstanding`} href="/invoices?status=overdue" tone="danger" />
+          <WorkQueueItem label="Invoices due this week" detail={`${metrics.invoicesDueThisWeekCount} invoice${metrics.invoicesDueThisWeekCount === 1 ? '' : 's'} · ${formatCurrency(metrics.invoicesDueThisWeekAmount)} to collect`} href="/invoices?sort=due_asc" tone="warning" />
+          <WorkQueueItem label="Lease renewals" detail={`${metrics.endingLeaseCounts[0].count} in 30 days · ${metrics.endingLeaseCounts[1].count} in 60 days · ${metrics.endingLeaseCounts[2].count} in 90 days`} href="/leases" tone="primary" />
+          <WorkQueueItem label="Vacant units" detail={`${metrics.vacantUnits} unit${metrics.vacantUnits === 1 ? '' : 's'} available to assign`} href="/units" tone="success" />
+          <WorkQueueItem label="Tenants without an active unit" detail={`${metrics.tenantsWithoutActiveUnit} tenant${metrics.tenantsWithoutActiveUnit === 1 ? '' : 's'} need assignment or review`} href="/tenants" tone="slate" />
+        </div>
+      </section>
 
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -338,4 +369,9 @@ export default async function DashboardPage() {
       )}
     </div>
   )
+}
+
+function WorkQueueItem({ label, detail, href, tone }: { label: string; detail: string; href: string; tone: 'danger' | 'warning' | 'primary' | 'success' | 'slate' }) {
+  const tones = { danger: 'bg-danger-500', warning: 'bg-warning-500', primary: 'bg-primary-500', success: 'bg-success-500', slate: 'bg-slate-400' }
+  return <Link href={href} className="flex items-center gap-3 px-5 py-4 transition hover:bg-slate-50"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tones[tone]}`} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-slate-900">{label}</span><span className="block truncate text-sm text-slate-500">{detail}</span></span><span className="text-sm font-semibold text-primary-700">View</span></Link>
 }

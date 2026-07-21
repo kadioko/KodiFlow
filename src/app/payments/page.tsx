@@ -91,7 +91,16 @@ export default async function PaymentsPage() {
         </div>
       ) : (
         <div className="card">
-          <div className="table-container">
+          <div className="divide-y divide-slate-100 md:hidden">
+            {payments.map((payment: any) => (
+              <article key={payment.id} className="p-4">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-slate-950">{payment.tenant_name || 'Tenant'}</p><p className="mt-0.5 truncate text-sm text-slate-500">{payment.invoice_number || 'Unlinked payment'} · {payment.unit_name || 'Unit'}</p></div><p className="shrink-0 text-lg font-bold text-success-700">{formatCurrency(payment.amount)}</p></div>
+                <div className="mt-3 flex items-center justify-between text-sm text-slate-500"><span>{formatDate(payment.payment_date)}</span><span className="badge bg-slate-100 text-slate-700">{getLabelByValue(PAYMENT_METHODS, payment.payment_method)}</span></div>
+                <div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/payments/${payment.id}`} className="text-primary-700">View</Link><Link href={`/payments/${payment.id}/edit`} className="text-slate-700">Edit</Link></div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden md:block table-container">
             <table className="table">
               <thead className="table-header">
                 <tr>
