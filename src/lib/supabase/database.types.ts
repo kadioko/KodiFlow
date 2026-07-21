@@ -14,7 +14,7 @@ export interface Database {
           id: string
           full_name: string | null
           email: string | null
-          admin_role: 'none' | 'admin' | 'super_admin'
+          admin_role: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
           company_name: string | null
           phone: string | null
           currency_preference: string
@@ -30,7 +30,7 @@ export interface Database {
           id: string
           full_name?: string | null
           email?: string | null
-          admin_role?: 'none' | 'admin' | 'super_admin'
+          admin_role?: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
           company_name?: string | null
           phone?: string | null
           currency_preference?: string
@@ -46,7 +46,7 @@ export interface Database {
           id?: string
           full_name?: string | null
           email?: string | null
-          admin_role?: 'none' | 'admin' | 'super_admin'
+          admin_role?: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
           company_name?: string | null
           phone?: string | null
           currency_preference?: string

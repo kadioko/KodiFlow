@@ -29,7 +29,7 @@ import { useState } from 'react'
 
 interface SidebarProps {
   user: User
-  adminRole: 'none' | 'admin' | 'super_admin'
+  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
 }
 
 export const navigation = [
@@ -57,7 +57,7 @@ const adminNavigation = [
 export function Sidebar({ user, adminRole }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
-  const visibleNavigation = adminRole === 'none' ? navigation : [...navigation, ...adminNavigation]
+  const visibleNavigation = ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
 
   return (
     <div className={`${collapsed ? 'w-16' : 'w-64'} hidden flex-shrink-0 bg-slate-950 text-white shadow-2xl shadow-slate-950/20 transition-all duration-300 lg:flex lg:flex-col`}>
@@ -110,7 +110,7 @@ export function Sidebar({ user, adminRole }: SidebarProps) {
               <p className="text-sm font-semibold text-white truncate max-w-[140px]">
                 {user.email}
               </p>
-              <p className="text-xs text-white/50">Property Manager</p>
+              <p className="text-xs capitalize text-white/50">{adminRole.replace('_', ' ')}</p>
             </div>
           </div>
         </div>
@@ -121,14 +121,14 @@ export function Sidebar({ user, adminRole }: SidebarProps) {
 
 interface MobileSidebarProps {
   user: User
-  adminRole: 'none' | 'admin' | 'super_admin'
+  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
   open: boolean
   onClose: () => void
 }
 
 export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarProps) {
   const pathname = usePathname()
-  const visibleNavigation = adminRole === 'none' ? navigation : [...navigation, ...adminNavigation]
+  const visibleNavigation = ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
 
   if (!open) return null
 
@@ -179,7 +179,7 @@ export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarP
             </div>
             <div className="ml-3 min-w-0">
               <p className="truncate text-sm font-semibold text-white">{user.email}</p>
-              <p className="text-xs text-white/50">Property Manager</p>
+              <p className="text-xs capitalize text-white/50">{adminRole.replace('_', ' ')}</p>
             </div>
           </div>
         </div>

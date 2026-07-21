@@ -1,7 +1,7 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
-export type AdminRole = 'none' | 'admin' | 'super_admin'
+export type AdminRole = 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
 
 export function createServiceClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -46,4 +46,9 @@ export async function getCurrentAdmin() {
 
 export function isAdminRole(role: AdminRole) {
   return role === 'admin' || role === 'super_admin'
+}
+
+export function canManageUserRole(actorRole: AdminRole, targetRole: AdminRole) {
+  if (actorRole === 'super_admin') return true
+  return actorRole === 'admin' && ['none', 'viewer', 'property_manager', 'accountant', 'maintenance_manager'].includes(targetRole)
 }

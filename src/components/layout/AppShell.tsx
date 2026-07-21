@@ -8,6 +8,8 @@ import { Header } from '@/components/layout/Header'
 import { LoadingState, PageSkeleton } from '@/components/ui/LoadingState'
 import { MobileBottomBar } from '@/components/layout/MobileBottomBar'
 
+type AppRole = 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
+
 interface AppShellProps {
   children: React.ReactNode
 }
@@ -17,7 +19,7 @@ const publicPrefixes = ['/auth']
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
-  const [adminRole, setAdminRole] = useState<'none' | 'admin' | 'super_admin'>('none')
+  const [adminRole, setAdminRole] = useState<AppRole>('none')
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -43,7 +45,7 @@ export function AppShell({ children }: AppShellProps) {
       .then((data) => {
         if (!mounted) return
         setUser(data.user ?? null)
-        setAdminRole(data.adminRole ?? 'none')
+        setAdminRole((data.adminRole ?? 'none') as AppRole)
       })
       .catch(() => {
         if (!mounted) return

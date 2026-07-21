@@ -4,8 +4,19 @@ import { useEffect, useState } from 'react'
 import { BarChart3, Building2, CreditCard, KeyRound, Receipt, Save, Shield, UserPlus, Users } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
-type AdminRole = 'admin' | 'super_admin'
+type AdminRole = 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
 type ManagedRole = 'none' | AdminRole
+
+const roleOptions: { value: AdminRole; label: string; description: string }[] = [
+  { value: 'viewer', label: 'Viewer', description: 'Read-only access for oversight.' },
+  { value: 'property_manager', label: 'Property Manager', description: 'Daily property, tenant, unit, and lease work.' },
+  { value: 'accountant', label: 'Accountant', description: 'Invoices, payments, expenses, and reports.' },
+  { value: 'maintenance_manager', label: 'Maintenance Manager', description: 'Maintenance requests, vendors, and costs.' },
+  { value: 'admin', label: 'Admin', description: 'Operational administration and support.' },
+  { value: 'super_admin', label: 'Super Admin', description: 'Full platform, users, roles, and recovery control.' },
+]
+
+const roleLabel = (role: ManagedRole) => roleOptions.find((option) => option.value === role)?.label || 'User'
 
 type ManagedUser = {
   id: string
@@ -46,7 +57,7 @@ export default function AdminPage() {
     fullName: '',
     email: '',
     password: '',
-    adminRole: 'admin' as AdminRole,
+    adminRole: 'property_manager' as AdminRole,
   })
 
   const canManageAdmins = currentRole === 'super_admin'
@@ -102,7 +113,7 @@ export default function AdminPage() {
       setError(data.error || 'Admin user was not created')
     } else {
       setMessage('Admin user created')
-      setFormData({ fullName: '', email: '', password: '', adminRole: 'admin' })
+      setFormData({ fullName: '', email: '', password: '', adminRole: 'property_manager' })
       await fetchAdminData()
     }
 
@@ -233,9 +244,9 @@ export default function AdminPage() {
                               ? 'bg-purple-100 text-purple-800'
                               : user.admin_role === 'admin'
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-slate-100 text-slate-700'
+                                : 'bg-primary-100 text-primary-800'
                           }`}>
-                            {user.admin_role === 'super_admin' ? 'Super Admin' : user.admin_role === 'admin' ? 'Admin' : 'User'}
+                            {roleLabel(user.admin_role)}
                           </span>
                         </td>
                         <td className="table-cell">
@@ -244,15 +255,10 @@ export default function AdminPage() {
                         <td className="table-cell">
                           {canManageAdmins ? (
                             <div className="flex flex-wrap gap-2">
-                              <button type="button" onClick={() => changeRole(user.id, 'admin')} className="btn-secondary text-xs">
-                                Admin
-                              </button>
-                              <button type="button" onClick={() => changeRole(user.id, 'super_admin')} className="btn-secondary text-xs">
-                                Super
-                              </button>
-                              <button type="button" onClick={() => changeRole(user.id, 'none')} className="btn-danger text-xs">
-                                Remove
-                              </button>
+                              <select aria-label={`Change role for ${user.email || user.id}`} value={user.admin_role} onChange={(event) => changeRole(user.id, event.target.value as ManagedRole)} className="input max-w-44 py-2 text-xs">
+                                <option value="none">No operational role</option>
+                                {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                              </select>
                               <button type="button" onClick={() => setPasswordUserId(user.id)} className="btn-secondary text-xs">
                                 Password
                               </button>
@@ -275,8 +281,8 @@ export default function AdminPage() {
             <div className="mb-5 flex items-center gap-3">
               <UserPlus className="h-5 w-5 text-primary-600" />
               <div>
-                <h2 className="font-semibold text-slate-900">Add Admin</h2>
-                <p className="text-sm text-slate-500">Create a confirmed admin account.</p>
+                <h2 className="font-semibold text-slate-900">Add Team User</h2>
+                <p className="text-sm text-slate-500">Create a confirmed operational account.</p>
               </div>
             </div>
 
@@ -296,13 +302,13 @@ export default function AdminPage() {
               <div className="form-group">
                 <label htmlFor="admin_role" className="label">Role</label>
                 <select id="admin_role" className="input" value={formData.adminRole} onChange={(event) => setFormData({ ...formData, adminRole: event.target.value as AdminRole })} disabled={!canManageAdmins}>
-                  <option value="admin">Admin</option>
-                  <option value="super_admin">Super Admin</option>
+                  {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">{roleOptions.find((role) => role.value === formData.adminRole)?.description}</p>
               </div>
               <button type="submit" disabled={!canManageAdmins || saving} className="btn-primary w-full">
                 <Save className="mr-2 h-5 w-5" />
-                {saving ? 'Creating...' : 'Create Admin'}
+                {saving ? 'Creating...' : 'Create User'}
               </button>
             </form>
           </section>

@@ -1,15 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServiceClient, getCurrentAdmin, isAdminRole } from '@/lib/supabase/admin'
+import { createServiceClient, getCurrentAdmin, isAdminRole, type AdminRole } from '@/lib/supabase/admin'
 
-type AdminRole = 'admin' | 'super_admin'
-type ManagedRole = 'none' | AdminRole
+type ManagedRole = AdminRole
 
 function normalizeEmail(email: unknown) {
   return typeof email === 'string' ? email.trim().toLowerCase() : ''
 }
 
 function normalizeRole(role: unknown): AdminRole {
-  return role === 'super_admin' ? 'super_admin' : 'admin'
+  const roles: AdminRole[] = ['none', 'viewer', 'property_manager', 'accountant', 'maintenance_manager', 'admin', 'super_admin']
+  return roles.includes(role as AdminRole) ? role as AdminRole : 'property_manager'
 }
 
 export async function GET() {
@@ -80,6 +80,10 @@ export async function POST(request: NextRequest) {
   const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : ''
   const adminRole = normalizeRole(body.adminRole)
 
+  if (adminRole === 'none') {
+    return NextResponse.json({ error: 'Choose an operational role for a new user' }, { status: 400 })
+  }
+
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
   }
@@ -136,7 +140,7 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json()
   const profileId = typeof body.id === 'string' ? body.id : ''
-  const adminRole = body.adminRole === 'none' ? 'none' : normalizeRole(body.adminRole)
+  const adminRole = normalizeRole(body.adminRole)
   const newPassword = typeof body.password === 'string' ? body.password : ''
 
   if (!profileId) {
