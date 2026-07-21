@@ -30,6 +30,7 @@ import {
   YAxis,
 } from 'recharts'
 import { calculateLateFee, calculateNetIncome } from '@/utils/finance'
+import { jsPDF } from 'jspdf'
 
 interface MonthlyData {
   month: number
@@ -421,6 +422,21 @@ export default function ReportsPage() {
     a.click()
   }
 
+  const handleExportOwnerPdf = () => {
+    const doc = new jsPDF()
+    const collectionRate = summary.monthlyExpected > 0 ? Math.round((summary.monthlyCollected / summary.monthlyExpected) * 100) : 0
+    doc.setFontSize(18); doc.text('KodiFlow Owner Report', 14, 18)
+    doc.setFontSize(11); doc.text(`${getMonthName(selectedMonth)} ${selectedYear}`, 14, 26)
+    const rows = [
+      ['Expected collections', formatCurrency(summary.monthlyExpected)], ['Collected', formatCurrency(summary.monthlyCollected)], ['Collection rate', `${collectionRate}%`], ['Outstanding', formatCurrency(summary.allOutstanding)], ['Overdue', formatCurrency(summary.allOverdue)], ['Expenses', formatCurrency(summary.totalExpenses)], ['Net income', formatCurrency(summary.netIncome)], ['Occupancy', `${summary.occupiedUnits}/${summary.totalUnits} units`],
+    ]
+    let y = 40
+    rows.forEach(([label, value]) => { doc.setFont('helvetica', 'normal'); doc.text(label, 14, y); doc.setFont('helvetica', 'bold'); doc.text(value, 120, y); y += 9 })
+    y += 8; doc.setFontSize(13); doc.text('Property performance', 14, y); y += 9; doc.setFontSize(9)
+    propertyReports.slice(0, 12).forEach((property) => { doc.setFont('helvetica', 'bold'); doc.text(property.property_name, 14, y); doc.setFont('helvetica', 'normal'); doc.text(`${property.occupied_units}/${property.total_units} occupied`, 75, y); doc.text(`Collected ${formatCurrency(property.total_collected)}`, 120, y); y += 7 })
+    doc.save(`kodiflow-owner-report-${selectedYear}-${String(selectedMonth).padStart(2, '0')}.pdf`)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -436,10 +452,7 @@ export default function ReportsPage() {
           <h1 className="page-title">Financial Reports</h1>
           <p className="text-gray-500">Property performance and collection reports</p>
         </div>
-        <button onClick={handleExportCSV} className="btn-secondary">
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </button>
+        <div className="flex gap-2"><button onClick={handleExportCSV} className="btn-secondary"><Download className="h-4 w-4 mr-2" />CSV</button><button onClick={handleExportOwnerPdf} className="btn-primary"><Download className="h-4 w-4 mr-2" />Owner PDF</button></div>
       </div>
 
       {/* Period Selector */}

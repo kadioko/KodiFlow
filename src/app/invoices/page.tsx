@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'lucide-react'
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
-import { createPaymentReminderMessage } from '@/utils/reminders'
+import { WhatsAppReminderButton } from '@/components/notifications/WhatsAppReminderButton'
 
 type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid' | 'transferred'
 type InvoiceSort = 'status' | 'balance_desc' | 'amount_desc' | 'paid_desc' | 'due_asc' | 'newest'
@@ -334,7 +334,7 @@ export default async function InvoicesPage({
               <article key={invoice.id} className="p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-slate-950">{invoice.tenant_name}</p><p className="mt-0.5 text-sm text-slate-500">{invoice.invoice_number} · {invoice.unit_name}</p></div><span className={`badge shrink-0 ${getColorByValue(INVOICE_STATUSES, invoice.status)}`}>{getLabelByValue(INVOICE_STATUSES, invoice.status)}</span></div>
                 <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{getPeriodDurationLabel(invoice.billing_period_start, invoice.billing_period_end)}</p><p className="mt-1 text-sm text-slate-600">{formatDate(invoice.billing_period_start)} to {formatDate(invoice.billing_period_end)}</p><p className="mt-1 text-xs text-slate-500">Due {formatDate(invoice.due_date)}</p></div><div className="text-right"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{invoice.balance < 0 ? 'Credit available' : invoice.balance > 0 ? 'Amount due' : 'Settled'}</p><p className={`mt-1 text-lg font-bold ${invoice.balance > 0 ? 'text-danger-600' : invoice.balance < 0 ? 'text-success-600' : 'text-slate-700'}`}>{formatCurrency(Math.abs(invoice.balance))}</p></div></div>
-                <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/invoices/${invoice.id}`} className="text-primary-700">View</Link>{invoice.balance > 0 && <><a href={`sms:?&body=${encodeURIComponent(createPaymentReminderMessage({ tenantName: invoice.tenant_name || 'Tenant', invoiceNumber: invoice.invoice_number || 'invoice', balance: invoice.balance, dueDate: invoice.due_date }))}`} className="text-amber-700">Remind</a><Link href={`/payments/new?invoice=${invoice.id}`} className="text-success-700">Pay</Link></>}</div>
+                <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/invoices/${invoice.id}`} className="text-primary-700">View</Link>{invoice.balance > 0 && <><WhatsAppReminderButton invoiceId={invoice.id} /><Link href={`/payments/new?invoice=${invoice.id}`} className="text-success-700">Pay</Link></>}</div>
               </article>
             ))}
           </div>
@@ -391,17 +391,7 @@ export default async function InvoicesPage({
                       </Link>
                       {invoice.balance > 0 && (
                         <>
-                          <a
-                            href={`sms:?&body=${encodeURIComponent(createPaymentReminderMessage({
-                              tenantName: invoice.tenant_name || 'Tenant',
-                              invoiceNumber: invoice.invoice_number || 'invoice',
-                              balance: invoice.balance,
-                              dueDate: invoice.due_date,
-                            }))}`}
-                            className="text-warning-600 hover:text-warning-800 font-medium"
-                          >
-                            Remind
-                          </a>
+                          <WhatsAppReminderButton invoiceId={invoice.id} />
                           <Link href={`/payments/new?invoice=${invoice.id}`} className="text-success-600 hover:text-success-800 font-medium">
                             Pay
                           </Link>
