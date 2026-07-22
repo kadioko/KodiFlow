@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS activity_log_user_entity_created_idx
 CREATE OR REPLACE FUNCTION public.log_row_activity()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
