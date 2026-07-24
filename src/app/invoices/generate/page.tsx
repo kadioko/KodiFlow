@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Receipt, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Receipt, AlertCircle, Check, CheckCircle, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import {
   calculateChargeAmountForPeriod,
@@ -369,8 +369,13 @@ export default function GenerateInvoicesPage() {
     )
   }
 
+  const selectedTotal = Array.from(selectedLeases).reduce((sum, leaseId) => {
+    const lease = leases.find((item) => item.id === leaseId)
+    return sum + (lease ? calculateInvoiceTotal(lease) : 0)
+  }, 0)
+
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl pb-32 md:pb-0">
       <div className="page-header">
         <div className="flex items-center">
           <Link href="/invoices" className="mr-4 p-2 rounded-lg hover:bg-gray-100">
@@ -451,7 +456,7 @@ export default function GenerateInvoicesPage() {
 
       {/* Leases List */}
       <div className="card">
-        <div className="card-header flex items-center justify-between">
+        <div className="card-header hidden items-center justify-between md:flex">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -465,7 +470,65 @@ export default function GenerateInvoicesPage() {
           </div>
         </div>
 
-        <div className="table-container">
+        <div className="border-b border-gray-200 px-4 py-3 md:hidden">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 text-left hover:bg-slate-50 active:bg-slate-100"
+            aria-pressed={selectedLeases.size === leases.filter(isLeaseInvoiceableForPeriod).length && selectedLeases.size > 0}
+          >
+            <span>
+              <span className="block text-base font-semibold text-gray-900">Active leases</span>
+              <span className="block text-sm text-gray-500">{selectedLeases.size} of {leases.length} selected</span>
+            </span>
+            <span className="text-sm font-semibold text-primary-700">
+              {selectedLeases.size === leases.filter(isLeaseInvoiceableForPeriod).length && selectedLeases.size > 0 ? 'Clear all' : 'Select all'}
+            </span>
+          </button>
+        </div>
+
+        <div className="divide-y divide-slate-100 md:hidden">
+          {leases.map((lease) => {
+            const leaseCharges = charges[lease.id] || []
+            const recurringAdditionalTotal = leaseCharges
+              .filter((charge) => charge.frequency !== 'one_time')
+              .reduce((sum, charge) => sum + calculateChargeAmountForPeriod(charge.amount, charge.frequency, lease.billing_frequency), 0)
+            const oneTimeTotal = leaseCharges.filter((charge) => charge.frequency === 'one_time').reduce((sum, charge) => sum + charge.amount, 0)
+            const total = calculateInvoiceTotal(lease)
+            const isGenerating = generating.has(lease.id)
+            const isInvoiceable = isLeaseInvoiceableForPeriod(lease)
+            const coverage = getInvoiceCoverage(lease)
+            const existingCoverage = getExistingCoverageForPeriod(lease)
+            const selected = selectedLeases.has(lease.id)
+
+            return (
+              <button
+                key={lease.id}
+                type="button"
+                onClick={() => toggleLease(lease.id)}
+                disabled={isGenerating || !isInvoiceable}
+                className={`flex min-h-28 w-full items-start gap-3 p-4 text-left transition active:bg-slate-50 disabled:cursor-not-allowed ${selected ? 'bg-primary-50/70' : 'bg-white'} ${isGenerating || !isInvoiceable ? 'opacity-60' : ''}`}
+                aria-pressed={selected}
+              >
+                <span className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 bg-white text-transparent'}`} aria-hidden="true">
+                  <Check className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="min-w-0"><span className="block truncate font-semibold text-slate-950">{lease.tenant_name}</span><span className="mt-0.5 block truncate text-sm text-slate-500">{lease.property_name} · {lease.unit_name}</span></span>
+                    <span className="shrink-0 text-right"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Total</span><span className="block font-bold text-slate-950">{formatCurrency(total)}</span></span>
+                  </span>
+                  {coverage && <span className="mt-3 block text-sm text-slate-600">{formatDate(coverage.periodStart.toISOString())} to {formatDate(coverage.periodEnd.toISOString())}</span>}
+                  {recurringAdditionalTotal + oneTimeTotal > 0 && <span className="mt-1 block text-xs text-success-700">Includes {formatCurrency(recurringAdditionalTotal + oneTimeTotal)} extra charges</span>}
+                  {!isInvoiceable && <span className="mt-2 block text-xs font-semibold text-warning-700">{existingCoverage ? `Already covered by ${existingCoverage.invoice_number || 'an existing invoice'}` : `Outside lease dates: ${formatDate(lease.start_date)} - ${formatDate(lease.end_date)}`}</span>}
+                  {isGenerating && <span className="mt-2 flex items-center gap-2 text-sm font-semibold text-primary-700"><Loader2 className="h-4 w-4 animate-spin" />Generating invoice</span>}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="hidden md:block table-container">
           <table className="table">
             <thead className="table-header">
               <tr>
@@ -580,14 +643,9 @@ export default function GenerateInvoicesPage() {
 
       {/* Generate Button */}
       {leases.length > 0 && (
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-6 hidden items-center justify-between md:flex">
           <p className="text-gray-600">
-            Total to generate: {formatCurrency(
-              Array.from(selectedLeases).reduce((sum, leaseId) => {
-                const lease = leases.find(l => l.id === leaseId)
-                return sum + (lease ? calculateInvoiceTotal(lease) : 0)
-              }, 0)
-            )}
+            Total to generate: {formatCurrency(selectedTotal)}
           </p>
           <button
             onClick={generateInvoices}
@@ -605,6 +663,19 @@ export default function GenerateInvoicesPage() {
                 Generate {selectedLeases.size} Invoice(s)
               </>
             )}
+          </button>
+        </div>
+      )}
+
+      {leases.length > 0 && (
+        <div className="fixed inset-x-0 bottom-20 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur md:hidden">
+          <button
+            onClick={generateInvoices}
+            disabled={loading || selectedLeases.size === 0}
+            className="btn-success min-h-14 w-full justify-between px-5 text-base disabled:cursor-not-allowed"
+          >
+            <span className="flex items-center">{loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Receipt className="mr-2 h-5 w-5" />}{loading ? 'Generating invoices...' : `Generate ${selectedLeases.size} invoice${selectedLeases.size === 1 ? '' : 's'}`}</span>
+            <span className="text-sm font-bold">{formatCurrency(selectedTotal)}</span>
           </button>
         </div>
       )}
