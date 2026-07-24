@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react'
 import { DateInput } from '@/components/ui/DateInput'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, formatDate, parseCurrencyInput } from '@/utils/currency'
 import { firstRelation } from '@/utils/supabase-relations'
@@ -251,7 +252,7 @@ function NewPaymentPageContent() {
   const formDisabled = loading || fetching
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl pb-32 md:pb-0">
       <div className="page-header">
         <div className="flex items-center">
           <Link href="/payments" className="mr-4 p-2 rounded-lg hover:bg-gray-100">
@@ -274,7 +275,7 @@ function NewPaymentPageContent() {
             </div>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-busy={formDisabled}>
+        <form id="record-payment-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6" aria-busy={formDisabled}>
           <fieldset disabled={formDisabled} className="space-y-6 disabled:opacity-75">
           {fetching && (
             <div className="flex items-center rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700">
@@ -392,14 +393,14 @@ function NewPaymentPageContent() {
               placeholder="Enter amount"
             />
             {selectedInvoice && (
-              <div className="flex space-x-2 mt-2">
+              <div className="mt-3 flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setFormData({ ...formData, amount: selectedInvoice.balance })
                     setAmountInput(formatAmountInput(selectedInvoice.balance))
                   }}
-                  className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded hover:bg-primary-200"
+                  className="min-h-11 rounded-lg bg-primary-100 px-4 text-sm font-semibold text-primary-700 hover:bg-primary-200 active:bg-primary-300"
                 >
                   Full Balance
                 </button>
@@ -410,7 +411,7 @@ function NewPaymentPageContent() {
                     setFormData({ ...formData, amount: halfBalance })
                     setAmountInput(formatAmountInput(halfBalance))
                   }}
-                  className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
+                  className="min-h-11 rounded-lg bg-gray-100 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-200 active:bg-gray-300"
                 >
                   50%
                 </button>
@@ -473,7 +474,7 @@ function NewPaymentPageContent() {
           </div>
           </fieldset>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 md:flex">
             <Link href="/payments" className={`btn-secondary ${formDisabled ? 'pointer-events-none opacity-50' : ''}`}>
               Cancel
             </Link>
@@ -493,6 +494,14 @@ function NewPaymentPageContent() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar
+        formId="record-payment-form"
+        label="Record payment"
+        pendingLabel="Recording payment..."
+        disabled={formDisabled || !selectedInvoice}
+        pending={loading}
+        amountLabel={selectedInvoice && formData.amount > 0 ? formatCurrency(formData.amount) : undefined}
+      />
     </div>
   )
 }

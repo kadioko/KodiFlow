@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react'
 import { DateInput } from '@/components/ui/DateInput'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { createClient } from '@/lib/supabase/client'
 import { PAYMENT_METHODS } from '@/utils/constants'
 import { formatCurrency, parseCurrencyInput } from '@/utils/currency'
@@ -168,7 +169,7 @@ export default function EditPaymentPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl pb-32 md:pb-0">
       <div className="page-header">
         <div className="flex items-center">
           <Link href={`/payments/${paymentId}`} className="mr-4 rounded-lg p-2 hover:bg-gray-100">
@@ -181,7 +182,7 @@ export default function EditPaymentPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-6 p-6">
+      <form id="edit-payment-form" onSubmit={handleSubmit} className="card space-y-6 p-4 sm:p-6">
         {error && <div className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">{error}</div>}
 
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm">
@@ -231,11 +232,11 @@ export default function EditPaymentPage() {
         </div>
 
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-between">
-          <button type="button" onClick={deletePayment} disabled={deleting || saving} className="btn-danger">
+          <button type="button" onClick={deletePayment} disabled={deleting || saving} className="btn-danger min-h-11">
             <Trash2 className="mr-2 h-5 w-5" />
             {deleting ? 'Reversing...' : 'Reverse Payment'}
           </button>
-          <div className="flex justify-end gap-3">
+          <div className="hidden justify-end gap-3 md:flex">
             <Link href={`/payments/${paymentId}`} className="btn-secondary">Cancel</Link>
             <button type="submit" disabled={saving || deleting} className="btn-primary">
               <Save className="mr-2 h-5 w-5" />
@@ -244,6 +245,14 @@ export default function EditPaymentPage() {
           </div>
         </div>
       </form>
+      <MobileFormSubmitBar
+        formId="edit-payment-form"
+        label="Save payment"
+        pendingLabel="Saving payment..."
+        disabled={saving || deleting}
+        pending={saving}
+        amountLabel={formData.amount > 0 ? formatCurrency(formData.amount) : undefined}
+      />
     </div>
   )
 }

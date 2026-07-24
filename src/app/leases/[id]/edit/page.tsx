@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { DateInput } from '@/components/ui/DateInput'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { createClient } from '@/lib/supabase/client'
 import { BILLING_FREQUENCIES, LEASE_STATUSES, LEASE_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
@@ -435,7 +436,7 @@ export default function EditLeasePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl pb-32 md:pb-0">
       <div className="page-header">
         <div className="flex items-center">
           <Link href={`/leases/${leaseId}`} className="mr-4 rounded-lg p-2 hover:bg-gray-100">
@@ -448,7 +449,7 @@ export default function EditLeasePage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-6 p-6">
+      <form id="edit-lease-form" onSubmit={handleSubmit} className="card space-y-6 p-4 sm:p-6">
         {error && (
           <div className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">
             {error}
@@ -595,7 +596,7 @@ export default function EditLeasePage() {
           <textarea id="notes" rows={3} className="input" value={formData.notes} onChange={(event) => setFormData({ ...formData, notes: event.target.value })} />
         </div>
 
-        <div className="flex justify-end gap-4 pt-2">
+        <div className="hidden justify-end gap-4 pt-2 md:flex">
           <Link href={`/leases/${leaseId}`} className="btn-secondary">Cancel</Link>
           <button type="submit" disabled={saving} className="btn-primary">
             <Save className="mr-2 h-5 w-5" />
@@ -603,6 +604,7 @@ export default function EditLeasePage() {
           </button>
         </div>
       </form>
+      <MobileFormSubmitBar formId="edit-lease-form" label="Save lease" pendingLabel="Saving lease..." disabled={saving} pending={saving} />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { DateInput } from '@/components/ui/DateInput'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { LEASE_TYPES, BILLING_FREQUENCIES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
@@ -253,7 +254,7 @@ function NewLeasePageContent() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl pb-32 md:pb-0">
       <div className="page-header">
         <div className="flex items-center">
           <Link href="/leases" className="mr-4 p-2 rounded-lg hover:bg-gray-100">
@@ -267,7 +268,7 @@ function NewLeasePageContent() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="create-lease-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -511,7 +512,7 @@ function NewLeasePageContent() {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 md:flex">
             <Link href="/leases" className="btn-secondary">
               Cancel
             </Link>
@@ -521,6 +522,7 @@ function NewLeasePageContent() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="create-lease-form" label="Create lease" pendingLabel="Creating lease..." pending={loading} />
     </div>
   )
 }
