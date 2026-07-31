@@ -4,6 +4,9 @@ import { Plus, DoorOpen } from 'lucide-react'
 import { getLabelByValue, getColorByValue, UNIT_TYPES, UNIT_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
+type UnitStatusFilter = 'all' | 'vacant' | 'occupied' | 'reserved' | 'under_maintenance' | 'inactive'
+type UnitSort = 'property' | 'vacant_first' | 'rent_desc' | 'rent_asc' | 'lease_end_asc' | 'newest'
+
 const floorSortOrder: Record<string, number> = {
   basement: 0,
   'ground floor': 1,
@@ -12,6 +15,43 @@ const floorSortOrder: Record<string, number> = {
   'third floor': 4,
   'fourth floor': 5,
   'fifth floor': 6,
+}
+
+function getQueryValue(value: string | string[] | undefined, fallback: string) {
+  return Array.isArray(value) ? value[0] || fallback : value || fallback
+}
+
+function getStatusFilter(value: string | string[] | undefined): UnitStatusFilter {
+  const status = getQueryValue(value, 'all')
+  return ['all', 'vacant', 'occupied', 'reserved', 'under_maintenance', 'inactive'].includes(status)
+    ? status as UnitStatusFilter
+    : 'all'
+}
+
+function getSort(value: string | string[] | undefined): UnitSort {
+  const sort = getQueryValue(value, 'property')
+  return ['property', 'vacant_first', 'rent_desc', 'rent_asc', 'lease_end_asc', 'newest'].includes(sort)
+    ? sort as UnitSort
+    : 'property'
+}
+
+function createUnitsHref(status: UnitStatusFilter, sort: UnitSort) {
+  const params = new URLSearchParams()
+  if (status !== 'all') params.set('status', status)
+  if (sort !== 'property') params.set('sort', sort)
+  const query = params.toString()
+  return query ? `/units?${query}` : '/units'
+}
+
+function unitStatusRank(status: string) {
+  switch (status) {
+    case 'vacant': return 0
+    case 'occupied': return 1
+    case 'reserved': return 2
+    case 'under_maintenance': return 3
+    case 'inactive': return 4
+    default: return 5
+  }
 }
 
 async function getUnits() {
@@ -37,30 +77,32 @@ async function getUnits() {
     return []
   }
 
-  // Get current lease info for each unit
-  const unitsWithLeases = await Promise.all(
-    (units || []).map(async (unit) => {
-      const { data: lease } = await supabase
-        .from('leases')
-        .select('tenant_id, end_date, tenants(full_name, business_name)')
-        .eq('unit_id', unit.id)
-        .eq('status', 'active')
-        .single()
+  const unitIds = (units || []).map((unit) => unit.id)
+  const { data: activeLeases } = unitIds.length > 0
+    ? await supabase
+      .from('leases')
+      .select('unit_id, tenant_id, end_date, tenants(full_name, business_name)')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('unit_id', unitIds)
+    : { data: [] }
 
-      const property = getFirst(unit.properties)
-      const section = getFirst(unit.property_sections)
-      const tenant = getFirst(lease?.tenants)
+  const leaseByUnit = new Map((activeLeases || []).map((lease) => [lease.unit_id, lease]))
+  const unitsWithLeases = (units || []).map((unit) => {
+    const lease = leaseByUnit.get(unit.id)
+    const property = getFirst(unit.properties)
+    const section = getFirst(unit.property_sections)
+    const tenant = getFirst(lease?.tenants)
 
-      return {
-        ...unit,
-        property_name: property?.name,
-        section_name: section?.name,
-        current_tenant_id: lease?.tenant_id || null,
-        current_tenant_name: tenant?.full_name || tenant?.business_name || null,
-        lease_end_date: lease?.end_date || null,
-      }
-    })
-  )
+    return {
+      ...unit,
+      property_name: property?.name,
+      section_name: section?.name,
+      current_tenant_id: lease?.tenant_id || null,
+      current_tenant_name: tenant?.full_name || tenant?.business_name || null,
+      lease_end_date: lease?.end_date || null,
+    }
+  })
 
   return unitsWithLeases.sort((a, b) => {
     const propertyCompare = (a.property_name || '').localeCompare(b.property_name || '')
@@ -77,12 +119,51 @@ async function getUnits() {
   })
 }
 
-export default async function UnitsPage() {
-  const units = await getUnits()
+export default async function UnitsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const statusFilter = getStatusFilter(params?.status)
+  const sort = getSort(params?.sort)
+  const allUnits = await getUnits()
+  const units = (statusFilter === 'all' ? allUnits : allUnits.filter((unit) => unit.status === statusFilter))
+    .sort((a, b) => {
+      switch (sort) {
+        case 'vacant_first':
+          return unitStatusRank(a.status) - unitStatusRank(b.status) || a.unit_name.localeCompare(b.unit_name)
+        case 'rent_desc': return b.monthly_rent - a.monthly_rent
+        case 'rent_asc': return a.monthly_rent - b.monthly_rent
+        case 'lease_end_asc': return (a.lease_end_date || '9999-12-31').localeCompare(b.lease_end_date || '9999-12-31')
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'property':
+        default:
+          return (a.property_name || '').localeCompare(b.property_name || '')
+            || ((floorSortOrder[(a.section_name || '').toLowerCase()] ?? 999) - (floorSortOrder[(b.section_name || '').toLowerCase()] ?? 999))
+            || a.unit_name.localeCompare(b.unit_name)
+      }
+    })
 
-  const vacantCount = units.filter(u => u.status === 'vacant').length
-  const occupiedCount = units.filter(u => u.status === 'occupied').length
-  const maintenanceCount = units.filter(u => u.status === 'under_maintenance').length
+  const vacantCount = allUnits.filter(u => u.status === 'vacant').length
+  const occupiedCount = allUnits.filter(u => u.status === 'occupied').length
+  const maintenanceCount = allUnits.filter(u => u.status === 'under_maintenance').length
+  const statusOptions: { value: UnitStatusFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: allUnits.length },
+    { value: 'vacant', label: 'Vacant', count: vacantCount },
+    { value: 'occupied', label: 'Occupied', count: occupiedCount },
+    { value: 'reserved', label: 'Reserved', count: allUnits.filter((unit) => unit.status === 'reserved').length },
+    { value: 'under_maintenance', label: 'Maintenance', count: maintenanceCount },
+    { value: 'inactive', label: 'Inactive', count: allUnits.filter((unit) => unit.status === 'inactive').length },
+  ]
+  const sortOptions: { value: UnitSort; label: string }[] = [
+    { value: 'property', label: 'Property and unit' },
+    { value: 'vacant_first', label: 'Vacant first' },
+    { value: 'rent_desc', label: 'Highest rent' },
+    { value: 'rent_asc', label: 'Lowest rent' },
+    { value: 'lease_end_asc', label: 'Lease ending soonest' },
+    { value: 'newest', label: 'Newest unit' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -117,7 +198,30 @@ export default async function UnitsPage() {
         </div>
       </div>
 
-      {units.length === 0 ? (
+      <div className="card p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Unit View</h2>
+            <p className="text-sm text-gray-500">Showing {units.length} of {allUnits.length} unit{allUnits.length === 1 ? '' : 's'}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {statusOptions.map((option) => (
+              <Link key={option.value} href={createUnitsHref(option.value, sort)} className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold ${statusFilter === option.value ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                {option.label} ({option.count})
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sortOptions.map((option) => (
+            <Link key={option.value} href={createUnitsHref(statusFilter, option.value)} className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold ${sort === option.value ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'}`}>
+              {option.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {allUnits.length === 0 ? (
         <div className="card p-12 text-center">
           <DoorOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No units yet</h3>
@@ -126,6 +230,13 @@ export default async function UnitsPage() {
             <Plus className="h-5 w-5 mr-2" />
             Add Unit
           </Link>
+        </div>
+      ) : units.length === 0 ? (
+        <div className="card p-12 text-center">
+          <DoorOpen className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">No {statusOptions.find((option) => option.value === statusFilter)?.label.toLowerCase()} units</h3>
+          <p className="mb-6 text-gray-500">Try another status view to see the rest of your units.</p>
+          <Link href={createUnitsHref('all', sort)} className="btn-secondary">View all units</Link>
         </div>
       ) : (
         <div className="card">
