@@ -4,6 +4,46 @@ import { Plus, FileText, User, AlertCircle } from 'lucide-react'
 import { getLabelByValue, getColorByValue, LEASE_TYPES, LEASE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/currency'
 
+type LeaseStatusFilter = 'all' | 'active' | 'expired' | 'pending' | 'renewed' | 'terminated'
+type LeaseSort = 'status' | 'end_asc' | 'newest' | 'balance_desc' | 'rent_desc'
+
+function getQueryValue(value: string | string[] | undefined, fallback: string) {
+  return Array.isArray(value) ? value[0] || fallback : value || fallback
+}
+
+function getStatusFilter(value: string | string[] | undefined): LeaseStatusFilter {
+  const status = getQueryValue(value, 'all')
+  return ['all', 'active', 'expired', 'pending', 'renewed', 'terminated'].includes(status)
+    ? status as LeaseStatusFilter
+    : 'all'
+}
+
+function getSort(value: string | string[] | undefined): LeaseSort {
+  const sort = getQueryValue(value, 'status')
+  return ['status', 'end_asc', 'newest', 'balance_desc', 'rent_desc'].includes(sort)
+    ? sort as LeaseSort
+    : 'status'
+}
+
+function createLeaseHref(status: LeaseStatusFilter, sort: LeaseSort) {
+  const params = new URLSearchParams()
+  if (status !== 'all') params.set('status', status)
+  if (sort !== 'status') params.set('sort', sort)
+  const query = params.toString()
+  return query ? `/leases?${query}` : '/leases'
+}
+
+function statusRank(status: string) {
+  switch (status) {
+    case 'active': return 0
+    case 'pending': return 1
+    case 'expired': return 2
+    case 'terminated': return 3
+    case 'renewed': return 4
+    default: return 5
+  }
+}
+
 async function getLeases() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,12 +103,47 @@ async function getLeases() {
   })
 }
 
-export default async function LeasesPage() {
-  const leases = await getLeases()
+export default async function LeasesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const statusFilter = getStatusFilter(params?.status)
+  const sort = getSort(params?.sort)
+  const allLeases = await getLeases()
+  const leases = (statusFilter === 'all' ? allLeases : allLeases.filter((lease: { status: string }) => lease.status === statusFilter))
+    .sort((a: { status: string; end_date: string; created_at: string; current_balance: number; monthly_rent: number }, b: { status: string; end_date: string; created_at: string; current_balance: number; monthly_rent: number }) => {
+      switch (sort) {
+        case 'end_asc': return new Date(a.end_date).getTime() - new Date(b.end_date).getTime()
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'balance_desc': return Math.abs(b.current_balance) - Math.abs(a.current_balance)
+        case 'rent_desc': return b.monthly_rent - a.monthly_rent
+        case 'status':
+        default:
+          return statusRank(a.status) - statusRank(b.status)
+            || new Date(a.end_date).getTime() - new Date(b.end_date).getTime()
+      }
+    })
 
-  const activeCount = leases.filter((l: { status: string }) => l.status === 'active').length
-  const expiringSoonCount = leases.filter((l: { is_expiring_soon: boolean }) => l.is_expiring_soon).length
-  const totalLeaseBalance = leases.reduce((sum: number, lease: { current_balance: number }) => sum + lease.current_balance, 0)
+  const activeCount = allLeases.filter((l: { status: string }) => l.status === 'active').length
+  const expiringSoonCount = allLeases.filter((l: { is_expiring_soon: boolean }) => l.is_expiring_soon).length
+  const totalLeaseBalance = allLeases.reduce((sum: number, lease: { current_balance: number }) => sum + lease.current_balance, 0)
+  const statusOptions: { value: LeaseStatusFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: allLeases.length },
+    { value: 'active', label: 'Active', count: activeCount },
+    { value: 'expired', label: 'Expired', count: allLeases.filter((lease: { status: string }) => lease.status === 'expired').length },
+    { value: 'pending', label: 'Pending', count: allLeases.filter((lease: { status: string }) => lease.status === 'pending').length },
+    { value: 'renewed', label: 'Renewed', count: allLeases.filter((lease: { status: string }) => lease.status === 'renewed').length },
+    { value: 'terminated', label: 'Terminated', count: allLeases.filter((lease: { status: string }) => lease.status === 'terminated').length },
+  ]
+  const sortOptions: { value: LeaseSort; label: string }[] = [
+    { value: 'status', label: 'Status: active first' },
+    { value: 'end_asc', label: 'End date: soonest' },
+    { value: 'newest', label: 'Newest lease' },
+    { value: 'balance_desc', label: 'Highest balance' },
+    { value: 'rent_desc', label: 'Highest rent' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -105,7 +180,42 @@ export default async function LeasesPage() {
         </div>
       </div>
 
-      {leases.length === 0 ? (
+      <div className="card p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Lease View</h2>
+            <p className="text-sm text-gray-500">Showing {leases.length} of {allLeases.length} lease{allLeases.length === 1 ? '' : 's'}</p>
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((option) => (
+                <Link
+                  key={option.value}
+                  href={createLeaseHref(option.value, sort)}
+                  className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold ${
+                    statusFilter === option.value ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {option.label} ({option.count})
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sortOptions.map((option) => (
+            <Link
+              key={option.value}
+              href={createLeaseHref(statusFilter, option.value)}
+              className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold ${sort === option.value ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'}`}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {allLeases.length === 0 ? (
         <div className="card p-12 text-center">
           <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No leases yet</h3>
@@ -114,6 +224,13 @@ export default async function LeasesPage() {
             <Plus className="h-5 w-5 mr-2" />
             Create Lease
           </Link>
+        </div>
+      ) : leases.length === 0 ? (
+        <div className="card p-12 text-center">
+          <FileText className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">No {statusFilter} leases</h3>
+          <p className="mb-6 text-gray-500">Try another status view to see the rest of your lease history.</p>
+          <Link href={createLeaseHref('all', sort)} className="btn-secondary">View all leases</Link>
         </div>
       ) : (
         <div className="card">
