@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { SECTION_TYPES } from '@/utils/constants'
 
 type Property = {
@@ -95,7 +96,7 @@ function NewSectionForm() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="create-section-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">{error}</div>}
 
           <div className="form-group">
@@ -149,7 +150,7 @@ function NewSectionForm() {
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="hidden justify-end space-x-3 pt-4 border-t border-gray-200 lg:flex">
             <Link href="/sections" className="btn-secondary">Cancel</Link>
             <button type="submit" disabled={loading} className="btn-primary">
               <Save className="h-5 w-5 mr-2" />
@@ -158,6 +159,7 @@ function NewSectionForm() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="create-section-form" label="Save section" pendingLabel="Saving section..." pending={loading} error={error} />
     </div>
   )
 }

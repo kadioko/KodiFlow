@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
+import { safeLoginDestination } from '@/utils/navigation'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -39,7 +40,7 @@ export default function LoginPage() {
 
       const params = new URLSearchParams(window.location.search)
       const nextPath = params.get('next')
-      window.location.assign(nextPath?.startsWith('/') ? nextPath : '/dashboard')
+      window.location.assign(safeLoginDestination(nextPath, window.location.origin))
     } catch (error) {
       setError(
         error instanceof DOMException && error.name === 'AbortError'

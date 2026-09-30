@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kodiflow-v2'
+const CACHE_NAME = 'kodiflow-v3-mobile-actions'
 const OFFLINE_URLS = ['/', '/auth/login', '/manifest.webmanifest', '/icons/icon.svg']
 
 self.addEventListener('install', (event) => {

@@ -10,16 +10,19 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
 
       - name: Lint
         run: npm run lint
@@ -29,6 +32,36 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Mobile layout regression checks
+        run: npm run test:e2e:mobile
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://layout-tests.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: layout-tests-placeholder
+
+      - name: End-to-end tests
+        if: vars.E2E_BASE_URL != ''
+        run: npx playwright test financial-workflows.spec.ts
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_INVOICE_ID: ${{ vars.E2E_INVOICE_ID }}
+          E2E_PAYMENT_ID: ${{ vars.E2E_PAYMENT_ID }}
+          E2E_LEASE_ID: ${{ vars.E2E_LEASE_ID }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: browser-test-results
+          path: test-results/
+          retention-days: 7
 
       - name: Build
         run: npm run build

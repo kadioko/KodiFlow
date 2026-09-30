@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { firstRelation, tenantName, type LeaseWithLocation, type Row } from '@/lib/supabase/query-results'
 import Link from 'next/link'
 import { Plus, FileText, User, AlertCircle } from 'lucide-react'
 import { getLabelByValue, getColorByValue, LEASE_TYPES, LEASE_STATUSES } from '@/utils/constants'
@@ -78,7 +79,7 @@ async function getLeases() {
       .neq('status', 'cancelled')
     : { data: [] }
 
-  const balanceByLease = (invoiceBalances || []).reduce<Record<string, number>>((acc, invoice: any) => {
+  const balanceByLease = ((invoiceBalances || []) as Pick<Row<'rent_invoices'>, 'lease_id' | 'balance' | 'status'>[]).reduce<Record<string, number>>((acc, invoice) => {
     acc[invoice.lease_id] = (acc[invoice.lease_id] || 0) + (invoice.balance || 0)
     return acc
   }, {})
@@ -87,15 +88,15 @@ async function getLeases() {
   const warningDate = new Date()
   warningDate.setDate(today.getDate() + 90)
 
-  return (leases || []).map((lease: any) => {
+  return ((leases || []) as LeaseWithLocation[]).map((lease) => {
     const endDate = new Date(lease.end_date)
     const daysUntilExpiry = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     
     return {
       ...lease,
-      tenant_name: lease.tenants?.full_name || lease.tenants?.business_name,
-      unit_name: lease.units?.unit_name,
-      property_name: lease.properties?.name,
+      tenant_name: tenantName(lease.tenants),
+      unit_name: firstRelation(lease.units)?.unit_name || 'Unit',
+      property_name: firstRelation(lease.properties)?.name || 'Property',
       current_balance: balanceByLease[lease.id] || 0,
       days_until_expiry: daysUntilExpiry,
       is_expiring_soon: daysUntilExpiry > 0 && daysUntilExpiry <= 90 && lease.status === 'active',
@@ -235,7 +236,7 @@ export default async function LeasesPage({
       ) : (
         <div className="card">
           <div className="divide-y divide-slate-100 md:hidden">
-            {leases.map((lease: any) => (
+            {leases.map((lease) => (
               <article key={lease.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-950">{lease.tenant_name}</p><p className="mt-0.5 text-sm text-slate-500">{lease.property_name} · {lease.unit_name}</p></div><span className={`badge ${getColorByValue(LEASE_STATUSES, lease.status)}`}>{getLabelByValue(LEASE_STATUSES, lease.status)}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lease period</p><p className="mt-1 font-medium text-slate-900">{formatDate(lease.start_date)} to {formatDate(lease.end_date)}</p>{lease.is_expiring_soon && <p className="mt-1 text-xs font-semibold text-amber-700">{lease.days_until_expiry} days remaining</p>}</div><div className="text-right"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{lease.current_balance > 0 ? 'Amount due' : lease.current_balance < 0 ? 'Credit available' : 'Settled'}</p><p className={`mt-1 text-lg font-bold ${lease.current_balance > 0 ? 'text-danger-600' : lease.current_balance < 0 ? 'text-success-600' : 'text-slate-700'}`}>{formatCurrency(Math.abs(lease.current_balance))}</p><p className="mt-1 text-xs text-slate-500">{formatCurrency(lease.monthly_rent)} monthly</p></div></div><div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/leases/${lease.id}`} className="text-primary-700">View</Link><Link href={`/leases/${lease.id}/edit`} className="text-slate-700">Edit</Link></div></article>
             ))}
           </div>
@@ -255,7 +256,7 @@ export default async function LeasesPage({
                 </tr>
               </thead>
               <tbody className="table-body">
-                {leases.map((lease: any) => (
+                {leases.map((lease) => (
                   <tr key={lease.id} className="hover:bg-gray-50">
                     <td className="table-cell">
                       <div className="flex items-center">

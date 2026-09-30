@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { Row, PropertyWithUnitSummary, Relation, TenantName } from '@/lib/supabase/query-results'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -158,7 +159,7 @@ export default function ReportsPage() {
     if (!user) return
 
     // Fetch properties with units and occupancy
-    const { data: properties } = await supabase
+    const { data: propertiesData } = await supabase
       .from('properties')
       .select(`
         id,
@@ -169,7 +170,7 @@ export default function ReportsPage() {
       .eq('user_id', user.id)
 
     // Fetch invoices for selected month
-    const { data: invoices } = await supabase
+    const { data: invoicesData } = await supabase
       .from('rent_invoices')
       .select('*, tenants(full_name, business_name)')
       .eq('user_id', user.id)
@@ -190,18 +191,22 @@ export default function ReportsPage() {
       .single()
 
     // Fetch all active leases
-    const { data: leases } = await supabase
+    const { data: leasesData } = await supabase
       .from('leases')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
 
-    const { data: expenses } = await supabase
+    const { data: expensesData } = await supabase
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)
 
-    const monthlyExpenses = expenses?.filter((expense: any) => {
+    const properties = (propertiesData || []) as PropertyWithUnitSummary[]
+    const invoices = (invoicesData || []) as (Row<'rent_invoices'> & { tenants: Relation<TenantName> })[]
+    const leases = (leasesData || []) as Row<'leases'>[]
+    const expenses = (expensesData || []) as Row<'expenses'>[]
+    const monthlyExpenses = expenses.filter((expense) => {
       const date = new Date(expense.expense_date)
       return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear
     }) || []
@@ -223,16 +228,16 @@ export default function ReportsPage() {
     const propertyReportsData: PropertyReport[] = []
     
     if (properties) {
-      properties.forEach((prop: any) => {
+      properties.forEach((prop) => {
         const units = prop.units || []
-        const occupied = units.filter((u: any) => u.status === 'occupied').length
-        const vacant = units.filter((u: any) => u.status === 'vacant').length
+        const occupied = units.filter((u) => u.status === 'occupied').length
+        const vacant = units.filter((u) => u.status === 'vacant').length
         
-        const propInvoices = invoices?.filter((inv: any) => inv.property_id === prop.id) || []
-        const propExpenses = monthlyExpenses.filter((expense: any) => expense.property_id === prop.id)
-        const totalInvoiced = propInvoices.reduce((sum: number, inv: any) => sum + inv.subtotal, 0)
-        const totalCollected = propInvoices.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0)
-        const totalExpenses = propExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0)
+        const propInvoices = invoices?.filter((inv) => inv.property_id === prop.id) || []
+        const propExpenses = monthlyExpenses.filter((expense) => expense.property_id === prop.id)
+        const totalInvoiced = propInvoices.reduce((sum: number, inv) => sum + inv.subtotal, 0)
+        const totalCollected = propInvoices.reduce((sum: number, inv) => sum + inv.amount_paid, 0)
+        const totalExpenses = propExpenses.reduce((sum: number, expense) => sum + expense.amount, 0)
         
         propertyReportsData.push({
           property_id: prop.id,
@@ -241,7 +246,7 @@ export default function ReportsPage() {
           total_units: units.length,
           occupied_units: occupied,
           vacant_units: vacant,
-          monthly_rent: units.reduce((sum: number, u: any) => sum + (u.monthly_rent || 0), 0),
+          monthly_rent: units.reduce((sum: number, u) => sum + (u.monthly_rent || 0), 0),
           total_invoiced: totalInvoiced,
           total_collected: totalCollected,
           outstanding: totalInvoiced - totalCollected,
@@ -254,12 +259,12 @@ export default function ReportsPage() {
     setPropertyReports(propertyReportsData)
 
     // Calculate summary
-    const totalInvoiced = invoices?.reduce((sum: number, inv: any) => sum + inv.subtotal, 0) || 0
-    const totalCollected = invoices?.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0) || 0
-    const overdueInvoices = invoices?.filter((inv: any) => inv.status === 'overdue') || []
-    const totalExpenses = monthlyExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0)
+    const totalInvoiced = invoices?.reduce((sum: number, inv) => sum + inv.subtotal, 0) || 0
+    const totalCollected = invoices?.reduce((sum: number, inv) => sum + inv.amount_paid, 0) || 0
+    const overdueInvoices = invoices?.filter((inv) => inv.status === 'overdue') || []
+    const totalExpenses = monthlyExpenses.reduce((sum: number, expense) => sum + expense.amount, 0)
     const lateFeeRate = Number(profile?.late_fee_rate || 0)
-    const lateFeesEstimated = overdueInvoices.reduce((sum: number, invoice: any) => {
+    const lateFeesEstimated = overdueInvoices.reduce((sum: number, invoice) => {
       return sum + calculateLateFee(invoice.balance || 0, invoice.due_date, lateFeeRate)
     }, 0)
 
@@ -318,7 +323,7 @@ export default function ReportsPage() {
     })
 
     const tenantMixMap = new Map<string, number>()
-    tenants?.forEach((tenant: any) => {
+    tenants?.forEach((tenant: Pick<Row<'tenants'>, 'id' | 'tenant_type'>) => {
       tenantMixMap.set(tenant.tenant_type, (tenantMixMap.get(tenant.tenant_type) || 0) + 1)
     })
     setTenantMix(Array.from(tenantMixMap.entries()).map(([tenant_type, count]) => ({ tenant_type, count })))
@@ -328,7 +333,7 @@ export default function ReportsPage() {
       setUtilityReports([])
     }
 
-    utilities?.forEach((utility: any) => {
+    utilities?.forEach((utility: Row<'utility_meter_readings'>) => {
       const current = utilityMap.get(utility.utility_type) || {
         utility_type: utility.utility_type,
         usage_amount: 0,
@@ -340,18 +345,18 @@ export default function ReportsPage() {
     })
     setUtilityReports(Array.from(utilityMap.values()))
 
-    const depositExpected = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_amount || 0), 0) || 0
-    const depositPaid = leases?.reduce((sum: number, lease: any) => sum + (lease.deposit_paid_amount || 0), 0) || 0
+    const depositExpected = leases?.reduce((sum: number, lease) => sum + (lease.deposit_amount || 0), 0) || 0
+    const depositPaid = leases?.reduce((sum: number, lease) => sum + (lease.deposit_paid_amount || 0), 0) || 0
     setDepositReport({
       expected: depositExpected,
       paid: depositPaid,
       outstanding: depositExpected - depositPaid,
-      pendingCount: leases?.filter((lease: any) => lease.deposit_status !== 'paid').length || 0,
+      pendingCount: leases?.filter((lease) => lease.deposit_status !== 'paid').length || 0,
     })
 
-    const totalUnits = properties?.reduce((sum: number, p: any) => sum + (p.units?.length || 0), 0) || 0
-    const occupiedUnits = properties?.reduce((sum: number, p: any) => {
-      return sum + (p.units?.filter((u: any) => u.status === 'occupied').length || 0)
+    const totalUnits = properties?.reduce((sum: number, p) => sum + (p.units?.length || 0), 0) || 0
+    const occupiedUnits = properties?.reduce((sum: number, p) => {
+      return sum + (p.units?.filter((u) => u.status === 'occupied').length || 0)
     }, 0) || 0
 
     const allOutstanding = allInvoices.reduce((sum, invoice) => sum + Math.max(invoice.balance || 0, 0), 0)

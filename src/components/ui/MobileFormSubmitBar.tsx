@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckCircle, Loader2 } from 'lucide-react'
+import { MobileActionBar } from './MobileActionBar'
 
 type MobileFormSubmitBarProps = {
   formId: string
@@ -9,15 +10,17 @@ type MobileFormSubmitBarProps = {
   disabled?: boolean
   pending?: boolean
   amountLabel?: string
+  error?: string
+  message?: string
 }
 
-export function MobileFormSubmitBar({ formId, label, pendingLabel, disabled = false, pending = false, amountLabel }: MobileFormSubmitBarProps) {
+export function MobileFormSubmitBar({ formId, label, pendingLabel, disabled = false, pending = false, amountLabel, error, message }: MobileFormSubmitBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-20 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur md:hidden">
-      <button type="submit" form={formId} disabled={disabled || pending} className="btn-success min-h-14 w-full justify-between px-5 text-base">
-        <span className="flex items-center">{pending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle className="mr-2 h-5 w-5" />}{pending ? pendingLabel : label}</span>
-        {amountLabel && <span className="text-sm font-bold">{amountLabel}</span>}
+    <MobileActionBar error={error} message={message}>
+      <button type="submit" form={formId} disabled={disabled || pending} aria-busy={pending} className="btn-success mobile-submit-button min-h-14 w-full gap-3 px-4 text-base">
+        {pending ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" /> : <CheckCircle className="h-5 w-5 shrink-0" />}
+        <span className="min-w-0 break-words">{pending ? pendingLabel : label}{amountLabel && <span className="block text-sm font-medium">{amountLabel}</span>}</span>
       </button>
-    </div>
+    </MobileActionBar>
   )
 }

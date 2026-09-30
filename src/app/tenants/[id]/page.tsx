@@ -696,8 +696,8 @@ export default function TenantDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="mobile-dialog-overlay fixed inset-0 z-50 bg-black bg-opacity-50">
+          <div className="mobile-dialog-panel w-full max-w-md rounded-lg bg-white p-6">
             <div className="flex items-center mb-4">
               <AlertCircle className="h-6 w-6 text-danger-500 mr-2" />
               <h3 className="text-lg font-medium text-gray-900">Delete Tenant</h3>
@@ -707,17 +707,17 @@ export default function TenantDetailPage() {
               <br /><br />
               Note: You can only delete tenants with no leases, invoices, or payments.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button 
                 onClick={() => setShowDeleteConfirm(false)}
-                className="btn-secondary"
+                className="btn-secondary min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 Cancel
               </button>
               <button 
                 onClick={handleDelete}
-                className="btn-danger"
+                className="btn-danger min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Tenant'}

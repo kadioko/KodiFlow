@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { ArrowLeft, User, Building2 } from 'lucide-react'
-import { TENANT_TYPES } from '@/utils/constants'
 
 export default function NewTenantPage() {
   const router = useRouter()
@@ -107,7 +107,7 @@ export default function NewTenantPage() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="create-tenant-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -391,7 +391,7 @@ export default function NewTenantPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href="/tenants" className="btn-secondary">
               Cancel
             </Link>
@@ -401,6 +401,7 @@ export default function NewTenantPage() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="create-tenant-form" label="Create tenant" pendingLabel="Creating tenant..." pending={loading} error={error} />
     </div>
   )
 }

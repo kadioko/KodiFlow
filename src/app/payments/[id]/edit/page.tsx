@@ -236,7 +236,7 @@ export default function EditPaymentPage() {
             <Trash2 className="mr-2 h-5 w-5" />
             {deleting ? 'Reversing...' : 'Reverse Payment'}
           </button>
-          <div className="hidden justify-end gap-3 md:flex">
+          <div className="hidden justify-end gap-3 lg:flex">
             <Link href={`/payments/${paymentId}`} className="btn-secondary">Cancel</Link>
             <button type="submit" disabled={saving || deleting} className="btn-primary">
               <Save className="mr-2 h-5 w-5" />
@@ -251,6 +251,7 @@ export default function EditPaymentPage() {
         pendingLabel="Saving payment..."
         disabled={saving || deleting}
         pending={saving}
+        error={error}
         amountLabel={formData.amount > 0 ? formatCurrency(formData.amount) : undefined}
       />
     </div>

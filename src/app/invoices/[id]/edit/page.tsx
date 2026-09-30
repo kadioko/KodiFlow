@@ -269,7 +269,7 @@ export default function EditInvoicePage() {
             <Trash2 className="mr-2 h-5 w-5" />
             {deleting ? 'Deleting...' : 'Delete Invoice'}
           </button>
-          <div className="hidden justify-end gap-3 md:flex">
+          <div className="hidden justify-end gap-3 lg:flex">
             <Link href={`/invoices/${invoiceId}`} className="btn-secondary">Cancel</Link>
             <button type="submit" disabled={saving || deleting} className="btn-primary">
               <Save className="mr-2 h-5 w-5" />
@@ -284,6 +284,7 @@ export default function EditInvoicePage() {
         pendingLabel="Saving invoice..."
         disabled={saving || deleting}
         pending={saving}
+        error={error}
         amountLabel={formatCurrency(invoiceSubtotal)}
       />
     </div>

@@ -1,20 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
+import { firstRelation, tenantName, type Row, type Relation, type TenantName } from '@/lib/supabase/query-results'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
+import { redirect } from 'next/navigation'
 
 type SearchPageProps = {
-  searchParams: {
-    q?: string
-  }
+  searchParams: Promise<{ q?: string | string[] }>
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const query = (searchParams.q || '').trim()
+  const params = await searchParams
+  const query = (Array.isArray(params.q) ? params.q[0] || '' : params.q || '').trim()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return <div>Loading...</div>
+    redirect('/auth/login?next=/search')
   }
 
   const pattern = `%${query}%`
@@ -49,10 +50,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }]
 
-  const properties = propertiesResult.data || []
-  const tenants = tenantsResult.data || []
-  const units = unitsResult.data || []
-  const invoices = invoicesResult.data || []
+  const properties = (propertiesResult.data || []) as Pick<Row<'properties'>, 'id' | 'name' | 'property_type' | 'location'>[]
+  const tenants = (tenantsResult.data || []) as Pick<Row<'tenants'>, 'id' | 'full_name' | 'business_name' | 'phone' | 'email'>[]
+  const units = (unitsResult.data || []) as (Pick<Row<'units'>, 'id' | 'unit_name' | 'unit_identifier' | 'status'> & { properties: Relation<{ name: string }> })[]
+  const invoices = (invoicesResult.data || []) as (Pick<Row<'rent_invoices'>, 'id' | 'invoice_number' | 'status' | 'subtotal'> & { tenants: Relation<TenantName> })[]
   const totalResults = properties.length + tenants.length + units.length + invoices.length
 
   return (
@@ -85,25 +86,25 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         <div className="card p-12 text-center text-gray-500">No results found for “{query}”.</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SearchSection title="Properties" items={properties.map((property: any) => ({
+          <SearchSection title="Properties" items={properties.map((property) => ({
             href: `/properties/${property.id}`,
             title: property.name,
             subtitle: `${property.property_type}${property.location ? ` • ${property.location}` : ''}`,
           }))} />
-          <SearchSection title="Tenants" items={tenants.map((tenant: any) => ({
+          <SearchSection title="Tenants" items={tenants.map((tenant) => ({
             href: `/tenants/${tenant.id}`,
             title: tenant.full_name || tenant.business_name || 'Unnamed tenant',
             subtitle: [tenant.phone, tenant.email].filter(Boolean).join(' • '),
           }))} />
-          <SearchSection title="Units" items={units.map((unit: any) => ({
+          <SearchSection title="Units" items={units.map((unit) => ({
             href: `/units/${unit.id}`,
             title: unit.unit_identifier ? `${unit.unit_identifier} / ${unit.unit_name}` : unit.unit_name,
-            subtitle: `${Array.isArray(unit.properties) ? unit.properties[0]?.name : unit.properties?.name || 'Property'} • ${unit.status}`,
+            subtitle: `${firstRelation(unit.properties)?.name || 'Property'} • ${unit.status}`,
           }))} />
-          <SearchSection title="Invoices" items={invoices.map((invoice: any) => ({
+          <SearchSection title="Invoices" items={invoices.map((invoice) => ({
             href: `/invoices/${invoice.id}`,
             title: invoice.invoice_number || 'Invoice',
-            subtitle: `${invoice.status} • ${Array.isArray(invoice.tenants) ? invoice.tenants[0]?.full_name || invoice.tenants[0]?.business_name : invoice.tenants?.full_name || invoice.tenants?.business_name || 'Tenant'}`,
+            subtitle: `${invoice.status} • ${tenantName(invoice.tenants)}`,
           }))} />
         </div>
       )}

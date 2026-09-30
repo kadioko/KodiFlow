@@ -15,8 +15,10 @@ declare global {
 
 export function PwaProvider() {
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
+    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // The app still works when offline support is unavailable.
+      })
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {

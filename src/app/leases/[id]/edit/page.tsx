@@ -8,6 +8,7 @@ import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { DateInput } from '@/components/ui/DateInput'
 import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { createClient } from '@/lib/supabase/client'
+import { firstRelation, type UnitOptionRow } from '@/lib/supabase/query-results'
 import { BILLING_FREQUENCIES, LEASE_STATUSES, LEASE_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
 
@@ -178,12 +179,12 @@ export default function EditLeasePage() {
       display_name: tenant.full_name || tenant.business_name || 'Unnamed tenant',
     })))
 
-    setUnits((unitsResult.data || []).map((unit: any) => ({
+    setUnits(((unitsResult.data || []) as UnitOptionRow[]).map((unit) => ({
       id: unit.id,
       unit_name: unit.unit_name,
       unit_identifier: unit.unit_identifier,
       property_id: unit.property_id,
-      property_name: unit.properties?.name || 'Property',
+      property_name: firstRelation(unit.properties)?.name || 'Property',
       monthly_rent: unit.monthly_rent,
       usage_type: unit.usage_type,
       status: unit.status,
@@ -596,7 +597,7 @@ export default function EditLeasePage() {
           <textarea id="notes" rows={3} className="input" value={formData.notes} onChange={(event) => setFormData({ ...formData, notes: event.target.value })} />
         </div>
 
-        <div className="hidden justify-end gap-4 pt-2 md:flex">
+        <div className="hidden justify-end gap-4 pt-2 lg:flex">
           <Link href={`/leases/${leaseId}`} className="btn-secondary">Cancel</Link>
           <button type="submit" disabled={saving} className="btn-primary">
             <Save className="mr-2 h-5 w-5" />
@@ -604,7 +605,7 @@ export default function EditLeasePage() {
           </button>
         </div>
       </form>
-      <MobileFormSubmitBar formId="edit-lease-form" label="Save lease" pendingLabel="Saving lease..." disabled={saving} pending={saving} />
+      <MobileFormSubmitBar formId="edit-lease-form" label="Save lease" pendingLabel="Saving lease..." disabled={saving} pending={saving} error={error} />
     </div>
   )
 }

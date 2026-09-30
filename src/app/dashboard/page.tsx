@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { PropertyWithUnitSummary } from '@/lib/supabase/query-results'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/utils/currency'
 import DashboardPropertyVisibility from '@/components/dashboard/DashboardPropertyVisibility'
 import Link from 'next/link'
@@ -107,7 +108,7 @@ async function getDashboardMetrics() {
   const residentialUnits = units?.filter(u => u.usage_type === 'residential').length || 0
   const commercialUnits = units?.filter(u => u.usage_type === 'commercial').length || 0
   const mixedUnits = units?.filter(u => u.usage_type === 'mixed').length || 0
-  const propertySummaries = (properties || []).map((property: any) => {
+  const propertySummaries = ((properties || []) as PropertyWithUnitSummary[]).map((property) => {
     const propertyUnits = property.units || []
 
     return {
@@ -115,9 +116,9 @@ async function getDashboardMetrics() {
       name: property.name,
       property_type: property.property_type,
       total_units: propertyUnits.length,
-      occupied_units: propertyUnits.filter((unit: any) => unit.status === 'occupied').length,
-      vacant_units: propertyUnits.filter((unit: any) => unit.status === 'vacant').length,
-      monthly_rent: propertyUnits.reduce((sum: number, unit: any) => sum + (unit.monthly_rent || 0), 0),
+      occupied_units: propertyUnits.filter((unit) => unit.status === 'occupied').length,
+      vacant_units: propertyUnits.filter((unit) => unit.status === 'vacant').length,
+      monthly_rent: propertyUnits.reduce((sum, unit) => sum + (unit.monthly_rent || 0), 0),
     }
   })
 

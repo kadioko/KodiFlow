@@ -474,7 +474,7 @@ function NewPaymentPageContent() {
           </div>
           </fieldset>
 
-          <div className="hidden items-center justify-end space-x-4 pt-4 md:flex">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href="/payments" className={`btn-secondary ${formDisabled ? 'pointer-events-none opacity-50' : ''}`}>
               Cancel
             </Link>
@@ -500,6 +500,7 @@ function NewPaymentPageContent() {
         pendingLabel="Recording payment..."
         disabled={formDisabled || !selectedInvoice}
         pending={loading}
+        error={error}
         amountLabel={selectedInvoice && formData.amount > 0 ? formatCurrency(formData.amount) : undefined}
       />
     </div>

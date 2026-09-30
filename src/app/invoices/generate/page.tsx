@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { MobileActionBar } from '@/components/ui/MobileActionBar'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Receipt, AlertCircle, Check, CheckCircle, Loader2 } from 'lucide-react'
@@ -643,7 +644,7 @@ export default function GenerateInvoicesPage() {
 
       {/* Generate Button */}
       {leases.length > 0 && (
-        <div className="mt-6 hidden items-center justify-between md:flex">
+        <div className="mt-6 hidden items-center justify-between lg:flex">
           <p className="text-gray-600">
             Total to generate: {formatCurrency(selectedTotal)}
           </p>
@@ -668,16 +669,17 @@ export default function GenerateInvoicesPage() {
       )}
 
       {leases.length > 0 && (
-        <div className="fixed inset-x-0 bottom-20 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur md:hidden">
+        <MobileActionBar error={error}>
           <button
             onClick={generateInvoices}
             disabled={loading || selectedLeases.size === 0}
-            className="btn-success min-h-14 w-full justify-between px-5 text-base disabled:cursor-not-allowed"
+            aria-busy={loading}
+            className="btn-success mobile-submit-button min-h-14 w-full flex-wrap gap-x-3 gap-y-1 px-4 text-base disabled:cursor-not-allowed"
           >
-            <span className="flex items-center">{loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Receipt className="mr-2 h-5 w-5" />}{loading ? 'Generating invoices...' : `Generate ${selectedLeases.size} invoice${selectedLeases.size === 1 ? '' : 's'}`}</span>
-            <span className="text-sm font-bold">{formatCurrency(selectedTotal)}</span>
+            <span className="flex min-w-0 items-center">{loading ? <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" /> : <Receipt className="mr-2 h-5 w-5 shrink-0" />}{loading ? 'Generating invoices...' : `Generate ${selectedLeases.size} invoice${selectedLeases.size === 1 ? '' : 's'}`}</span>
+            <span className="w-full break-words text-sm font-medium">{formatCurrency(selectedTotal)}</span>
           </button>
-        </div>
+        </MobileActionBar>
       )}
     </div>
   )

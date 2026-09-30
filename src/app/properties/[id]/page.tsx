@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { firstRelation, tenantName, type SectionWithUnitCount, type PropertyUnitRow, type LeaseWithLocation, type InvoiceWithLocation, type PaymentWithTenant } from '@/lib/supabase/query-results'
 import { 
   ArrowLeft, 
-  Building2, 
   MapPin, 
   Edit2, 
   Trash2, 
@@ -14,13 +14,10 @@ import {
   LayoutDashboard,
   Layers,
   DoorOpen,
-  Users,
   FileText,
   Receipt,
   CreditCard,
   AlertCircle,
-  CheckCircle,
-  XCircle,
   Loader2
 } from 'lucide-react'
 import { getLabelByValue, getColorByValue, PROPERTY_TYPES, UNIT_STATUSES } from '@/utils/constants'
@@ -160,7 +157,7 @@ export default function PropertyDetailPage() {
       .eq('user_id', user.id)
 
     if (sectionsData) {
-      setSections(sectionsData.map((s: any) => ({
+      setSections((sectionsData as SectionWithUnitCount[]).map((s) => ({
         ...s,
         units_count: s.units?.[0]?.count || 0,
       })))
@@ -178,19 +175,19 @@ export default function PropertyDetailPage() {
       .eq('user_id', user.id)
 
     if (unitsData) {
-      const formattedUnits = unitsData.map((u: any) => {
-        const activeLease = u.leases?.find((l: any) => l.status === 'active')
+      const formattedUnits = (unitsData as PropertyUnitRow[]).map((u) => {
+        const activeLease = u.leases?.find((l) => l.status === 'active')
         return {
           ...u,
-          section_name: u.property_sections?.name,
-          current_tenant_name: activeLease?.tenants?.full_name || activeLease?.tenants?.business_name || null,
+          section_name: firstRelation(u.property_sections)?.name || null,
+          current_tenant_name: activeLease ? tenantName(activeLease.tenants) : null,
         }
       })
       setUnits(formattedUnits)
 
       // Calculate stats
-      const occupied = formattedUnits.filter((u: any) => u.status === 'occupied').length
-      const vacant = formattedUnits.filter((u: any) => u.status === 'vacant').length
+      const occupied = formattedUnits.filter((u) => u.status === 'occupied').length
+      const vacant = formattedUnits.filter((u) => u.status === 'vacant').length
       
       setStats(prev => ({
         ...prev,
@@ -213,17 +210,17 @@ export default function PropertyDetailPage() {
       .order('created_at', { ascending: false })
 
     if (leasesData) {
-      const formattedLeases = leasesData.map((l: any) => ({
+      const formattedLeases = (leasesData as LeaseWithLocation[]).map((l) => ({
         ...l,
-        tenant_name: l.tenants?.full_name || l.tenants?.business_name,
-        unit_name: l.units?.unit_name,
+        tenant_name: tenantName(l.tenants),
+        unit_name: firstRelation(l.units)?.unit_name || 'Unit',
       }))
       setLeases(formattedLeases)
       
       setStats(prev => ({
         ...prev,
         totalLeases: formattedLeases.length,
-        activeLeases: formattedLeases.filter((l: any) => l.status === 'active').length,
+        activeLeases: formattedLeases.filter((l) => l.status === 'active').length,
       }))
     }
 
@@ -241,15 +238,15 @@ export default function PropertyDetailPage() {
       .limit(20)
 
     if (invoicesData) {
-      const formattedInvoices = invoicesData.map((inv: any) => ({
+      const formattedInvoices = (invoicesData as InvoiceWithLocation[]).map((inv) => ({
         ...inv,
-        tenant_name: inv.tenants?.full_name || inv.tenants?.business_name,
-        unit_name: inv.units?.unit_name,
+        tenant_name: tenantName(inv.tenants),
+        unit_name: firstRelation(inv.units)?.unit_name || 'Unit',
       }))
       setInvoices(formattedInvoices)
 
-      const totalRev = formattedInvoices.reduce((sum: number, inv: any) => sum + inv.subtotal, 0)
-      const collectedRev = formattedInvoices.reduce((sum: number, inv: any) => sum + inv.amount_paid, 0)
+      const totalRev = formattedInvoices.reduce((sum, inv) => sum + inv.subtotal, 0)
+      const collectedRev = formattedInvoices.reduce((sum, inv) => sum + inv.amount_paid, 0)
       
       setStats(prev => ({
         ...prev,
@@ -273,10 +270,10 @@ export default function PropertyDetailPage() {
       .limit(20)
 
     if (paymentsData) {
-      setPayments(paymentsData.map((p: any) => ({
+      setPayments((paymentsData as PaymentWithTenant[]).map((p) => ({
         ...p,
-        tenant_name: p.tenants?.full_name || p.tenants?.business_name,
-        invoice_number: p.rent_invoices?.invoice_number,
+        tenant_name: tenantName(p.tenants),
+        invoice_number: firstRelation(p.rent_invoices)?.invoice_number || 'Unlinked payment',
       })))
     }
 
@@ -774,8 +771,8 @@ export default function PropertyDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="mobile-dialog-overlay fixed inset-0 z-50 bg-black bg-opacity-50">
+          <div className="mobile-dialog-panel w-full max-w-md rounded-lg bg-white p-6">
             <div className="flex items-center mb-4">
               <AlertCircle className="h-6 w-6 text-danger-500 mr-2" />
               <h3 className="text-lg font-medium text-gray-900">Delete Property</h3>
@@ -785,17 +782,17 @@ export default function PropertyDetailPage() {
               <br /><br />
               Note: You can only delete properties with no units, leases, invoices, or payments.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button 
                 onClick={() => setShowDeleteConfirm(false)}
-                className="btn-secondary"
+                className="btn-secondary min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 Cancel
               </button>
               <button 
                 onClick={handleDelete}
-                className="btn-danger"
+                className="btn-danger min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Property'}

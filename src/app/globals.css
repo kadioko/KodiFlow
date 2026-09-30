@@ -5,6 +5,11 @@
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 255, 255, 255;
   --background-end-rgb: 255, 255, 255;
+  --mobile-navigation-height: calc(5.5rem + env(safe-area-inset-bottom));
+  --mobile-submit-bar-height: 5.75rem;
+  --visible-viewport-height: 100dvh;
+  --visible-viewport-top: 0px;
+  --visible-viewport-bottom: 0px;
 }
 
 @layer base {
@@ -170,6 +175,72 @@
   .safe-area-x {
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  /* One bottom surface at a time: navigation for lists, actions for forms. */
+  .mobile-page-content {
+    padding-bottom: calc(var(--mobile-navigation-height) + 1.5rem);
+  }
+
+  .mobile-bottom-navigation {
+    min-height: var(--mobile-navigation-height);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-form-submit-bar {
+    bottom: var(--visible-viewport-bottom);
+    padding: 0.75rem max(1rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  .mobile-submit-button {
+    transition-property: background-color, color, opacity;
+  }
+
+  .mobile-dialog-overlay {
+    top: var(--visible-viewport-top);
+    bottom: auto;
+    height: var(--visible-viewport-height);
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  .mobile-dialog-panel {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  @media (max-width: 1023px) {
+    html { scroll-padding-block: 1rem 8rem; }
+
+    .mobile-page-content:has(.mobile-form-submit-bar) {
+      padding-bottom: calc(var(--mobile-submit-bar-height) + 1.5rem);
+    }
+
+    .mobile-page-content:has(.mobile-form-submit-bar) ~ .mobile-bottom-navigation {
+      display: none;
+    }
+
+    .input { font-size: 16px; }
+
+    .btn, .btn-primary, .btn-secondary, .btn-danger, .btn-success, .icon-button {
+      min-height: 48px;
+      touch-action: manipulation;
+    }
+
+    .icon-button { min-width: 48px; }
+
+    .page-header { flex-wrap: wrap; gap: 1rem; }
+  }
+
+  @media (min-width: 1024px) {
+    .mobile-page-content {
+      padding-bottom: 2rem;
+    }
   }
 }
 

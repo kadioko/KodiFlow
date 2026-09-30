@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, DoorOpen, Loader2 } from 'lucide-react'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { UNIT_TYPES, USAGE_TYPES, UNIT_STATUSES } from '@/utils/constants'
 
 interface Property {
@@ -224,7 +225,7 @@ export default function EditUnitPage() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="edit-unit-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -429,7 +430,7 @@ export default function EditUnitPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href={`/units/${unitId}`} className="btn-secondary">
               Cancel
             </Link>
@@ -439,6 +440,7 @@ export default function EditUnitPage() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="edit-unit-form" label="Save changes" pendingLabel="Saving unit..." pending={saving} error={error} />
     </div>
   )
 }

@@ -23,7 +23,7 @@ export type ChargeType = 'rent' | 'service_charge' | 'security' | 'water' | 'ele
 
 export type ChargeFrequency = 'monthly' | 'quarterly' | 'annually' | 'one_time' | 'custom';
 
-export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'transferred';
 
 export type PaymentMethod = 'cash' | 'bank' | 'mobile_money' | 'cheque' | 'card' | 'other';
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { SECTION_TYPES } from '@/utils/constants'
 
 type Property = {
@@ -143,7 +144,7 @@ export default function EditSectionPage({ params }: PageProps) {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="edit-section-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">{error}</div>}
 
           <div className="form-group">
@@ -200,7 +201,7 @@ export default function EditSectionPage({ params }: PageProps) {
               <Trash2 className="h-5 w-5 mr-2" />
               Delete Section
             </button>
-            <div className="flex justify-end space-x-3">
+            <div className="hidden justify-end space-x-3 lg:flex">
               <Link href="/sections" className="btn-secondary">Cancel</Link>
               <button type="submit" disabled={saving} className="btn-primary">
                 <Save className="h-5 w-5 mr-2" />
@@ -210,6 +211,7 @@ export default function EditSectionPage({ params }: PageProps) {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="edit-section-form" label="Save changes" pendingLabel="Saving section..." pending={saving} error={error} />
     </div>
   )
 }

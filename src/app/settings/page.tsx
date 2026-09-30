@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { SUPPORTED_CURRENCIES } from '@/utils/finance'
 import { LANGUAGE_OPTIONS } from '@/utils/constants'
 import { applyTheme, getStoredTheme, THEME_STORAGE_KEY, type AppTheme } from '@/components/theme/ThemeProvider'
@@ -100,6 +101,7 @@ export default function SettingsPage() {
 
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (loading || saving) return
     setSaving(true)
     setMessage('')
     setError('')
@@ -209,8 +211,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <form onSubmit={saveSettings} className="card p-6 space-y-6">
+      <form id="settings-form" onSubmit={saveSettings} className="card space-y-6 p-4 sm:p-6">
         {loading && <div className="text-sm text-slate-500">Loading financial settings...</div>}
+        <fieldset disabled={loading || saving} className="space-y-6">
 
         <div className="form-group">
           <label className="label" htmlFor="currency">Default Currency</label>
@@ -267,11 +270,13 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-500 mt-1">Use this for short notes such as E.&amp;.O.E.</p>
         </div>
 
-        <button type="submit" disabled={saving} className="btn-primary">
+        <button type="submit" disabled={saving} className="btn-primary hidden lg:inline-flex">
           <Save className="h-5 w-5 mr-2" />
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
+        </fieldset>
       </form>
+      <MobileFormSubmitBar formId="settings-form" label="Save settings" pendingLabel="Saving settings..." pending={saving} disabled={loading} error={error} message={message} />
     </div>
   )
 }

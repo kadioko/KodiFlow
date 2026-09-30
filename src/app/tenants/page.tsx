@@ -3,9 +3,11 @@ import Link from 'next/link'
 import { Plus, Users, Phone, Building2, User } from 'lucide-react'
 import { getLabelByValue, TENANT_TYPES } from '@/utils/constants'
 import { formatCurrency } from '@/utils/currency'
+import OperationalListFilters from '@/components/ui/OperationalListFilters'
 
 type TenantRow = {
   id: string
+  created_at: string
   tenant_type: 'individual' | 'business' | 'organization'
   full_name: string | null
   business_name: string | null
@@ -27,11 +29,13 @@ type TenantListItem = TenantRow & {
 }
 
 type InvoiceBalance = {
+  tenant_id: string
   balance: number | null
 }
 
 type ActiveLeaseAssignment = {
   id: string
+  tenant_id: string
   unit_id: string
   units: { unit_name: string } | { unit_name: string }[] | null
   properties: { name: string } | { name: string }[] | null
@@ -54,53 +58,83 @@ async function getTenants(): Promise<TenantListItem[]> {
     return []
   }
 
-  // Get balance for each tenant
-  const tenantsWithBalance = await Promise.all(
-    ((tenants || []) as TenantRow[]).map(async (tenant) => {
-      const { data: invoices } = await supabase
-        .from('rent_invoices')
-        .select('balance')
-        .eq('tenant_id', tenant.id)
-        .eq('user_id', user.id)
-      
-      const totalBalance = ((invoices || []) as InvoiceBalance[]).reduce((sum, inv) => sum + (inv.balance || 0), 0)
+  const tenantRows = (tenants || []) as TenantRow[]
+  if (tenantRows.length === 0) return []
 
-      const { data: activeLeases } = await supabase
-        .from('leases')
-        .select('id, unit_id, units(unit_name), properties(name)')
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'active')
-        .eq('user_id', user.id)
+  const tenantIds = tenantRows.map((tenant) => tenant.id)
+  const [invoiceResult, leaseResult] = await Promise.all([
+    supabase
+      .from('rent_invoices')
+      .select('tenant_id, balance')
+      .eq('user_id', user.id)
+      .in('tenant_id', tenantIds)
+      .not('status', 'in', '(cancelled,transferred)'),
+    supabase
+      .from('leases')
+      .select('id, tenant_id, unit_id, units(unit_name), properties(name)')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('tenant_id', tenantIds),
+  ])
 
-      const assignedUnits = ((activeLeases || []) as ActiveLeaseAssignment[]).map((lease) => {
-        const unit = Array.isArray(lease.units) ? lease.units[0] : lease.units
-        const property = Array.isArray(lease.properties) ? lease.properties[0] : lease.properties
+  if (invoiceResult.error) console.error('Error fetching tenant invoice balances:', invoiceResult.error)
+  if (leaseResult.error) console.error('Error fetching tenant assignments:', leaseResult.error)
 
-        return {
-          lease_id: lease.id,
-          unit_id: lease.unit_id,
-          unit_name: unit?.unit_name || 'Unknown unit',
-          property_name: property?.name || 'Unknown property',
-        }
-      })
+  const balanceByTenant = new Map<string, number>()
+  for (const invoice of (invoiceResult.data || []) as InvoiceBalance[]) {
+    balanceByTenant.set(invoice.tenant_id, (balanceByTenant.get(invoice.tenant_id) || 0) + Number(invoice.balance || 0))
+  }
 
-      return {
-        ...tenant,
-        total_balance: totalBalance,
-        active_leases_count: assignedUnits.length,
-        assigned_units: assignedUnits,
-        display_name: tenant.tenant_type === 'individual'
-          ? tenant.full_name
-          : tenant.business_name,
-      }
+  const assignmentsByTenant = new Map<string, TenantListItem['assigned_units']>()
+  for (const lease of (leaseResult.data || []) as ActiveLeaseAssignment[]) {
+    const unit = Array.isArray(lease.units) ? lease.units[0] : lease.units
+    const property = Array.isArray(lease.properties) ? lease.properties[0] : lease.properties
+    const assignments = assignmentsByTenant.get(lease.tenant_id) || []
+    assignments.push({
+      lease_id: lease.id,
+      unit_id: lease.unit_id,
+      unit_name: unit?.unit_name || 'Unknown unit',
+      property_name: property?.name || 'Unknown property',
     })
-  )
+    assignmentsByTenant.set(lease.tenant_id, assignments)
+  }
 
-  return tenantsWithBalance
+  return tenantRows.map((tenant) => {
+    const assignedUnits = assignmentsByTenant.get(tenant.id) || []
+    return {
+      ...tenant,
+      total_balance: balanceByTenant.get(tenant.id) || 0,
+      active_leases_count: assignedUnits.length,
+      assigned_units: assignedUnits,
+      display_name: tenant.tenant_type === 'individual' ? tenant.full_name : tenant.business_name,
+    }
+  })
 }
 
-export default async function TenantsPage() {
-  const tenants = await getTenants()
+export default async function TenantsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const allTenants = await getTenants()
+  const query = (typeof params?.q === 'string' ? params.q : '').trim().toLowerCase()
+  const assignment = typeof params?.assignment === 'string' ? params.assignment : 'all'
+  const balance = typeof params?.balance === 'string' ? params.balance : 'all'
+  const sort = typeof params?.sort === 'string' ? params.sort : 'name_asc'
+  const tenants = allTenants
+    .filter((tenant) => {
+      const searchable = [tenant.display_name, tenant.phone, tenant.email, ...tenant.assigned_units.map((unit) => unit.unit_name)].filter(Boolean).join(' ').toLowerCase()
+      return (!query || searchable.includes(query))
+        && (assignment === 'all' || (assignment === 'assigned' ? tenant.active_leases_count > 0 : tenant.active_leases_count === 0))
+        && (balance === 'all' || (balance === 'due' ? tenant.total_balance > 0 : balance === 'credit' ? tenant.total_balance < 0 : tenant.total_balance === 0))
+    })
+    .sort((a, b) => {
+      if (sort === 'balance_desc') return b.total_balance - a.total_balance
+      if (sort === 'balance_asc') return a.total_balance - b.total_balance
+      if (sort === 'newest') return b.created_at.localeCompare(a.created_at)
+      return (a.display_name || '').localeCompare(b.display_name || '')
+    })
 
   return (
     <div className="space-y-6">
@@ -115,11 +149,21 @@ export default async function TenantsPage() {
         </Link>
       </div>
 
+      <OperationalListFilters
+        searchPlaceholder="Search tenants, contacts, phones, or units"
+        filters={[
+          { key: 'assignment', label: 'Assignments', options: [{ value: 'assigned', label: 'Assigned' }, { value: 'unassigned', label: 'Unassigned' }] },
+          { key: 'balance', label: 'Balances', options: [{ value: 'due', label: 'Amount due' }, { value: 'credit', label: 'Credit available' }, { value: 'settled', label: 'Settled' }] },
+        ]}
+        sortOptions={[{ value: 'name_asc', label: 'Name A-Z' }, { value: 'balance_desc', label: 'Highest balance' }, { value: 'balance_asc', label: 'Lowest balance' }, { value: 'newest', label: 'Newest tenant' }]}
+        savedViews={[{ label: 'All tenants', params: {} }, { label: 'Unassigned tenants', params: { assignment: 'unassigned' } }, { label: 'Amount due', params: { balance: 'due', sort: 'balance_desc' } }, { label: 'Credit available', params: { balance: 'credit' } }]}
+      />
+
       {tenants.length === 0 ? (
         <div className="card p-12 text-center">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No tenants yet</h3>
-          <p className="text-gray-500 mb-6">Get started by adding your first tenant</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{allTenants.length ? 'No matching tenants' : 'No tenants yet'}</h3>
+          <p className="text-gray-500 mb-6">{allTenants.length ? 'Clear or change the filters to see more tenants.' : 'Get started by adding your first tenant'}</p>
           <Link href="/tenants/new" className="btn-primary">
             <Plus className="h-5 w-5 mr-2" />
             Add Tenant

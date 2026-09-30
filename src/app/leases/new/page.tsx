@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { firstRelation, type UnitOptionRow } from '@/lib/supabase/query-results'
 import { ArrowLeft } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { DateInput } from '@/components/ui/DateInput'
@@ -114,14 +115,14 @@ function NewLeasePageContent() {
           .order('unit_name')
         
         if (unitsData) {
-          const formattedUnits = unitsData
-            .filter((u: any) => u.status === 'vacant' || u.id === preselectedUnitId)
-            .map((u: any) => ({
+          const formattedUnits = (unitsData as UnitOptionRow[])
+            .filter((u) => u.status === 'vacant' || u.id === preselectedUnitId)
+            .map((u) => ({
             id: u.id,
             unit_name: u.unit_name,
             unit_identifier: u.unit_identifier,
             property_id: u.property_id,
-            property_name: u.properties?.name,
+            property_name: firstRelation(u.properties)?.name || 'Property',
             monthly_rent: u.monthly_rent,
             usage_type: u.usage_type,
             status: u.status,
@@ -512,7 +513,7 @@ function NewLeasePageContent() {
             />
           </div>
 
-          <div className="hidden items-center justify-end space-x-4 pt-4 md:flex">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href="/leases" className="btn-secondary">
               Cancel
             </Link>
@@ -522,7 +523,7 @@ function NewLeasePageContent() {
           </div>
         </form>
       </div>
-      <MobileFormSubmitBar formId="create-lease-form" label="Create lease" pendingLabel="Creating lease..." pending={loading} />
+      <MobileFormSubmitBar formId="create-lease-form" label="Create lease" pendingLabel="Creating lease..." pending={loading} error={error} />
     </div>
   )
 }

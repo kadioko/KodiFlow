@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, DoorOpen, Building2 } from 'lucide-react'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
+import { ArrowLeft } from 'lucide-react'
 import { UNIT_TYPES, USAGE_TYPES } from '@/utils/constants'
 
 interface Property {
@@ -153,7 +154,7 @@ export default function NewUnitPage() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="create-unit-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -338,7 +339,7 @@ export default function NewUnitPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href="/units" className="btn-secondary">
               Cancel
             </Link>
@@ -348,6 +349,7 @@ export default function NewUnitPage() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="create-unit-form" label="Create unit" pendingLabel="Creating unit..." pending={loading} error={error} />
     </div>
   )
 }

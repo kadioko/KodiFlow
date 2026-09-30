@@ -2,6 +2,19 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Building2, MapPin, ChevronRight } from 'lucide-react'
 import { getLabelByValue, getColorByValue, PROPERTY_TYPES } from '@/utils/constants'
+import OperationalListFilters from '@/components/ui/OperationalListFilters'
+
+type PropertyWithRelations = {
+  id: string
+  name: string
+  property_type: 'residential' | 'commercial' | 'mixed_use'
+  location: string | null
+  description: string | null
+  created_at: string
+  updated_at: string
+  property_sections: { count: number }[] | null
+  units: { id: string; status: string }[] | null
+}
 
 async function getProperties() {
   const supabase = await createClient()
@@ -14,7 +27,7 @@ async function getProperties() {
     .select(`
       *,
       property_sections(count),
-      units(count)
+      units(id, status)
     `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
@@ -24,33 +37,42 @@ async function getProperties() {
     return []
   }
 
-  // Get occupied units count for each property
-  const propertiesWithStats = await Promise.all(
-    (properties || []).map(async (property) => {
-      const { data: units } = await supabase
-        .from('units')
-        .select('status')
-        .eq('property_id', property.id)
-      
-      const occupied = units?.filter(u => u.status === 'occupied').length || 0
-      const vacant = units?.filter(u => u.status === 'vacant').length || 0
-      const total = units?.length || 0
-
-      return {
-        ...property,
-        total_units: total,
-        occupied_units: occupied,
-        vacant_units: vacant,
-        sections_count: property.property_sections?.[0]?.count || 0,
-      }
-    })
-  )
-
-  return propertiesWithStats
+  return ((properties || []) as unknown as PropertyWithRelations[]).map((property) => {
+    const units = property.units || []
+    return {
+      ...property,
+      total_units: units.length,
+      occupied_units: units.filter((unit) => unit.status === 'occupied').length,
+      vacant_units: units.filter((unit) => unit.status === 'vacant').length,
+      sections_count: property.property_sections?.[0]?.count || 0,
+    }
+  })
 }
 
-export default async function PropertiesPage() {
-  const properties = await getProperties()
+export default async function PropertiesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const allProperties = await getProperties()
+  const query = (typeof params?.q === 'string' ? params.q : '').trim().toLowerCase()
+  const type = typeof params?.type === 'string' ? params.type : 'all'
+  const occupancy = typeof params?.occupancy === 'string' ? params.occupancy : 'all'
+  const sort = typeof params?.sort === 'string' ? params.sort : 'newest'
+  const properties = allProperties
+    .filter((property) => {
+      const searchable = [property.name, property.location, property.property_type].filter(Boolean).join(' ').toLowerCase()
+      return (!query || searchable.includes(query))
+        && (type === 'all' || property.property_type === type)
+        && (occupancy === 'all' || (occupancy === 'vacant' ? property.vacant_units > 0 : property.total_units > 0 && property.occupied_units === property.total_units))
+    })
+    .sort((a, b) => {
+      if (sort === 'name_asc') return a.name.localeCompare(b.name)
+      if (sort === 'vacancy_desc') return b.vacant_units - a.vacant_units
+      if (sort === 'occupancy_asc') return (a.occupied_units / Math.max(a.total_units, 1)) - (b.occupied_units / Math.max(b.total_units, 1))
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
 
   return (
     <div className="space-y-6">
@@ -65,11 +87,21 @@ export default async function PropertiesPage() {
         </Link>
       </div>
 
+      <OperationalListFilters
+        searchPlaceholder="Search properties or locations"
+        filters={[
+          { key: 'type', label: 'Types', options: PROPERTY_TYPES },
+          { key: 'occupancy', label: 'Occupancy', options: [{ value: 'vacant', label: 'Has vacant units' }, { value: 'full', label: 'Fully occupied' }] },
+        ]}
+        sortOptions={[{ value: 'newest', label: 'Newest property' }, { value: 'name_asc', label: 'Name A-Z' }, { value: 'vacancy_desc', label: 'Most vacant units' }, { value: 'occupancy_asc', label: 'Lowest occupancy' }]}
+        savedViews={[{ label: 'All properties', params: {} }, { label: 'Vacant units', params: { occupancy: 'vacant', sort: 'vacancy_desc' } }, { label: 'Fully occupied', params: { occupancy: 'full' } }]}
+      />
+
       {properties.length === 0 ? (
         <div className="card p-12 text-center">
           <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No properties yet</h3>
-          <p className="text-gray-500 mb-6">Get started by adding your first property</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{allProperties.length ? 'No matching properties' : 'No properties yet'}</h3>
+          <p className="text-gray-500 mb-6">{allProperties.length ? 'Clear or change the filters to see more properties.' : 'Get started by adding your first property'}</p>
           <Link href="/properties/new" className="btn-primary">
             <Plus className="h-5 w-5 mr-2" />
             Add Property

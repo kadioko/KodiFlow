@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
 import { ArrowLeft, User, Building2, Loader2, Home, CalendarDays } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { DateInput } from '@/components/ui/DateInput'
@@ -405,7 +406,7 @@ export default function EditTenantPage() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="edit-tenant-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -785,7 +786,7 @@ export default function EditTenantPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href={`/tenants/${tenantId}`} className="btn-secondary">
               Cancel
             </Link>
@@ -795,6 +796,7 @@ export default function EditTenantPage() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="edit-tenant-form" label="Save changes" pendingLabel="Saving tenant..." pending={saving} error={error} />
     </div>
   )
 }

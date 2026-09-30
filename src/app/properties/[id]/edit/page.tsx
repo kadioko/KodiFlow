@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Building2, Loader2 } from 'lucide-react'
+import { MobileFormSubmitBar } from '@/components/ui/MobileFormSubmitBar'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { PROPERTY_TYPES } from '@/utils/constants'
 
 function getRouteParam(value: string | string[] | undefined) {
@@ -126,7 +127,7 @@ export default function EditPropertyPage() {
       </div>
 
       <div className="card">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form id="edit-property-form" onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-6">
           {error && (
             <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
               {error}
@@ -195,7 +196,7 @@ export default function EditPropertyPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-4 pt-4">
+          <div className="hidden items-center justify-end space-x-4 pt-4 lg:flex">
             <Link href={`/properties/${propertyId}`} className="btn-secondary">
               Cancel
             </Link>
@@ -205,6 +206,7 @@ export default function EditPropertyPage() {
           </div>
         </form>
       </div>
+      <MobileFormSubmitBar formId="edit-property-form" label="Save changes" pendingLabel="Saving property..." pending={saving} error={error} />
     </div>
   )
 }

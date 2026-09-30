@@ -4,19 +4,15 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { tenantName, type LeaseWithTenant, type PaymentWithTenant } from '@/lib/supabase/query-results'
 import { 
   ArrowLeft, 
   DoorOpen, 
   Edit2, 
   Trash2, 
-  FileText,
-  Receipt,
-  CreditCard,
   Loader2,
   AlertCircle,
   User,
-  CheckCircle,
-  XCircle,
   Calendar
 } from 'lucide-react'
 import { UNIT_TYPES, UNIT_STATUSES, getLabelByValue, getColorByValue } from '@/utils/constants'
@@ -143,14 +139,14 @@ export default function UnitDetailPage() {
       .order('created_at', { ascending: false })
 
     if (leasesData) {
-      const formattedLeases = leasesData.map((l: any) => ({
+      const formattedLeases = (leasesData as LeaseWithTenant[]).map((l) => ({
         ...l,
-        tenant_name: l.tenants?.full_name || l.tenants?.business_name,
+        tenant_name: tenantName(l.tenants),
       }))
       setLeases(formattedLeases)
       
       // Find current active lease
-      const active = formattedLeases.find((l: any) => l.status === 'active')
+      const active = formattedLeases.find((l) => l.status === 'active')
       setCurrentLease(active || null)
     }
 
@@ -178,9 +174,9 @@ export default function UnitDetailPage() {
       .order('payment_date', { ascending: false })
 
     if (paymentsData) {
-      setPayments(paymentsData.map((p: any) => ({
+      setPayments((paymentsData as PaymentWithTenant[]).map((p) => ({
         ...p,
-        tenant_name: p.tenants?.full_name || p.tenants?.business_name,
+        tenant_name: tenantName(p.tenants),
       })))
     }
 
@@ -634,8 +630,8 @@ export default function UnitDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="mobile-dialog-overlay fixed inset-0 z-50 bg-black bg-opacity-50">
+          <div className="mobile-dialog-panel w-full max-w-md rounded-lg bg-white p-6">
             <div className="flex items-center mb-4">
               <AlertCircle className="h-6 w-6 text-danger-500 mr-2" />
               <h3 className="text-lg font-medium text-gray-900">Delete Unit</h3>
@@ -645,17 +641,17 @@ export default function UnitDetailPage() {
               <br /><br />
               This action cannot be undone.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button 
                 onClick={() => setShowDeleteConfirm(false)}
-                className="btn-secondary"
+                className="btn-secondary min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 Cancel
               </button>
               <button 
                 onClick={handleDelete}
-                className="btn-danger"
+                className="btn-danger min-h-11 w-full sm:w-auto"
                 disabled={deleteLoading}
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Unit'}
