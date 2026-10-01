@@ -52,6 +52,7 @@ jobs:
           E2E_INVOICE_ID: ${{ vars.E2E_INVOICE_ID }}
           E2E_PAYMENT_ID: ${{ vars.E2E_PAYMENT_ID }}
           E2E_LEASE_ID: ${{ vars.E2E_LEASE_ID }}
+          E2E_EXPIRED_LEASE_ID: ${{ vars.E2E_EXPIRED_LEASE_ID }}
           E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
           E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
 

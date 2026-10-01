@@ -28,6 +28,17 @@ test.describe('financial workflows', () => {
     await expect(page.getByText(/opening balance|opening credit|carry-forward/i).first()).toBeVisible()
   })
 
+  test('expired lease offers a move-out confirmation without changing records', async ({ page }) => {
+    test.skip(!process.env.E2E_EXPIRED_LEASE_ID, 'Set E2E_EXPIRED_LEASE_ID from an isolated expired-lease fixture.')
+    await signIn(page)
+    await page.goto(`/leases/${process.env.E2E_EXPIRED_LEASE_ID}`)
+    await page.getByRole('button', { name: /confirm move-out and mark unit vacant/i }).click()
+    await expect(page.getByRole('heading', { name: /confirm tenant move-out/i })).toBeVisible()
+    await expect(page.getByText(/no balance is transferred to a new tenant/i)).toBeVisible()
+    await page.getByRole('button', { name: /cancel/i }).click()
+    await expect(page.getByRole('heading', { name: /confirm tenant move-out/i })).toHaveCount(0)
+  })
+
   test('invoice void and payment reversal pages require an explicit reason', async ({ page }) => {
     test.skip(!process.env.E2E_INVOICE_ID || !process.env.E2E_PAYMENT_ID, 'Set isolated E2E invoice and payment fixtures.')
     await signIn(page)

@@ -83,7 +83,7 @@ Unit status meanings:
 - **Under Maintenance**: Not ready to rent.
 - **Inactive**: Not currently used.
 
-When you create an active lease for a unit, KodiFlow marks the unit as occupied. When a lease is terminated or moved away from a unit, KodiFlow can mark that unit vacant if no other active lease remains.
+When you create an active lease for a unit, KodiFlow marks the unit as occupied. Lease expiry alone does not mean the tenant has moved out, so KodiFlow does not automatically make an expired lease's unit available. After the tenant hands over the unit, close out the expired lease using **Mark Vacant**. KodiFlow checks for other active leases first. A unit reserved or under maintenance keeps that status until you deliberately change it.
 
 Use **Unit ID / Door Number** for the building code printed on doors or plans, such as `A-101`, `B2-04`, or `SHOP-G01`. This helps distinguish similar unit names inside the same building.
 
@@ -154,6 +154,16 @@ From a lease detail page you can:
 - Terminate an active lease.
 
 To renew a previous lease, open the lease, tenant, unit, or property history and use **Renew** or **New Lease**. KodiFlow preselects the tenant and unit, calculates the natural next term from the chosen billing frequency, and previews any carried Opening Balance or Opening Credit before you confirm.
+
+### When A Lease Expires And The Tenant Is Leaving
+
+Expiry and move-out are separate events. Use this decision:
+
+- **Same tenant is staying:** choose **Renew** and review the billing frequency, new term, and any Opening Balance or Opening Credit. The renewal carries the old lease's balance according to the preview.
+- **Tenant is leaving:** do not renew. After keys and possession are handed back, open the expired lease and choose **Mark Vacant**, then confirm the move-out. This changes the unit availability only; the expired lease dates, invoices, payments, deposit, and remaining balance are preserved.
+- **Tenant left before the agreed end date:** use **Terminate** on the active lease to record the early end. The unit is released only when no other active lease uses it.
+
+After marking a departing tenant's unit vacant, open the unit and create a **new lease** for the incoming tenant. The previous tenant's unpaid balance stays on their old lease and statement; it is not added to the new tenant's account. Handle any security-deposit settlement against the departing tenant's records separately.
 
 ## 8. Invoices And Rent
 
@@ -318,7 +328,16 @@ If the tenant pays a service charge, enter it on the lease. Generated invoices w
 2. Click **Terminate**.
 3. Confirm the action.
 4. The lease becomes terminated.
-5. The unit becomes vacant if no other active lease exists.
+5. If no other active lease uses the unit, its status becomes vacant unless it is already reserved or under maintenance.
+
+### Tenant Leaves When The Lease Expires
+
+1. Open the lease and verify it is **Expired**. Expiry does not confirm the tenant has vacated.
+2. Complete the move-out handover and any inspection or meter checks.
+3. If the same tenant is staying, use **Renew** and review the carry-forward preview. If they are leaving, do not renew.
+4. For a departing tenant, click **Mark Vacant** and confirm. KodiFlow blocks the change if another active lease uses the unit.
+5. Open the vacant unit and create a new lease for the incoming tenant.
+6. Review the old tenant's balance on their original lease or statement. It does not transfer to an unrelated new tenant.
 
 ### Review A Tenant Balance
 
@@ -346,6 +365,10 @@ The same guidance applies if a property or lease says "Not Found".
 
 Check that the unit has an active lease. A tenant occupies a unit through a lease, not just by existing as a tenant.
 
+### An Expired Lease's Unit Still Shows As Occupied
+
+This is intentional: the end date passing does not confirm that keys were returned or the tenant moved out. Once handover is complete, open the expired lease and use **Mark Vacant**. If the action reports another active lease, review all leases linked to the unit before releasing it. If the unit is reserved or under maintenance, its status is preserved and should be changed only when it is ready to rent.
+
 ### A Unit Is Missing From Lease Creation
 
 The create lease screen shows vacant units. If the unit is occupied, reserved, under maintenance, or inactive, edit the unit status or edit the existing lease first.
@@ -365,6 +388,7 @@ Refresh the page. If it still looks wrong, go to **Settings**, switch to Light, 
 - Create properties and units before creating leases.
 - Use leases to connect tenants to units.
 - Keep unit statuses accurate.
+- Do not mark a unit vacant until move-out is confirmed; keep a departing tenant's balance on their original lease.
 - Record payments as soon as they are received.
 - Add documents to support important records.
 - Review reports regularly.
