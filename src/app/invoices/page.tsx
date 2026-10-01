@@ -4,6 +4,7 @@ import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'luci
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { WhatsAppReminderButton } from '@/components/notifications/WhatsAppReminderButton'
+import { calculateInvoiceMetrics, getEffectiveInvoiceStatus } from '@/utils/invoice-metrics'
 
 type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid' | 'transferred'
 type InvoiceSort = 'status' | 'balance_desc' | 'amount_desc' | 'paid_desc' | 'due_asc' | 'newest'
@@ -130,27 +131,39 @@ async function getInvoices(): Promise<InvoiceListItem[]> {
   
   if (!user) return []
 
-  await supabase.rpc('refresh_overdue_invoices')
+  const { error: statusRefreshError } = await supabase.rpc('refresh_overdue_invoices')
+  if (statusRefreshError) console.error('Error refreshing invoice statuses:', statusRefreshError)
 
-  const { data: invoices, error } = await supabase
-    .from('rent_invoices')
-    .select(`
-      *,
-      tenants(full_name, business_name),
-      units(unit_name),
-      properties(name)
-    `)
-    .eq('user_id', user.id)
-    .order('billing_year', { ascending: false })
-    .order('billing_month', { ascending: false })
-    .order('created_at', { ascending: false })
+  const pageSize = 500
+  const invoices: InvoiceRow[] = []
+  for (let offset = 0; ; offset += pageSize) {
+    const { data: page, error } = await supabase
+      .from('rent_invoices')
+      .select(`
+        *,
+        tenants(full_name, business_name),
+        units(unit_name),
+        properties(name)
+      `)
+      .eq('user_id', user.id)
+      .order('billing_year', { ascending: false })
+      .order('billing_month', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + pageSize - 1)
 
-  if (error) {
-    console.error('Error fetching invoices:', error)
-    return []
+    if (error) {
+      console.error('Error fetching invoices:', error)
+      if (offset > 0) throw new Error('Could not load all invoices. Please refresh and try again.')
+      return []
+    }
+
+    const rows = (page || []) as InvoiceRow[]
+    invoices.push(...rows)
+    if (rows.length < pageSize) break
   }
 
-  return ((invoices || []) as InvoiceRow[]).map((invoice) => {
+  return invoices.map((invoice) => {
     const tenant = firstRelation(invoice.tenants)
     const unit = firstRelation(invoice.units)
     const property = firstRelation(invoice.properties)
@@ -169,7 +182,7 @@ async function getInvoices(): Promise<InvoiceListItem[]> {
       amount_paid: invoice.amount_paid || 0,
       balance: invoice.balance || 0,
       due_date: invoice.due_date,
-      status: invoice.status,
+      status: getEffectiveInvoiceStatus(invoice, new Date().toISOString().slice(0, 10)),
     }
   })
 }
@@ -188,10 +201,7 @@ export default async function InvoicesPage({
     : allInvoices.filter((invoice) => invoice.status === statusFilter)
   const invoices = sortInvoices(filteredInvoices, sort)
 
-  const financialInvoices = allInvoices.filter((inv) => !['cancelled', 'transferred'].includes(inv.status))
-  const totalExpected = financialInvoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0)
-  const totalPaid = financialInvoices.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0)
-  const totalBalance = financialInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0)
+  const invoiceMetrics = calculateInvoiceMetrics(allInvoices)
   const overdueCount = allInvoices.filter((inv) => inv.status === 'overdue').length
   const paidCount = allInvoices.filter((inv) => inv.status === 'paid').length
   const unpaidCount = allInvoices.filter((inv) => inv.status === 'unpaid').length
@@ -238,7 +248,8 @@ export default async function InvoicesPage({
             </div>
           </div>
           <p className="stat-label mt-4">Expected</p>
-          <p className="stat-value">{formatCurrency(totalExpected)}</p>
+          <p className="stat-value break-words text-xl leading-tight [overflow-wrap:anywhere] sm:text-3xl">{formatCurrency(invoiceMetrics.expected)}</p>
+          <p className="mt-1 text-xs text-gray-500">All non-cancelled, non-transferred invoices</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center">
@@ -247,7 +258,8 @@ export default async function InvoicesPage({
             </div>
           </div>
           <p className="stat-label mt-4">Collected</p>
-          <p className="stat-value">{formatCurrency(totalPaid)}</p>
+          <p className="stat-value break-words text-xl leading-tight [overflow-wrap:anywhere] sm:text-3xl">{formatCurrency(invoiceMetrics.collected)}</p>
+          <p className="mt-1 text-xs text-gray-500">Payments applied to invoices</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center">
@@ -256,7 +268,8 @@ export default async function InvoicesPage({
             </div>
           </div>
           <p className="stat-label mt-4">Outstanding</p>
-          <p className="stat-value">{formatCurrency(totalBalance)}</p>
+          <p className="stat-value break-words text-xl leading-tight [overflow-wrap:anywhere] sm:text-3xl">{formatCurrency(invoiceMetrics.outstanding)}</p>
+          <p className="mt-1 text-xs text-gray-500">Positive balances only; credits stay visible on invoices</p>
         </div>
         <div className="stat-card">
           <div className="flex items-center">
@@ -265,7 +278,8 @@ export default async function InvoicesPage({
             </div>
           </div>
           <p className="stat-label mt-4">Overdue</p>
-          <p className="stat-value text-danger-600">{overdueCount}</p>
+          <p className="stat-value break-words text-xl leading-tight text-danger-600 [overflow-wrap:anywhere] sm:text-3xl">{formatCurrency(invoiceMetrics.overdue)}</p>
+          <p className="mt-1 text-xs text-gray-500">{invoiceMetrics.overdueCount} overdue invoice{invoiceMetrics.overdueCount === 1 ? '' : 's'}</p>
         </div>
       </div>
 
