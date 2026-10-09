@@ -83,7 +83,7 @@ Unit status meanings:
 - **Under Maintenance**: Not ready to rent.
 - **Inactive**: Not currently used.
 
-When you create an active lease for a unit, KodiFlow marks the unit as occupied. Lease expiry alone does not mean the tenant has moved out, so KodiFlow does not automatically make an expired lease's unit available. After the tenant hands over the unit, close out the expired lease using **Mark Vacant**. KodiFlow checks for other active leases first. A unit reserved or under maintenance keeps that status until you deliberately change it.
+When you create an active lease for a unit, KodiFlow marks the unit as occupied. Lease expiry alone does not mean the tenant has moved out, so KodiFlow does not automatically make an expired lease's unit available. After the tenant hands over the unit, close out the expired lease using **Mark Vacant**. KodiFlow checks for other active leases first. When terminating a lease, the status automation also leaves the unit alone if another active or expired lease is linked. Reserved or maintenance status is preserved.
 
 Use **Unit ID / Door Number** for the building code printed on doors or plans, such as `A-101`, `B2-04`, or `SHOP-G01`. This helps distinguish similar unit names inside the same building.
 
@@ -328,7 +328,7 @@ If the tenant pays a service charge, enter it on the lease. Generated invoices w
 2. Click **Terminate**.
 3. Confirm the action.
 4. The lease becomes terminated.
-5. If no other active lease uses the unit, its status becomes vacant unless it is already reserved or under maintenance.
+5. The unit becomes vacant only if no other active or expired lease remains and the unit is currently occupied. Reserved or maintenance status is preserved. If it remains occupied, review the lease records and confirm move-out with **Mark Vacant**.
 
 ### Tenant Leaves When The Lease Expires
 

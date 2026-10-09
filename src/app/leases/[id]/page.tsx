@@ -261,7 +261,7 @@ export default function LeaseDetailPage() {
           .select('id', { count: 'exact', head: true })
           .eq('unit_id', lease.unit_id)
           .eq('user_id', user.id)
-          .eq('status', 'active')
+          .in('status', ['active', 'expired'])
 
         if (activeLeaseError || count === null) {
           setError('The lease ended, but unit availability could not be checked. Verify the unit status before offering it.')
@@ -277,7 +277,7 @@ export default function LeaseDetailPage() {
             setError('The lease ended, but the unit could not be marked vacant. Update its status after confirming move-out.')
           }
         } else {
-          successMessage = 'Lease terminated. The unit remains occupied because another active lease is linked to it.'
+          successMessage = 'Lease terminated. The unit remains occupied because another active or expired lease is linked to it.'
         }
       }
 
@@ -292,8 +292,9 @@ export default function LeaseDetailPage() {
   }
 
   const handleMarkUnitVacant = async () => {
-    if (!lease || lease.status !== 'expired' || lease.unit_status !== 'occupied') {
-      setError('Only an expired lease with an occupied unit can be closed out this way.')
+    const isEndedLease = lease?.status === 'expired' || lease?.status === 'terminated'
+    if (!lease || !isEndedLease || lease.unit_status !== 'occupied') {
+      setError('Only an expired or terminated lease with an occupied unit can be closed out this way.')
       return
     }
 
@@ -343,7 +344,7 @@ export default function LeaseDetailPage() {
 
       setLease({ ...lease, unit_status: 'vacant' })
       setShowVacantConfirm(false)
-      setSuccess('Unit marked vacant. The expired lease, invoices, payments, and balance remain unchanged.')
+      setSuccess('Unit marked vacant. The lease, invoices, payments, and balance remain unchanged.')
     } catch (vacancyError) {
       setError(vacancyError instanceof Error ? vacancyError.message : 'The unit could not be marked vacant.')
     } finally {
@@ -444,6 +445,7 @@ export default function LeaseDetailPage() {
 
   const isActive = lease.status === 'active'
   const isExpired = lease.status === 'expired'
+  const isMoveOutPending = lease.status === 'expired' || lease.status === 'terminated'
   const canRenew = lease.status === 'active' || (lease.status === 'expired' && lease.unit_status !== 'vacant')
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -548,7 +550,7 @@ export default function LeaseDetailPage() {
               )}
             </>
           )}
-          {lease.status === 'expired' && lease.unit_status === 'occupied' && (
+          {isMoveOutPending && lease.unit_status === 'occupied' && (
             <button
               onClick={() => {
                 setError('')
@@ -562,13 +564,13 @@ export default function LeaseDetailPage() {
               Mark Vacant
             </button>
           )}
-          {!canRenew && lease.status === 'expired' && lease.unit_status === 'vacant' && (
+          {isMoveOutPending && lease.unit_status === 'vacant' && (
             <Link href={`/leases/new?unit=${lease.unit_id}`} className="btn-primary min-h-11">
               <RefreshCw className="h-4 w-4 mr-2" />
               Create New Lease
             </Link>
           )}
-          {!canRenew && !(lease.status === 'expired' && lease.unit_status === 'vacant') && (
+          {!canRenew && !isMoveOutPending && (
             <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${lease.unit_id}`} className="btn-primary">
               <RefreshCw className="h-4 w-4 mr-2" />
               Renew / New Lease
@@ -604,16 +606,16 @@ export default function LeaseDetailPage() {
         </div>
       )}
 
-      {lease.status === 'expired' && (
+      {isMoveOutPending && (
         <div className={`rounded-lg border p-4 ${lease.unit_status === 'vacant' ? 'border-success-200 bg-success-50 text-success-800' : lease.unit_status === 'occupied' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
           <p className="font-semibold">
             {lease.unit_status === 'vacant' ? 'Move-out completed' : lease.unit_status === 'occupied' ? 'Confirm move-out before releasing this unit' : `Unit status: ${lease.unit_status.replaceAll('_', ' ')}`}
           </p>
           <p className="mt-1 text-sm">
             {lease.unit_status === 'vacant'
-              ? 'The unit is available for a new lease. This expired lease and its financial history are preserved.'
+              ? 'The unit is available for a new lease. This ended lease and its financial history are preserved.'
               : lease.unit_status === 'occupied'
-                ? 'An expired lease does not confirm the tenant has left. After handover, mark the unit vacant. Any unpaid balance stays with this lease and is not charged to a new tenant.'
+                ? `${lease.status === 'expired' ? 'Expiry does not confirm the tenant has left.' : 'Ending a lease does not by itself confirm handover.'} After the tenant returns possession, mark the unit vacant. Any unpaid balance stays with this lease and is not charged to a new tenant.`
                 : 'This unit status is preserved. Review the unit before making it available for a new lease.'}
           </p>
         </div>
@@ -925,10 +927,12 @@ export default function LeaseDetailPage() {
               <h3 id="mark-vacant-title" className="text-lg font-semibold text-gray-900">Confirm Tenant Move-Out</h3>
             </div>
             <p className="mb-4 text-sm text-gray-700">
-              Confirm that <strong>{lease.tenant_name}</strong> has handed over <strong>{lease.unit_name}</strong> and is not renewing this lease.
+              {lease.status === 'expired'
+                ? <>Confirm that <strong>{lease.tenant_name}</strong> has handed over <strong>{lease.unit_name}</strong> and is not renewing this lease.</>
+                : <>Confirm that <strong>{lease.tenant_name}</strong> has handed over <strong>{lease.unit_name}</strong> following early termination.</>}
             </p>
             <div className="mb-5 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-              This marks the unit vacant only. The expired lease, invoices, payments, security deposit, and any remaining balance stay in the old lease history. No balance is transferred to a new tenant.
+              This marks the unit vacant only. The ended lease, invoices, payments, security deposit, and any remaining balance stay in the old lease history. No balance is transferred to a new tenant.
             </div>
             {error && <p role="alert" className="mb-3 text-sm text-danger-700">{error}</p>}
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

@@ -206,51 +206,79 @@ export default function EditLeasePage() {
     }))
   }
 
-  const syncUnitStatuses = async (userId: string) => {
+  const syncUnitStatuses = async (userId: string): Promise<boolean> => {
     const supabase = createClient()
+    const canVacateUnit = async (unitId: string): Promise<boolean | null> => {
+      const { count, error: leaseQueryError } = await supabase
+        .from('leases')
+        .select('id', { count: 'exact', head: true })
+        .eq('unit_id', unitId)
+        .eq('user_id', userId)
+        .in('status', ['active', 'expired'])
+        .neq('id', leaseId)
+
+      if (leaseQueryError || count === null) {
+        setError('The lease was saved, but another lease could not be checked. The unit status was left unchanged.')
+        return null
+      }
+
+      return count === 0
+    }
 
     if (formData.status === 'active') {
-      await supabase
+      const { error: unitError } = await supabase
         .from('units')
         .update({ status: 'occupied', updated_at: new Date().toISOString() })
         .eq('id', formData.unit_id)
         .eq('user_id', userId)
+
+      if (unitError) {
+        setError('The lease was saved, but the unit could not be marked occupied. Please verify its status.')
+        return false
+      }
     }
 
-    if (originalUnitId && originalUnitId !== formData.unit_id) {
-      const { count } = await supabase
-        .from('leases')
-        .select('id', { count: 'exact', head: true })
-        .eq('unit_id', originalUnitId)
-        .eq('user_id', userId)
-        .eq('status', 'active')
-
-      if (!count) {
-        await supabase
+    if (formData.status === 'active' && originalUnitId && originalUnitId !== formData.unit_id) {
+      const canVacate = await canVacateUnit(originalUnitId)
+      if (canVacate === null) return false
+      if (canVacate) {
+        const { error: unitError } = await supabase
           .from('units')
           .update({ status: 'vacant', updated_at: new Date().toISOString() })
           .eq('id', originalUnitId)
           .eq('user_id', userId)
+          .eq('status', 'occupied')
+
+        if (unitError) {
+          setError('The lease was saved, but the previous unit could not be released. Please verify its status.')
+          return false
+        }
       }
     }
 
-    if (formData.status !== 'active') {
-      const { count } = await supabase
-        .from('leases')
-        .select('id', { count: 'exact', head: true })
-        .eq('unit_id', formData.unit_id)
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .neq('id', leaseId)
+    if (formData.status === 'terminated') {
+      const releaseUnitId = originalUnitId && originalUnitId !== formData.unit_id
+        ? originalUnitId
+        : formData.unit_id
 
-      if (!count) {
-        await supabase
+      const canVacate = await canVacateUnit(releaseUnitId)
+      if (canVacate === null) return false
+      if (canVacate) {
+        const { error: unitError } = await supabase
           .from('units')
           .update({ status: 'vacant', updated_at: new Date().toISOString() })
-          .eq('id', formData.unit_id)
+          .eq('id', releaseUnitId)
           .eq('user_id', userId)
+          .eq('status', 'occupied')
+
+        if (unitError) {
+          setError('The lease was saved, but the unit could not be released. Please verify its status.')
+          return false
+        }
       }
     }
+
+    return true
   }
 
   const syncServiceCharge = async (userId: string) => {
@@ -422,7 +450,11 @@ export default function EditLeasePage() {
       return
     }
 
-    await syncUnitStatuses(user.id)
+    const statusesSynced = await syncUnitStatuses(user.id)
+    if (!statusesSynced) {
+      setSaving(false)
+      return
+    }
     router.push(`/leases/${leaseId}`)
     router.refresh()
     setSaving(false)
