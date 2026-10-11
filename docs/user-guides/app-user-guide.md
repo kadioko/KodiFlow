@@ -141,7 +141,7 @@ Lease status meanings:
 - **Active**: The lease is current and the unit is occupied.
 - **Pending**: Created but not active yet.
 - **Expired**: End date has passed.
-- **Terminated**: Ended early.
+- **Terminated**: Closed after an early end or confirmed move-out.
 - **Renewed**: Replaced by a renewed lease.
 
 From a lease detail page you can:
@@ -150,17 +150,17 @@ From a lease detail page you can:
 - View the property.
 - View the unit.
 - Edit the lease.
-- Renew an active lease.
+- Renew an active or expired lease before move-out is confirmed.
 - Terminate an active lease.
 
 To renew a previous lease, open the lease, tenant, unit, or property history and use **Renew** or **New Lease**. KodiFlow preselects the tenant and unit, calculates the natural next term from the chosen billing frequency, and previews any carried Opening Balance or Opening Credit before you confirm.
 
 ### When A Lease Expires And The Tenant Is Leaving
 
-Expiry and move-out are separate events. Use this decision:
+Expiry and move-out are separate events. An expired lease now presents both choices, even if the unit is already marked vacant. Unit vacancy alone does not record the tenant's move-out decision. Use this decision:
 
 - **Same tenant is staying:** choose **Renew** and review the billing frequency, new term, and any Opening Balance or Opening Credit. The renewal carries the old lease's balance according to the preview.
-- **Tenant is leaving:** do not renew. After keys and possession are handed back, open the expired lease and choose **Mark Vacant**, then confirm the move-out. This changes the unit availability only; the expired lease dates, invoices, payments, deposit, and remaining balance are preserved.
+- **Tenant is leaving:** do not renew. After keys and possession are handed back, open the expired lease and choose **Confirm Move-Out**. This closes the expired lease and marks the unit vacant only when no other active or expired lease remains. The lease's invoices, payments, deposit, and remaining balance are preserved.
 - **Tenant left before the agreed end date:** use **Terminate** on the active lease to record the early end. The unit is released only when no other active lease uses it.
 
 After marking a departing tenant's unit vacant, open the unit and create a **new lease** for the incoming tenant. The previous tenant's unpaid balance stays on their old lease and statement; it is not added to the new tenant's account. Handle any security-deposit settlement against the departing tenant's records separately.
@@ -335,7 +335,7 @@ If the tenant pays a service charge, enter it on the lease. Generated invoices w
 1. Open the lease and verify it is **Expired**. Expiry does not confirm the tenant has vacated.
 2. Complete the move-out handover and any inspection or meter checks.
 3. If the same tenant is staying, use **Renew** and review the carry-forward preview. If they are leaving, do not renew.
-4. For a departing tenant, click **Mark Vacant** and confirm. KodiFlow blocks the change if another active lease uses the unit.
+4. For a departing tenant, click **Confirm Move-Out** and confirm. KodiFlow records the decision and marks the unit vacant only when no other active or expired lease remains.
 5. Open the vacant unit and create a new lease for the incoming tenant.
 6. Review the old tenant's balance on their original lease or statement. It does not transfer to an unrelated new tenant.
 
@@ -367,7 +367,7 @@ Check that the unit has an active lease. A tenant occupies a unit through a leas
 
 ### An Expired Lease's Unit Still Shows As Occupied
 
-This is intentional: the end date passing does not confirm that keys were returned or the tenant moved out. Once handover is complete, open the expired lease and use **Mark Vacant**. If the action reports another active lease, review all leases linked to the unit before releasing it. If the unit is reserved or under maintenance, its status is preserved and should be changed only when it is ready to rent.
+This is intentional: the end date passing does not confirm that keys were returned or the tenant moved out. Open the expired lease and choose **Renew** or **Confirm Move-Out**. A unit already marked vacant still needs an explicit choice for that lease. Move-out confirmation changes the lease to terminated; the unit is made vacant only when no other active or expired lease remains. Reserved or maintenance status is preserved and should be changed only when the unit is ready to rent.
 
 ### A Unit Is Missing From Lease Creation
 

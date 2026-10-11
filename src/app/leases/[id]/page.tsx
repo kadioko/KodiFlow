@@ -126,6 +126,20 @@ export default function LeaseDetailPage() {
     fetchLeaseData()
   }, [leaseId])
 
+  useEffect(() => {
+    if (!lease || lease.status !== 'expired') return
+
+    const url = new URL(window.location.href)
+    const action = url.searchParams.get('action')
+    if (action !== 'renew' && action !== 'move-out') return
+
+    if (action === 'renew') setShowRenewModal(true)
+    if (action === 'move-out') setShowVacantConfirm(true)
+
+    url.searchParams.delete('action')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [lease])
+
   const fetchLeaseData = async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -292,9 +306,8 @@ export default function LeaseDetailPage() {
   }
 
   const handleMarkUnitVacant = async () => {
-    const isEndedLease = lease?.status === 'expired' || lease?.status === 'terminated'
-    if (!lease || !isEndedLease || lease.unit_status !== 'occupied') {
-      setError('Only an expired or terminated lease with an occupied unit can be closed out this way.')
+    if (!lease || !['expired', 'terminated'].includes(lease.status)) {
+      setError('Only an expired or terminated lease can be closed out this way.')
       return
     }
 
@@ -311,20 +324,60 @@ export default function LeaseDetailPage() {
         return
       }
 
-      const { count, error: activeLeaseError } = await supabase
-        .from('leases')
-        .select('id', { count: 'exact', head: true })
-        .eq('unit_id', lease.unit_id)
-        .eq('user_id', user.id)
-        .eq('status', 'active')
+      if (lease.status === 'expired') {
+        const { data: updatedLease, error: leaseError } = await supabase
+          .from('leases')
+          .update({ status: 'terminated', updated_at: new Date().toISOString() })
+          .eq('id', lease.id)
+          .eq('user_id', user.id)
+          .eq('status', 'expired')
+          .select('id')
+          .maybeSingle()
 
-      if (activeLeaseError || count === null) {
-        setError('Could not verify whether another active lease uses this unit. No changes were made.')
+        if (leaseError || !updatedLease) {
+          setError(leaseError?.message || 'The lease changed before move-out was confirmed. Refresh and review it.')
+          return
+        }
+
+        const { data: unitData } = await supabase
+          .from('units')
+          .select('status')
+          .eq('id', lease.unit_id)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const unitStatus = unitData?.status || lease.unit_status
+
+        setLease({ ...lease, status: 'terminated', unit_status: unitStatus })
+        setShowVacantConfirm(false)
+        setSuccess(unitStatus === 'vacant'
+          ? 'Move-out confirmed. The unit is vacant, and this lease and its financial history are preserved.'
+          : unitStatus === 'occupied'
+            ? 'Move-out recorded. The unit remains occupied because another active or expired lease is linked to it.'
+            : `Move-out recorded. The unit remains ${unitStatus.replaceAll('_', ' ')}; review its availability before creating a lease.`)
         return
       }
 
-      if (count > 0) {
-        setError('This unit still has another active lease. Review its lease records before marking the unit vacant.')
+      if (lease.unit_status !== 'occupied') {
+        setError('The unit status changed. Refresh and review the unit before marking it vacant.')
+        return
+      }
+
+      const { data: otherOpenLeases, error: activeLeaseError } = await supabase
+        .from('leases')
+        .select('id')
+        .eq('unit_id', lease.unit_id)
+        .eq('user_id', user.id)
+        .in('status', ['active', 'expired'])
+        .neq('id', lease.id)
+        .limit(1)
+
+      if (activeLeaseError || !otherOpenLeases) {
+        setError('Could not verify whether another active or expired lease uses this unit. No changes were made.')
+        return
+      }
+
+      if (otherOpenLeases.length > 0) {
+        setError('This unit still has another active or expired lease. Review its lease records before marking the unit vacant.')
         return
       }
 
@@ -344,7 +397,7 @@ export default function LeaseDetailPage() {
 
       setLease({ ...lease, unit_status: 'vacant' })
       setShowVacantConfirm(false)
-      setSuccess('Unit marked vacant. The lease, invoices, payments, and balance remain unchanged.')
+      setSuccess('Move-out confirmed. The lease, invoices, payments, and balance remain unchanged.')
     } catch (vacancyError) {
       setError(vacancyError instanceof Error ? vacancyError.message : 'The unit could not be marked vacant.')
     } finally {
@@ -365,6 +418,25 @@ export default function LeaseDetailPage() {
         return
       }
 
+      const { data: otherActiveLeases, error: availabilityError } = await supabase
+        .from('leases')
+        .select('id')
+        .eq('unit_id', lease.unit_id)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .neq('id', lease.id)
+        .limit(1)
+
+      if (availabilityError || !otherActiveLeases) {
+        setError('Could not verify whether this unit is available for renewal. No changes were made.')
+        return
+      }
+
+      if (otherActiveLeases.length > 0) {
+        setError('This unit already has another active lease. Review the unit before renewing this lease.')
+        return
+      }
+
       const { data: renewalResult, error: renewError } = await supabase.rpc('renew_lease', {
         p_lease_id: lease.id,
         p_new_end_date: renewData.new_end_date,
@@ -380,6 +452,8 @@ export default function LeaseDetailPage() {
         setShowRenewModal(false)
         router.push(`/leases/${renewalResult[0].new_lease_id}`)
       }
+    } catch (renewalError) {
+      setError(renewalError instanceof Error ? renewalError.message : 'The lease could not be renewed.')
     } finally {
       setActionLoading(false)
     }
@@ -445,8 +519,9 @@ export default function LeaseDetailPage() {
 
   const isActive = lease.status === 'active'
   const isExpired = lease.status === 'expired'
-  const isMoveOutPending = lease.status === 'expired' || lease.status === 'terminated'
-  const canRenew = lease.status === 'active' || (lease.status === 'expired' && lease.unit_status !== 'vacant')
+  const isTerminated = lease.status === 'terminated'
+  const canRenew = isActive || isExpired
+  const canConfirmMoveOut = isExpired || (isTerminated && lease.unit_status === 'occupied')
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const leaseEndDate = new Date(`${lease.end_date}T00:00:00`)
@@ -550,7 +625,7 @@ export default function LeaseDetailPage() {
               )}
             </>
           )}
-          {isMoveOutPending && lease.unit_status === 'occupied' && (
+          {canConfirmMoveOut && (
             <button
               onClick={() => {
                 setError('')
@@ -558,19 +633,19 @@ export default function LeaseDetailPage() {
               }}
               disabled={actionLoading}
               className="btn-secondary min-h-11"
-              aria-label="Confirm move-out and mark unit vacant"
+              aria-label={isExpired ? 'Confirm tenant move-out' : 'Mark unit vacant'}
             >
               <DoorOpen className="mr-2 h-4 w-4" />
-              Mark Vacant
+              {isExpired ? 'Confirm Move-Out' : 'Mark Vacant'}
             </button>
           )}
-          {isMoveOutPending && lease.unit_status === 'vacant' && (
+          {isTerminated && lease.unit_status === 'vacant' && (
             <Link href={`/leases/new?unit=${lease.unit_id}`} className="btn-primary min-h-11">
               <RefreshCw className="h-4 w-4 mr-2" />
               Create New Lease
             </Link>
           )}
-          {!canRenew && !isMoveOutPending && (
+          {!canRenew && !isTerminated && (
             <Link href={`/leases/new?tenant=${lease.tenant_id}&unit=${lease.unit_id}`} className="btn-primary">
               <RefreshCw className="h-4 w-4 mr-2" />
               Renew / New Lease
@@ -606,7 +681,21 @@ export default function LeaseDetailPage() {
         </div>
       )}
 
-      {isMoveOutPending && (
+      {isExpired && (
+        <section aria-labelledby="lease-next-step-title" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
+          <h2 id="lease-next-step-title" className="font-semibold">Choose what happens next</h2>
+          <p className="mt-1 text-sm">
+            Renew the lease if the tenant is staying, or confirm move-out after they hand back the unit. The outstanding balance stays with this lease unless you renew it and accept the carry-forward preview.
+          </p>
+          {lease.unit_status === 'vacant' && (
+            <p className="mt-2 text-sm font-medium">
+              The unit is currently marked vacant, but that does not confirm a move-out for this lease. Choose Renew or Confirm Move-Out below.
+            </p>
+          )}
+        </section>
+      )}
+
+      {isTerminated && (
         <div className={`rounded-lg border p-4 ${lease.unit_status === 'vacant' ? 'border-success-200 bg-success-50 text-success-800' : lease.unit_status === 'occupied' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
           <p className="font-semibold">
             {lease.unit_status === 'vacant' ? 'Move-out completed' : lease.unit_status === 'occupied' ? 'Confirm move-out before releasing this unit' : `Unit status: ${lease.unit_status.replaceAll('_', ' ')}`}
@@ -615,7 +704,7 @@ export default function LeaseDetailPage() {
             {lease.unit_status === 'vacant'
               ? 'The unit is available for a new lease. This ended lease and its financial history are preserved.'
               : lease.unit_status === 'occupied'
-                ? `${lease.status === 'expired' ? 'Expiry does not confirm the tenant has left.' : 'Ending a lease does not by itself confirm handover.'} After the tenant returns possession, mark the unit vacant. Any unpaid balance stays with this lease and is not charged to a new tenant.`
+                ? 'After the tenant returns possession, mark the unit vacant. Any unpaid balance stays with this lease and is not charged to a new tenant.'
                 : 'This unit status is preserved. Review the unit before making it available for a new lease.'}
           </p>
         </div>
@@ -932,7 +1021,7 @@ export default function LeaseDetailPage() {
                 : <>Confirm that <strong>{lease.tenant_name}</strong> has handed over <strong>{lease.unit_name}</strong> following early termination.</>}
             </p>
             <div className="mb-5 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-              This marks the unit vacant only. The ended lease, invoices, payments, security deposit, and any remaining balance stay in the old lease history. No balance is transferred to a new tenant.
+              Confirming move-out closes this lease and marks the unit vacant only when no other active or expired lease remains. The invoices, payments, security deposit, and any remaining balance stay in this lease history; no balance is transferred to a new tenant.
             </div>
             {error && <p role="alert" className="mb-3 text-sm text-danger-700">{error}</p>}
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -948,7 +1037,7 @@ export default function LeaseDetailPage() {
                 className="btn-primary min-h-11 w-full sm:w-auto"
                 disabled={actionLoading}
               >
-                {actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Marking vacant...</> : 'Confirm Move-Out'}
+                {actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Confirming move-out...</> : 'Confirm Move-Out'}
               </button>
             </div>
           </div>

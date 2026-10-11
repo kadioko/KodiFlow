@@ -4,7 +4,12 @@ export const fixtureId = '00000000-0000-4000-8000-000000000001'
 export const fixtureError = 'Could not save. Please try again.'
 const user = { id: fixtureId, email: 'layout@example.test', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' }
 
-export async function mockMobileData(page: Page) {
+type MobileFixtureOptions = {
+  leaseStatus?: 'active' | 'expired'
+  unitStatus?: string
+}
+
+export async function mockMobileData(page: Page, options: MobileFixtureOptions = {}) {
   const expiresAt = Math.floor(Date.now() / 1000) + 3600
   const jwt = ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify({ sub: fixtureId, exp: expiresAt })).toString('base64url'), 'fixture'].join('.')
   const session = { access_token: jwt, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_at: expiresAt, expires_in: 3600, user }
@@ -28,15 +33,42 @@ export async function mockMobileData(page: Page) {
     }
     const today = new Date()
     const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
-    const lease = { id: fixtureId, user_id: fixtureId, tenant_id: fixtureId, unit_id: fixtureId, property_id: fixtureId, start_date: start, end_date: `${today.getFullYear() + 1}-12-31`, monthly_rent: 616000, deposit_amount: 0, rent_due_day: 5, lease_type: 'residential', billing_frequency: 'semi_annually', status: 'active', notes: '', created_at: start, tenants: { id: fixtureId, full_name: 'Mobile Test Tenant', tenant_type: 'individual' }, units: { unit_name: 'Unit 51' }, properties: { name: 'Test Property' } }
+    const isExpired = options.leaseStatus === 'expired'
+    const unit = { unit_name: 'Unit 51', status: options.unitStatus || 'occupied' }
+    const lease = { id: fixtureId, user_id: fixtureId, tenant_id: fixtureId, unit_id: fixtureId, property_id: fixtureId, start_date: isExpired ? `${today.getFullYear() - 2}-01-01` : start, end_date: isExpired ? `${today.getFullYear() - 1}-12-31` : `${today.getFullYear() + 1}-12-31`, monthly_rent: 616000, deposit_amount: 0, rent_due_day: 5, lease_type: 'residential', billing_frequency: 'semi_annually', status: options.leaseStatus || 'active', notes: '', created_at: start, tenants: { id: fixtureId, full_name: 'Mobile Test Tenant', tenant_type: 'individual' }, units: unit, properties: { name: 'Test Property' } }
     const invoice = { id: fixtureId, invoice_number: 'INV-TEST-001', tenant_id: fixtureId, unit_id: fixtureId, lease_id: fixtureId, due_date: start, status: 'unpaid', notes: '', amount_paid: 0, subtotal: 3696000, balance: 3696000, billing_period_start: '2020-01-01', billing_period_end: '2020-06-30', tenants: lease.tenants, units: lease.units, properties: lease.properties }
     const rows: Record<string, unknown[]> = {
       rent_invoices: [invoice],
       invoice_items: [{ id: fixtureId, item_name: 'Six month rent', item_type: 'rent', amount: 3696000, notes: '' }],
       leases: [lease],
+      units: [unit],
       profiles: [{ currency_preference: 'TZS', language_preference: 'en', late_fee_rate: 0, invoice_payment_instructions: 'Test bank account', invoice_footer_note: 'E.&.O.E.' }],
     }
-    const data = rows[table || ''] || []
+    let data = rows[table || ''] || []
+    if (table === 'leases') {
+      const idFilter = url.searchParams.get('id') || ''
+      const unitFilter = url.searchParams.get('unit_id') || ''
+      const statusFilter = url.searchParams.get('status') || ''
+      const exactId = idFilter.startsWith('eq.') ? idFilter.slice(3) : null
+      const excludedId = idFilter.startsWith('neq.') ? idFilter.slice(4) : null
+      const exactUnit = unitFilter.startsWith('eq.') ? unitFilter.slice(3) : null
+      const exactStatus = statusFilter.startsWith('eq.') ? statusFilter.slice(3) : null
+      const includedStatuses = statusFilter.startsWith('in.(')
+        ? statusFilter.slice(4, -1).split(',')
+        : null
+
+      data = data.filter((row) => {
+        const leaseRow = row as Record<string, unknown>
+        return (!exactId || leaseRow.id === exactId)
+          && (!excludedId || leaseRow.id !== excludedId)
+          && (!exactUnit || leaseRow.unit_id === exactUnit)
+          && (!exactStatus || leaseRow.status === exactStatus)
+          && (!includedStatuses || includedStatuses.includes(String(leaseRow.status)))
+      })
+    }
+    if (request.method() === 'HEAD') {
+      return route.fulfill({ status: 200, headers: { 'content-range': `*/${data.length}` } })
+    }
     return route.fulfill({ json: single ? data[0] || {} : data })
   })
   return writes

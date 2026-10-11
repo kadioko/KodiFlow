@@ -31,8 +31,18 @@ test.describe('financial workflows', () => {
   test('expired lease offers a move-out confirmation without changing records', async ({ page }) => {
     test.skip(!process.env.E2E_EXPIRED_LEASE_ID, 'Set E2E_EXPIRED_LEASE_ID from an isolated expired-lease fixture.')
     await signIn(page)
-    await page.goto(`/leases/${process.env.E2E_EXPIRED_LEASE_ID}`)
-    await page.getByRole('button', { name: /confirm move-out and mark unit vacant/i }).click()
+    await page.goto('/leases?status=expired')
+    const renewalLink = page.locator(`a[href="/leases/${process.env.E2E_EXPIRED_LEASE_ID}?action=renew"]`)
+    const moveOutLink = page.locator(`a[href="/leases/${process.env.E2E_EXPIRED_LEASE_ID}?action=move-out"]`)
+    await expect(renewalLink).toBeVisible()
+    await expect(moveOutLink).toBeVisible()
+
+    await renewalLink.click()
+    await expect(page.getByRole('dialog', { name: /renew lease/i })).toBeVisible()
+    await page.getByRole('dialog', { name: /renew lease/i }).getByRole('button', { name: /cancel/i }).click()
+
+    await page.goto('/leases?status=expired')
+    await page.locator(`a[href="/leases/${process.env.E2E_EXPIRED_LEASE_ID}?action=move-out"]`).click()
     await expect(page.getByRole('heading', { name: /confirm tenant move-out/i })).toBeVisible()
     await expect(page.getByText(/no balance is transferred to a new tenant/i)).toBeVisible()
     await page.getByRole('button', { name: /cancel/i }).click()

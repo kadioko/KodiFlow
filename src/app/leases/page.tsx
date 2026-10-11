@@ -237,7 +237,51 @@ export default async function LeasesPage({
         <div className="card">
           <div className="divide-y divide-slate-100 md:hidden">
             {leases.map((lease) => (
-              <article key={lease.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-950">{lease.tenant_name}</p><p className="mt-0.5 text-sm text-slate-500">{lease.property_name} · {lease.unit_name}</p></div><span className={`badge ${getColorByValue(LEASE_STATUSES, lease.status)}`}>{getLabelByValue(LEASE_STATUSES, lease.status)}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lease period</p><p className="mt-1 font-medium text-slate-900">{formatDate(lease.start_date)} to {formatDate(lease.end_date)}</p>{lease.is_expiring_soon && <p className="mt-1 text-xs font-semibold text-amber-700">{lease.days_until_expiry} days remaining</p>}</div><div className="text-right"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{lease.current_balance > 0 ? 'Amount due' : lease.current_balance < 0 ? 'Credit available' : 'Settled'}</p><p className={`mt-1 text-lg font-bold ${lease.current_balance > 0 ? 'text-danger-600' : lease.current_balance < 0 ? 'text-success-600' : 'text-slate-700'}`}>{formatCurrency(Math.abs(lease.current_balance))}</p><p className="mt-1 text-xs text-slate-500">{formatCurrency(lease.monthly_rent)} monthly</p></div></div><div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold"><Link href={`/leases/${lease.id}`} className="text-primary-700">View</Link><Link href={`/leases/${lease.id}/edit`} className="text-slate-700">Edit</Link></div></article>
+              <article key={lease.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">{lease.tenant_name}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">{lease.property_name} · {lease.unit_name}</p>
+                  </div>
+                  <span className={`badge ${getColorByValue(LEASE_STATUSES, lease.status)}`}>
+                    {getLabelByValue(LEASE_STATUSES, lease.status)}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lease period</p>
+                    <p className="mt-1 font-medium text-slate-900">{formatDate(lease.start_date)} to {formatDate(lease.end_date)}</p>
+                    {lease.is_expiring_soon && <p className="mt-1 text-xs font-semibold text-amber-700">{lease.days_until_expiry} days remaining</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {lease.current_balance > 0 ? 'Amount due' : lease.current_balance < 0 ? 'Credit available' : 'Settled'}
+                    </p>
+                    <p className={`mt-1 text-lg font-bold ${lease.current_balance > 0 ? 'text-danger-600' : lease.current_balance < 0 ? 'text-success-600' : 'text-slate-700'}`}>
+                      {formatCurrency(Math.abs(lease.current_balance))}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{formatCurrency(lease.monthly_rent)} monthly</p>
+                  </div>
+                </div>
+                {lease.status === 'expired' && (
+                  <div className="mt-3 border-t border-amber-100 pt-3">
+                    <p className="text-sm font-semibold text-amber-950">Choose what happens next</p>
+                    <p className="mt-0.5 text-xs text-slate-600">Renew if the tenant is staying, or confirm move-out if they have left.</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <Link href={`/leases/${lease.id}?action=renew`} className="inline-flex min-h-12 items-center justify-center rounded-lg bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white">
+                        Review renewal
+                      </Link>
+                      <Link href={`/leases/${lease.id}?action=move-out`} className="inline-flex min-h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-800">
+                        Confirm move-out
+                      </Link>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 flex gap-4 border-t border-slate-100 pt-3 text-sm font-semibold">
+                  <Link href={`/leases/${lease.id}`} className="text-primary-700">View</Link>
+                  <Link href={`/leases/${lease.id}/edit`} className="text-slate-700">Edit</Link>
+                </div>
+              </article>
             ))}
           </div>
           <div className="hidden md:block table-container">
@@ -308,7 +352,7 @@ export default async function LeasesPage({
                       </span>
                     </td>
                     <td className="table-cell">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                         <Link 
                           href={`/leases/${lease.id}`}
                           className="text-primary-600 hover:text-primary-900 font-medium"
@@ -321,6 +365,22 @@ export default async function LeasesPage({
                         >
                           Edit
                         </Link>
+                        {lease.status === 'expired' && (
+                          <>
+                            <Link
+                              href={`/leases/${lease.id}?action=renew`}
+                              className="inline-flex min-h-11 items-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                            >
+                              Review renewal
+                            </Link>
+                            <Link
+                              href={`/leases/${lease.id}?action=move-out`}
+                              className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                            >
+                              Confirm move-out
+                            </Link>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

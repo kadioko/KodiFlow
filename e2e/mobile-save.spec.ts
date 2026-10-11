@@ -108,3 +108,56 @@ test('password reset can retry after correcting a mismatch', async ({ page }) =>
   await save.tap()
   await expect(page.getByRole('heading', { name: 'Password updated' })).toBeVisible()
 })
+
+test('expired lease offers renewal or move-out even when the unit is already marked vacant', async ({ page }) => {
+  await mockMobileData(page, { leaseStatus: 'expired', unitStatus: 'vacant' })
+  await page.setViewportSize({ width: 402, height: 874 })
+  let moveOutPayload: Record<string, unknown> | null = null
+  await page.route('**/rest/v1/leases*', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback()
+    moveOutPayload = route.request().postDataJSON()
+    await route.fulfill({ status: 200, json: { id: fixtureId } })
+  })
+  await page.goto(`/leases/${fixtureId}`)
+
+  await expect(page.getByRole('heading', { name: 'Choose what happens next' })).toBeVisible()
+  await expect(page.getByText(/currently marked vacant, but that does not confirm a move-out/i)).toBeVisible()
+  await expect(page.getByText('Move-out completed')).toHaveCount(0)
+
+  const renew = page.getByRole('button', { name: 'Renew', exact: true })
+  const moveOut = page.getByRole('button', { name: 'Confirm tenant move-out' })
+  await expectTouchable(renew, page)
+  await expectTouchable(moveOut, page)
+
+  await moveOut.tap()
+  const moveOutDialog = page.getByRole('dialog', { name: 'Confirm Tenant Move-Out' })
+  await expect(moveOutDialog).toBeVisible()
+  await moveOutDialog.getByRole('button', { name: 'Cancel' }).tap()
+
+  await renew.tap()
+  const renewalDialog = page.getByRole('dialog', { name: 'Renew Lease' })
+  await expect(renewalDialog).toBeVisible()
+  await renewalDialog.getByRole('button', { name: 'Cancel' }).tap()
+
+  await moveOut.tap()
+  await page.getByRole('dialog', { name: 'Confirm Tenant Move-Out' }).getByRole('button', { name: 'Confirm Move-Out' }).tap()
+  await expect.poll(() => moveOutPayload?.status).toBe('terminated')
+  await expect(page.getByText('Move-out completed')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Renew', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Create New Lease' })).toBeVisible()
+})
+
+test('expired lease decision links open the selected confirmation on mobile', async ({ page }) => {
+  await mockMobileData(page, { leaseStatus: 'expired', unitStatus: 'vacant' })
+  await page.setViewportSize({ width: 402, height: 874 })
+
+  await page.goto(`/leases/${fixtureId}?action=renew`)
+  await expect(page.getByRole('dialog', { name: 'Renew Lease' })).toBeVisible()
+  await expect(page).not.toHaveURL(/action=renew/)
+  await page.getByRole('dialog', { name: 'Renew Lease' }).getByRole('button', { name: 'Cancel' }).tap()
+
+  await page.goto(`/leases/${fixtureId}?action=move-out`)
+  await expect(page.getByRole('dialog', { name: 'Confirm Tenant Move-Out' })).toBeVisible()
+  await expect(page).not.toHaveURL(/action=move-out/)
+  await page.getByRole('dialog', { name: 'Confirm Tenant Move-Out' }).getByRole('button', { name: 'Cancel' }).tap()
+})

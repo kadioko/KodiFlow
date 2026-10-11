@@ -85,6 +85,14 @@ describe('lease changes and unit occupancy trigger', () => {
     expect(result.rows).toEqual([{ status: 'vacant' }])
   })
 
+  it('records an expired tenant move-out by terminating the lease and vacating the unit', async () => {
+    await db.query('INSERT INTO public.leases (id, user_id, unit_id, status) VALUES ($1, $2, $3, $4)', [expiredLeaseId, userId, unitId, 'expired'])
+    await db.query('UPDATE public.leases SET status = $1 WHERE id = $2', ['terminated', expiredLeaseId])
+
+    const result = await db.query('SELECT status FROM public.units WHERE id = $1', [unitId])
+    expect(result.rows).toEqual([{ status: 'vacant' }])
+  })
+
   it('preserves maintenance status when a lease is terminated', async () => {
     await db.query('INSERT INTO public.leases (id, user_id, unit_id, status) VALUES ($1, $2, $3, $4)', [activeLeaseId, userId, unitId, 'active'])
     await db.query('UPDATE public.units SET status = $1 WHERE id = $2', ['under_maintenance', unitId])
