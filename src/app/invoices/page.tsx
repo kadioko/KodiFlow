@@ -4,6 +4,7 @@ import { Plus, Receipt, AlertCircle, CheckCircle, Clock, DollarSign } from 'luci
 import { getLabelByValue, getColorByValue, INVOICE_STATUSES } from '@/utils/constants'
 import { formatCurrency, formatDate, getMonthName } from '@/utils/currency'
 import { WhatsAppReminderButton } from '@/components/notifications/WhatsAppReminderButton'
+import { BulkInvoicePdfActions } from '@/components/invoices/BulkInvoicePdfActions'
 import { calculateInvoiceMetrics, getEffectiveInvoiceStatus } from '@/utils/invoice-metrics'
 
 type InvoiceStatusFilter = 'all' | 'unpaid' | 'overdue' | 'partially_paid' | 'paid' | 'transferred'
@@ -329,6 +330,14 @@ export default async function InvoicesPage({
             </div>
           </div>
         </div>
+        {(statusFilter === 'overdue' || statusFilter === 'unpaid') && invoices.length > 0 && (
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <BulkInvoicePdfActions
+              invoices={invoices}
+              statusLabel={statusFilter === 'overdue' ? 'Overdue' : 'Unpaid'}
+            />
+          </div>
+        )}
       </div>
 
       {invoices.length === 0 ? (
