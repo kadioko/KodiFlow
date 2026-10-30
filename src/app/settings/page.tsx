@@ -8,8 +8,11 @@ import { LANGUAGE_OPTIONS } from '@/utils/constants'
 import { applyTheme, getStoredTheme, THEME_STORAGE_KEY, type AppTheme } from '@/components/theme/ThemeProvider'
 import type { BeforeInstallPromptEvent } from '@/components/pwa/PwaProvider'
 import { Check, Download, MonitorSmartphone, Moon, Save, Smartphone, Sun } from 'lucide-react'
+import { useLanguage } from '@/components/i18n/LanguageProvider'
+import { normalizeLanguage } from '@/utils/i18n'
 
 export default function SettingsPage() {
+  const { t, setLanguage: applyLanguage } = useLanguage()
   const [currency, setCurrency] = useState('TZS')
   const [language, setLanguage] = useState('en')
   const [lateFeeRate, setLateFeeRate] = useState(0)
@@ -64,7 +67,7 @@ export default function SettingsPage() {
     const handleInstalled = () => {
       setInstallPrompt(null)
       setIsStandalone(true)
-      setInstallMessage('KodiFlow is installed on this device.')
+      setInstallMessage(t('settings.installed'))
     }
 
     window.addEventListener('kodiflow-pwa-install-ready', handleInstallReady)
@@ -84,7 +87,7 @@ export default function SettingsPage() {
 
   const installApp = async () => {
     if (!installPrompt) {
-      setInstallMessage('Open your browser menu and choose Add to Home screen or Install app.')
+      setInstallMessage(t('settings.showInstallHelp'))
       return
     }
 
@@ -94,8 +97,8 @@ export default function SettingsPage() {
     setInstallPrompt(null)
     setInstallMessage(
       choice.outcome === 'accepted'
-        ? 'KodiFlow is being added to your app screen.'
-        : 'Install dismissed. You can try again from this screen later.'
+        ? t('settings.installing')
+        : t('settings.installDismissed')
     )
   }
 
@@ -110,7 +113,7 @@ export default function SettingsPage() {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      setError('You must be logged in')
+      setError(t('settings.loginRequired'))
       setSaving(false)
       return
     }
@@ -129,7 +132,8 @@ export default function SettingsPage() {
     if (error) {
       setError(error.message)
     } else {
-      setMessage('Settings saved')
+      applyLanguage(normalizeLanguage(language))
+      setMessage(t('settings.saved'))
     }
     setSaving(false)
   }
@@ -138,8 +142,8 @@ export default function SettingsPage() {
     <div className="max-w-3xl space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="text-gray-500">Configure financial preferences and automation defaults</p>
+          <h1 className="page-title">{t('settings.title')}</h1>
+          <p className="text-gray-500">{t('settings.subtitle')}</p>
         </div>
       </div>
 
@@ -152,8 +156,8 @@ export default function SettingsPage() {
             <MonitorSmartphone className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-slate-950">App Experience</h2>
-            <p className="mt-1 text-sm text-slate-500">Install KodiFlow on your phone and choose how the app looks.</p>
+            <h2 className="text-lg font-bold text-slate-950">{t('settings.appExperience')}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t('settings.appExperienceHelp')}</p>
           </div>
         </div>
 
@@ -162,11 +166,11 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3">
               <Smartphone className="mt-0.5 h-5 w-5 text-primary-600" />
               <div>
-                <h3 className="font-semibold text-slate-900">Add to app screen</h3>
+                <h3 className="font-semibold text-slate-900">{t('settings.addToHomeScreen')}</h3>
                 <p className="mt-1 text-sm text-slate-500">
                   {isStandalone
-                    ? 'KodiFlow is already running like an installed app.'
-                    : 'Create a full-screen mobile shortcut from your browser.'}
+                    ? t('settings.installed')
+                    : t('settings.installHelp')}
                 </p>
               </div>
             </div>
@@ -177,13 +181,13 @@ export default function SettingsPage() {
               className="btn-primary mt-4 w-full"
             >
               {isStandalone ? <Check className="mr-2 h-5 w-5" /> : <Download className="mr-2 h-5 w-5" />}
-              {isStandalone ? 'Installed' : installPrompt ? 'Install KodiFlow' : 'Show Install Help'}
+              {isStandalone ? t('settings.installedShort') : installPrompt ? t('settings.install') : t('settings.installHelpButton')}
             </button>
             {installMessage && <p className="mt-3 text-sm text-slate-500">{installMessage}</p>}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-            <h3 className="font-semibold text-slate-900">Appearance</h3>
+            <h3 className="font-semibold text-slate-900">{t('settings.appearance')}</h3>
             <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 shadow-inner ring-1 ring-slate-200">
               <button
                 type="button"
@@ -193,7 +197,7 @@ export default function SettingsPage() {
                 }`}
               >
                 <Sun className="mr-2 h-4 w-4" />
-                Light
+                {t('settings.light')}
               </button>
               <button
                 type="button"
@@ -203,20 +207,20 @@ export default function SettingsPage() {
                 }`}
               >
                 <Moon className="mr-2 h-4 w-4" />
-                Dark
+                {t('settings.dark')}
               </button>
             </div>
-            <p className="mt-3 text-sm text-slate-500">Your choice is saved on this device.</p>
+            <p className="mt-3 text-sm text-slate-500">{t('settings.themeDevice')}</p>
           </div>
         </div>
       </section>
 
       <form id="settings-form" onSubmit={saveSettings} className="card space-y-6 p-4 sm:p-6">
-        {loading && <div className="text-sm text-slate-500">Loading financial settings...</div>}
+        {loading && <div className="text-sm text-slate-500">{t('settings.loading')}</div>}
         <fieldset disabled={loading || saving} className="space-y-6">
 
         <div className="form-group">
-          <label className="label" htmlFor="currency">Default Currency</label>
+          <label className="label" htmlFor="currency">{t('settings.currency')}</label>
           <select id="currency" className="input" value={currency} onChange={(event) => setCurrency(event.target.value)}>
             {SUPPORTED_CURRENCIES.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -225,17 +229,17 @@ export default function SettingsPage() {
         </div>
 
         <div className="form-group">
-          <label className="label" htmlFor="language">Language</label>
+          <label className="label" htmlFor="language">{t('settings.language')}</label>
           <select id="language" className="input" value={language} onChange={(event) => setLanguage(event.target.value)}>
             {LANGUAGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{option.value === 'sw' ? 'Kiswahili' : option.label}</option>
             ))}
           </select>
-          <p className="text-sm text-gray-500 mt-1">Stores your preferred language for English/Swahili UI support.</p>
+          <p className="text-sm text-gray-500 mt-1">{t('settings.languageHelp')}</p>
         </div>
 
         <div className="form-group">
-          <label className="label" htmlFor="late_fee_rate">Late Fee Rate (%)</label>
+          <label className="label" htmlFor="late_fee_rate">{t('settings.lateFee')}</label>
           <input
             id="late_fee_rate"
             className="input"
@@ -245,38 +249,38 @@ export default function SettingsPage() {
             value={lateFeeRate}
             onChange={(event) => setLateFeeRate(parseFloat(event.target.value) || 0)}
           />
-          <p className="text-sm text-gray-500 mt-1">Used to estimate penalty amounts for overdue invoices in reports.</p>
+          <p className="text-sm text-gray-500 mt-1">{t('settings.lateFeeHelp')}</p>
         </div>
 
         <div className="form-group">
-          <label className="label" htmlFor="invoice_payment_instructions">Invoice Payment Instructions</label>
+          <label className="label" htmlFor="invoice_payment_instructions">{t('settings.paymentInstructions')}</label>
           <textarea
             id="invoice_payment_instructions"
             className="input min-h-24"
             value={invoicePaymentInstructions}
             onChange={(event) => setInvoicePaymentInstructions(event.target.value)}
           />
-          <p className="text-sm text-gray-500 mt-1">Shown on invoice pages and PDF downloads.</p>
+          <p className="text-sm text-gray-500 mt-1">{t('settings.paymentInstructionsHelp')}</p>
         </div>
 
         <div className="form-group">
-          <label className="label" htmlFor="invoice_footer_note">Invoice Footer Note</label>
+          <label className="label" htmlFor="invoice_footer_note">{t('settings.footerNote')}</label>
           <input
             id="invoice_footer_note"
             className="input"
             value={invoiceFooterNote}
             onChange={(event) => setInvoiceFooterNote(event.target.value)}
           />
-          <p className="text-sm text-gray-500 mt-1">Use this for short notes such as E.&amp;.O.E.</p>
+          <p className="text-sm text-gray-500 mt-1">{t('settings.footerNoteHelp')}</p>
         </div>
 
         <button type="submit" disabled={saving} className="btn-primary hidden lg:inline-flex">
           <Save className="h-5 w-5 mr-2" />
-          {saving ? 'Saving...' : 'Save Settings'}
+          {saving ? t('settings.saving') : t('settings.save')}
         </button>
         </fieldset>
       </form>
-      <MobileFormSubmitBar formId="settings-form" label="Save settings" pendingLabel="Saving settings..." pending={saving} disabled={loading} error={error} message={message} />
+      <MobileFormSubmitBar formId="settings-form" label={t('settings.save')} pendingLabel={t('settings.saving')} pending={saving} disabled={loading} error={error} message={message} />
     </div>
   )
 }

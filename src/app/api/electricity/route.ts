@@ -20,7 +20,7 @@ export async function GET() {
       service.from('units').select('id, unit_name, property_id, section_id, unit_identifier').eq('user_id', ownerId).in('property_id', propertyIds).order('unit_name'),
       service.from('electricity_accounts').select('*').eq('owner_user_id', ownerId).in('property_id', propertyIds).order('floor_label').order('created_at'),
       actor.isOwner
-        ? service.from('electricity_staff').select('id, staff_id, full_name, active, created_at').eq('owner_user_id', ownerId).order('full_name')
+        ? service.from('electricity_staff').select('id, auth_user_id, staff_id, full_name, active, created_at').eq('owner_user_id', ownerId).order('full_name')
         : Promise.resolve({ data: [], error: null }),
       actor.isOwner
         ? service.from('electricity_staff_properties').select('staff_id, property_id').eq('owner_user_id', ownerId).in('property_id', propertyIds)
@@ -45,19 +45,21 @@ export async function GET() {
       : { data: [], error: null }
     if (tenantResult.error) return NextResponse.json({ error: tenantResult.error.message }, { status: 500 })
 
-    const [readingResult, topupResult, cutoffResult] = accountIds.length > 0
+    const [readingResult, topupResult, cutoffResult, adjustmentResult] = accountIds.length > 0
       ? await Promise.all([
           service.from('electricity_readings').select('*').in('account_id', accountIds).order('reading_date', { ascending: false }).order('created_at', { ascending: false }).limit(2000),
           service.from('electricity_topups').select('*').in('account_id', accountIds).order('purchase_date', { ascending: false }).limit(1000),
           service.from('electricity_cutoff_events').select('*').in('account_id', accountIds).order('performed_at', { ascending: false }).limit(1000),
+          service.from('electricity_balance_adjustments').select('*').in('account_id', accountIds).order('adjustment_date', { ascending: false }).limit(1000),
         ])
       : [
           { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
+          { data: [], error: null },
         ]
 
-    const secondaryErrors = [readingResult.error, topupResult.error, cutoffResult.error]
+    const secondaryErrors = [readingResult.error, topupResult.error, cutoffResult.error, adjustmentResult.error]
     const secondaryError = secondaryErrors.find(Boolean)
     if (secondaryError) return NextResponse.json({ error: secondaryError.message }, { status: 500 })
 
@@ -84,6 +86,15 @@ export async function GET() {
       pendingTopupsByAccount.set(topup.account_id, current)
     }
 
+    const pendingAdjustmentsByAccount = new Map<string, { units: number; count: number }>()
+    for (const adjustment of adjustmentResult.data || []) {
+      if (adjustment.applied_reading_id) continue
+      const current = pendingAdjustmentsByAccount.get(adjustment.account_id) || { units: 0, count: 0 }
+      current.units += Number(adjustment.adjustment_units)
+      current.count += 1
+      pendingAdjustmentsByAccount.set(adjustment.account_id, current)
+    }
+
     const latestCutoffByAccount = new Map<string, NonNullable<typeof cutoffResult.data>[number]>()
     for (const event of cutoffResult.data || []) {
       if (!latestCutoffByAccount.has(event.account_id)) latestCutoffByAccount.set(event.account_id, event)
@@ -99,6 +110,7 @@ export async function GET() {
     const enrichedAccounts = accounts.map((account) => {
       const latestReading = latestReadingByAccount.get(account.id) || null
       const pending = pendingTopupsByAccount.get(account.id) || { verifiedUnits: 0, reportedUnits: 0, count: 0 }
+      const pendingAdjustment = pendingAdjustmentsByAccount.get(account.id) || { units: 0, count: 0 }
       const tenant = account.tenant_id ? tenantsById.get(account.tenant_id) : null
       const unit = account.unit_id ? unitsById.get(account.unit_id) : null
       const section = unit?.section_id ? sectionsById.get(unit.section_id) : null
@@ -114,7 +126,9 @@ export async function GET() {
         pending_verified_topup_units: pending.verifiedUnits,
         pending_reported_topup_units: pending.reportedUnits,
         pending_topup_count: pending.count,
-        estimated_balance_units: Number(balanceBase) + pending.verifiedUnits,
+        pending_adjustment_units: pendingAdjustment.units,
+        pending_adjustment_count: pendingAdjustment.count,
+        estimated_balance_units: Number(balanceBase) + pending.verifiedUnits + pendingAdjustment.units,
         last_cutoff_event: latestCutoffByAccount.get(account.id) || null,
       }
     })
@@ -126,6 +140,7 @@ export async function GET() {
 
     return NextResponse.json({
       ownerMode: actor.isOwner,
+      currentUserId: actor.user.id,
       currentStaffId: actor.staff?.staff_id || null,
       properties,
       sections,
@@ -135,6 +150,7 @@ export async function GET() {
       readings: readingResult.data || [],
       topups: topupResult.data || [],
       cutoffEvents: cutoffResult.data || [],
+      adjustments: adjustmentResult.data || [],
       staff,
     })
   } catch (error) {

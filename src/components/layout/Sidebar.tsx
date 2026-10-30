@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useLanguage } from '@/components/i18n/LanguageProvider'
 
 interface SidebarProps {
   user: User
@@ -34,30 +35,31 @@ interface SidebarProps {
 }
 
 export const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Properties', href: '/properties', icon: Building2 },
-  { name: 'Sections', href: '/sections', icon: Layers },
-  { name: 'Units', href: '/units', icon: DoorOpen },
-  { name: 'Tenants', href: '/tenants', icon: Users },
-  { name: 'Leases', href: '/leases', icon: FileText },
-  { name: 'Invoices', href: '/invoices', icon: Receipt },
-  { name: 'Payments', href: '/payments', icon: CreditCard },
-  { name: 'Expenses', href: '/expenses', icon: Wallet },
-  { name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { name: 'Utilities', href: '/utilities', icon: Gauge },
-  { name: 'Electricity Tracking', href: '/electricity', icon: Bolt },
-  { name: 'Documents', href: '/documents', icon: FileStack },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
-  { name: 'Tenant Portal', href: '/tenant-portal', icon: UserRound },
-  { name: 'Settings', href: '/settings', icon: Settings },
-]
+  { name: 'Dashboard', labelKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Properties', labelKey: 'nav.properties', href: '/properties', icon: Building2 },
+  { name: 'Sections', labelKey: 'nav.sections', href: '/sections', icon: Layers },
+  { name: 'Units', labelKey: 'nav.units', href: '/units', icon: DoorOpen },
+  { name: 'Tenants', labelKey: 'nav.tenants', href: '/tenants', icon: Users },
+  { name: 'Leases', labelKey: 'nav.leases', href: '/leases', icon: FileText },
+  { name: 'Invoices', labelKey: 'nav.invoices', href: '/invoices', icon: Receipt },
+  { name: 'Payments', labelKey: 'nav.payments', href: '/payments', icon: CreditCard },
+  { name: 'Expenses', labelKey: 'nav.expenses', href: '/expenses', icon: Wallet },
+  { name: 'Maintenance', labelKey: 'nav.maintenance', href: '/maintenance', icon: Wrench },
+  { name: 'Utilities', labelKey: 'nav.utilities', href: '/utilities', icon: Gauge },
+  { name: 'Electricity Tracking', labelKey: 'nav.electricity', href: '/electricity', icon: Bolt },
+  { name: 'Documents', labelKey: 'nav.documents', href: '/documents', icon: FileStack },
+  { name: 'Reports', labelKey: 'nav.reports', href: '/reports', icon: BarChart3 },
+  { name: 'Tenant Portal', labelKey: 'nav.tenantPortal', href: '/tenant-portal', icon: UserRound },
+  { name: 'Settings', labelKey: 'nav.settings', href: '/settings', icon: Settings },
+] as const
 
 const adminNavigation = [
-  { name: 'Admin', href: '/admin', icon: Shield },
-]
+  { name: 'Admin', labelKey: 'nav.admin', href: '/admin', icon: Shield },
+] as const
 
 export function Sidebar({ user, adminRole }: SidebarProps) {
   const pathname = usePathname()
+  const { t } = useLanguage()
   const [collapsed, setCollapsed] = useState(false)
   const visibleNavigation = adminRole === 'electricity_staff'
     ? navigation.filter((item) => item.href === '/electricity')
@@ -75,7 +77,7 @@ export function Sidebar({ user, adminRole }: SidebarProps) {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={`${collapsed ? 'absolute left-12' : ''} rounded-lg p-1 text-white/70 hover:bg-white/10 hover:text-white`}
-          aria-label={collapsed ? 'Expand dashboard navigation' : 'Collapse dashboard navigation'}
+          aria-label={collapsed ? t('header.showDashboard') : t('header.hideDashboard')}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
@@ -93,10 +95,10 @@ export function Sidebar({ user, adminRole }: SidebarProps) {
                   ? 'sidebar-link-active'
                   : 'sidebar-link-inactive'
               } ${collapsed ? 'justify-center' : ''}`}
-              title={collapsed ? item.name : undefined}
+              title={collapsed ? t(item.labelKey) : undefined}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span className="ml-3">{item.name}</span>}
+              {!collapsed && <span className="ml-3">{t(item.labelKey)}</span>}
             </Link>
           )
         })}
@@ -132,6 +134,7 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarProps) {
   const pathname = usePathname()
+  const { t } = useLanguage()
   const visibleNavigation = adminRole === 'electricity_staff'
     ? navigation.filter((item) => item.href === '/electricity')
     : ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
@@ -170,7 +173,7 @@ export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarP
                 className={isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                <span className="ml-3">{item.name}</span>
+                <span className="ml-3">{t(item.labelKey)}</span>
               </Link>
             )
           })}

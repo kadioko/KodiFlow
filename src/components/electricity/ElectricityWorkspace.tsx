@@ -1,13 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bolt, Building2, Check, CircleAlert, Clock3, Copy, Gauge, KeyRound, MessageCircle, Plus, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
+import { Bolt, Building2, Check, CircleAlert, Clock3, Copy, Download, Gauge, KeyRound, MessageCircle, Plus, Printer, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { calculateElectricityBalance, classifyElectricityBalance, type ElectricityBalanceStatus } from '@/lib/electricity/balance'
 import { reconcileMainMeters } from '@/lib/electricity/reconciliation'
 import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electricity/database.types'
 import type { Database } from '@/lib/supabase/database.types'
 import { formatDate } from '@/utils/currency'
 import { normalizeWhatsAppPhone } from '@/utils/phone'
+import { useLanguage } from '@/components/i18n/LanguageProvider'
+import type { TranslationKey } from '@/utils/i18n'
 
 type PropertyOption = { id: string; name: string }
 type SectionOption = { id: string; name: string; property_id: string; section_type: string }
@@ -15,7 +17,7 @@ type UnitOption = { id: string; unit_name: string; property_id: string; section_
 type TenantOption = { id: string; full_name: string | null; business_name: string | null; phone: string; user_id: string }
 type TopupRow = Database['public']['Tables']['electricity_topups']['Row']
 type CutoffEvent = Database['public']['Tables']['electricity_cutoff_events']['Row']
-type StaffRow = Pick<Database['public']['Tables']['electricity_staff']['Row'], 'id' | 'staff_id' | 'full_name' | 'active' | 'created_at'> & { property_ids: string[] }
+type StaffRow = Pick<Database['public']['Tables']['electricity_staff']['Row'], 'id' | 'auth_user_id' | 'staff_id' | 'full_name' | 'active' | 'created_at'> & { property_ids: string[] }
 type AccountView = ElectricityAccountRow & {
   property_name: string
   unit_name: string | null
@@ -26,11 +28,14 @@ type AccountView = ElectricityAccountRow & {
   pending_verified_topup_units: number
   pending_reported_topup_units: number
   pending_topup_count: number
+  pending_adjustment_units: number
+  pending_adjustment_count: number
   estimated_balance_units: number
   last_cutoff_event: CutoffEvent | null
 }
 type WorkspaceData = {
   ownerMode: boolean
+  currentUserId: string
   currentStaffId: string | null
   properties: PropertyOption[]
   sections: SectionOption[]
@@ -40,6 +45,7 @@ type WorkspaceData = {
   readings: ElectricityReadingRow[]
   topups: TopupRow[]
   cutoffEvents: CutoffEvent[]
+  adjustments: Database['public']['Tables']['electricity_balance_adjustments']['Row'][]
   staff: StaffRow[]
 }
 type AccountForm = {
@@ -57,20 +63,26 @@ type AccountForm = {
 type ActionState = { type: 'success' | 'error'; message: string } | null
 
 const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+const daysAgoISO = (days: number) => {
+  const date = new Date(`${todayISO()}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() - days)
+  return date.toISOString().slice(0, 10)
+}
 const numeric = (value: number | string) => Number(value || 0).toLocaleString('en-TZ', { maximumFractionDigits: 3 })
 const accountTitle = (account: AccountView) => account.meter_kind === 'floor_main'
   ? `${account.floor_label} main meter`
   : account.tenant_name
 
-const statusPresentation: Record<ElectricityBalanceStatus, { label: string; className: string; icon: typeof Bolt }> = {
-  exhausted: { label: 'Balance at/below zero', className: 'border-rose-200 bg-rose-50 text-rose-800', icon: CircleAlert },
-  low: { label: 'Low units', className: 'border-rose-200 bg-rose-50 text-rose-800', icon: CircleAlert },
-  soon: { label: 'Nearly low', className: 'border-amber-200 bg-amber-50 text-amber-800', icon: Clock3 },
-  okay: { label: 'Units available', className: 'border-emerald-200 bg-emerald-50 text-emerald-800', icon: Check },
-  reading_due: { label: 'Reading needed', className: 'border-slate-200 bg-slate-100 text-slate-700', icon: Gauge },
+const statusPresentation: Record<ElectricityBalanceStatus, { labelKey: TranslationKey; className: string; icon: typeof Bolt }> = {
+  exhausted: { labelKey: 'electricity.balanceExhausted', className: 'border-rose-200 bg-rose-50 text-rose-800', icon: CircleAlert },
+  low: { labelKey: 'electricity.lowUnits', className: 'border-rose-200 bg-rose-50 text-rose-800', icon: CircleAlert },
+  soon: { labelKey: 'electricity.nearlyLow', className: 'border-amber-200 bg-amber-50 text-amber-800', icon: Clock3 },
+  okay: { labelKey: 'electricity.unitsAvailable', className: 'border-emerald-200 bg-emerald-50 text-emerald-800', icon: Check },
+  reading_due: { labelKey: 'electricity.readingDue', className: 'border-slate-200 bg-slate-100 text-slate-700', icon: Gauge },
 }
 
 export function ElectricityWorkspace() {
+  const { t } = useLanguage()
   const [data, setData] = useState<WorkspaceData | null>(null)
   const [propertyId, setPropertyId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -80,11 +92,14 @@ export function ElectricityWorkspace() {
   const [readingValue, setReadingValue] = useState('')
   const [readingDate, setReadingDate] = useState(todayISO())
   const [readingNotes, setReadingNotes] = useState('')
+  const [quickReadingDate, setQuickReadingDate] = useState(todayISO())
+  const [quickReadingValues, setQuickReadingValues] = useState<Record<string, string>>({})
   const [topupAccountId, setTopupAccountId] = useState('')
   const [topupDate, setTopupDate] = useState(todayISO())
   const [topupUnits, setTopupUnits] = useState('')
+  const [topupUnitsConfirmation, setTopupUnitsConfirmation] = useState('')
   const [tokenSuffix, setTokenSuffix] = useState('')
-  const [topupVerified, setTopupVerified] = useState(false)
+  const [tokenSuffixConfirmation, setTokenSuffixConfirmation] = useState('')
   const [topupNotes, setTopupNotes] = useState('')
   const [cutoffTarget, setCutoffTarget] = useState<{ accountId: string; action: 'disconnected' | 'restored' } | null>(null)
   const [cutoffReason, setCutoffReason] = useState('')
@@ -101,6 +116,14 @@ export function ElectricityWorkspace() {
   const [resetPin, setResetPin] = useState('')
   const [editingStaffId, setEditingStaffId] = useState('')
   const [assignmentPropertyIds, setAssignmentPropertyIds] = useState<string[]>([])
+  const [activeView, setActiveView] = useState<'overview' | 'readings' | 'topups' | 'meters' | 'reports' | 'staff'>('overview')
+  const [reportStartDate, setReportStartDate] = useState(daysAgoISO(6))
+  const [reportEndDate, setReportEndDate] = useState(todayISO())
+  const [weeklyTarget, setWeeklyTarget] = useState<2 | 3>(2)
+  const [adjustmentTarget, setAdjustmentTarget] = useState<AccountView | null>(null)
+  const [adjustmentUnits, setAdjustmentUnits] = useState('')
+  const [adjustmentDate, setAdjustmentDate] = useState(todayISO())
+  const [adjustmentReason, setAdjustmentReason] = useState('')
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -114,7 +137,7 @@ export function ElectricityWorkspace() {
       setAccountForm((current) => ({ ...current, propertyId: current.propertyId || workspace.properties[0]?.id || '' }))
       setActionState(null)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not load electricity records.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.checkMigrationAccess') })
     } finally {
       if (showLoading) setLoading(false)
     }
@@ -146,6 +169,134 @@ export function ElectricityWorkspace() {
   })
   const lowCount = attention.filter(({ status }) => status === 'exhausted' || status === 'low').length
   const verifiedReadingBalance = submeters.reduce((sum, account) => sum + account.estimated_balance_units, 0)
+  const topupAmountMatches = topupUnits.trim() !== ''
+    && Number.isFinite(Number(topupUnits))
+    && Math.round(Number(topupUnits) * 1000) === Math.round(Number(topupUnitsConfirmation) * 1000)
+  const topupTokenMatches = tokenSuffix.trim().toUpperCase() === tokenSuffixConfirmation.trim().toUpperCase()
+  const topupReady = topupAmountMatches && topupTokenMatches
+
+  const reportRows = useMemo(() => {
+    if (!data) return []
+    const accountMap = new Map(data.accounts.filter((account) => account.property_id === propertyId).map((account) => [account.id, account]))
+    return data.readings
+      .filter((reading) => reading.reading_date >= reportStartDate && reading.reading_date <= reportEndDate && accountMap.has(reading.account_id))
+      .map((reading) => {
+        const account = accountMap.get(reading.account_id)!
+        const periodStart = reading.previous_reading_date || account.initial_reading_date
+        const topups = data.topups.filter((topup) => topup.account_id === reading.account_id && (
+          topup.applied_reading_id === reading.id
+          || (!topup.applied_reading_id && topup.status === 'reported' && topup.purchase_date > periodStart && topup.purchase_date <= reading.reading_date)
+        ))
+        const reportedTopupUnits = topups.filter((topup) => topup.status === 'reported').reduce((sum, topup) => sum + Number(topup.units), 0)
+        const verifiedTopupUnits = topups.filter((topup) => topup.status === 'verified').reduce((sum, topup) => sum + Number(topup.units), 0)
+        const cutoff = data.cutoffEvents
+          .filter((event) => event.account_id === reading.account_id
+            && event.action === 'disconnected'
+            && event.meter_reading !== null
+            && event.performed_at.slice(0, 10) >= periodStart
+            && event.performed_at.slice(0, 10) <= reading.reading_date)
+          .sort((left, right) => right.performed_at.localeCompare(left.performed_at))[0]
+        return {
+          id: reading.id,
+          account,
+          reading,
+          periodStart,
+          unitsPurchased: topups.reduce((sum, topup) => sum + Number(topup.units), 0),
+          verifiedTopupUnits,
+          reportedTopupUnits,
+          cutoffReading: cutoff?.meter_reading ?? null,
+          adjustmentUnits: Number(reading.adjustment_units || 0),
+        }
+      })
+      .sort((left, right) => left.reading.reading_date.localeCompare(right.reading.reading_date) || left.account.tenant_name.localeCompare(right.account.tenant_name))
+  }, [data, propertyId, reportStartDate, reportEndDate])
+
+  const reportTotals = useMemo(() => reportRows.reduce((totals, row) => ({
+    usage: totals.usage + Number(row.reading.usage_units),
+    purchased: totals.purchased + row.unitsPurchased,
+    verified: totals.verified + row.verifiedTopupUnits,
+    reported: totals.reported + row.reportedTopupUnits,
+    adjustments: totals.adjustments + row.adjustmentUnits,
+    carried: totals.carried + Number(row.reading.closing_balance_units || 0),
+  }), { usage: 0, purchased: 0, verified: 0, reported: 0, adjustments: 0, carried: 0 }), [reportRows])
+
+  const weeklyReadingsByAccount = useMemo(() => {
+    const counts = new Map<string, number>()
+    const weekStart = daysAgoISO(6)
+    for (const reading of data?.readings || []) {
+      const account = data?.accounts.find((item) => item.id === reading.account_id)
+      if (account?.property_id === propertyId && account.meter_kind === 'submeter' && reading.reading_date >= weekStart && reading.reading_date <= todayISO()) {
+        counts.set(account.id, (counts.get(account.id) || 0) + 1)
+      }
+    }
+    return counts
+  }, [data, propertyId])
+  const clientsOnTrack = submeters.filter((account) => (weeklyReadingsByAccount.get(account.id) || 0) >= weeklyTarget).length
+  const clientsNeedingReadings = Math.max(0, submeters.length - clientsOnTrack)
+
+  const submitAdjustment = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!adjustmentTarget || saving) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      await postJson('/api/electricity/adjustments', {
+        accountId: adjustmentTarget.id,
+        adjustmentUnits: Number(adjustmentUnits),
+        adjustmentDate,
+        reason: adjustmentReason,
+      })
+      setAdjustmentTarget(null)
+      setAdjustmentUnits('')
+      setAdjustmentReason('')
+      setActionState({ type: 'success', message: t('electricity.adjustmentSaved') })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.adjustmentSaveFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const downloadReport = () => {
+    const csvValue = (value: string | number | null) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const rows = [
+      [t('electricity.property'), t('electricity.client'), t('electricity.unit'), t('electricity.period'), t('electricity.previousReading'), t('electricity.currentMeterReading'), t('electricity.broughtForward'), t('electricity.unitsConsumed'), t('electricity.unitsPurchased'), t('electricity.unitsVerified'), t('electricity.unitsReported'), t('electricity.cutoffReading'), t('electricity.adjustmentAmount'), t('electricity.carriedForward')],
+      ...reportRows.map(({ account, reading, periodStart, unitsPurchased, verifiedTopupUnits, reportedTopupUnits, cutoffReading, adjustmentUnits }) => [
+        account.property_name,
+        account.tenant_name,
+        account.unit_name || account.floor_label,
+        `${periodStart} to ${reading.reading_date}`,
+        reading.previous_meter_reading,
+        reading.current_meter_reading,
+        reading.opening_balance_units,
+        reading.usage_units,
+        unitsPurchased,
+        verifiedTopupUnits,
+        reportedTopupUnits,
+        cutoffReading,
+        adjustmentUnits,
+        reading.closing_balance_units,
+      ]),
+      [t('electricity.periodTotals'), '', '', '', '', '', '', reportTotals.usage, reportTotals.purchased, reportTotals.verified, reportTotals.reported, '', reportTotals.adjustments, reportTotals.carried],
+    ]
+    const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(',')).join('\r\n')}`
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `electricity-ledger-${reportStartDate}-to-${reportEndDate}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const workspaceViews = [
+    { key: 'overview' as const, label: t('electricity.areaOverview') },
+    { key: 'readings' as const, label: t('electricity.areaReadings') },
+    { key: 'topups' as const, label: t('electricity.areaTopups') },
+    { key: 'meters' as const, label: t('electricity.areaMeters') },
+    { key: 'reports' as const, label: t('electricity.areaReports') },
+    ...(data?.ownerMode ? [{ key: 'staff' as const, label: t('electricity.areaStaff') }] : []),
+  ]
 
   const postJson = async (path: string, body: unknown, method = 'POST') => {
     const response = await fetch(path, {
@@ -154,7 +305,7 @@ export function ElectricityWorkspace() {
       body: JSON.stringify(body),
     })
     const result = await response.json()
-    if (!response.ok) throw new Error(result.error || 'The request could not be saved.')
+    if (!response.ok) throw new Error(result.error || t('electricity.requestFailed'))
     return result
   }
 
@@ -167,7 +318,7 @@ export function ElectricityWorkspace() {
         setCopiedMeterAccountId((current) => current === account.id ? '' : current)
       }, 1800)
     } catch {
-      setActionState({ type: 'error', message: 'Could not copy the meter number. You can still select and copy it from the list.' })
+      setActionState({ type: 'error', message: t('electricity.copyFailed') })
     }
   }
 
@@ -186,10 +337,45 @@ export function ElectricityWorkspace() {
       const reading = result.reading as ElectricityReadingRow
       setReadingValue('')
       setReadingNotes('')
-      setActionState({ type: 'success', message: `Reading saved. ${numeric(reading.usage_units)} units used${reading.closing_balance_units === null ? '.' : `; estimated ${numeric(reading.closing_balance_units)} units remain.`}` })
+      setActionState({
+        type: 'success',
+        message: reading.closing_balance_units === null
+          ? t('electricity.readingSavedNoBalance', { used: numeric(reading.usage_units) })
+          : t('electricity.readingSaved', { used: numeric(reading.usage_units), remaining: numeric(reading.closing_balance_units) }),
+      })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not save reading.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.readingSaveFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitQuickReading = async (account: AccountView) => {
+    const currentReading = Number(quickReadingValues[account.id])
+    const previousReading = account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+    const previousDate = account.latest_reading?.reading_date ?? account.initial_reading_date
+    if (saving || !Number.isFinite(currentReading) || currentReading < previousReading || quickReadingDate <= previousDate) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      const result = await postJson('/api/electricity/readings', {
+        accountId: account.id,
+        currentReading,
+        readingDate: quickReadingDate,
+        notes: null,
+      })
+      const reading = result.reading as ElectricityReadingRow
+      setQuickReadingValues((current) => ({ ...current, [account.id]: '' }))
+      setActionState({
+        type: 'success',
+        message: reading.closing_balance_units === null
+          ? t('electricity.readingSavedNoBalance', { used: numeric(reading.usage_units) })
+          : t('electricity.readingSaved', { used: numeric(reading.usage_units), remaining: numeric(reading.closing_balance_units) }),
+      })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.readingSaveFailed') })
     } finally {
       setSaving(false)
     }
@@ -205,18 +391,20 @@ export function ElectricityWorkspace() {
         accountId: topupAccountId,
         purchaseDate: topupDate,
         units: Number(topupUnits),
+        unitsConfirmation: Number(topupUnitsConfirmation),
         tokenSuffix,
-        verified: topupVerified,
+        tokenSuffixConfirmation,
         notes: topupNotes,
       })
       setTopupUnits('')
+      setTopupUnitsConfirmation('')
       setTokenSuffix('')
+      setTokenSuffixConfirmation('')
       setTopupNotes('')
-      setTopupVerified(false)
-      setActionState({ type: 'success', message: topupVerified ? 'Verified top-up recorded and included in the estimate.' : 'Reported top-up saved. It will not change the estimated balance until verified against the meter.' })
+      setActionState({ type: 'success', message: t('electricity.topupReportedSaved') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not record top-up.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.topupSaveFailed') })
     } finally {
       setSaving(false)
     }
@@ -230,12 +418,12 @@ export function ElectricityWorkspace() {
       setActionState({
         type: 'success',
         message: result.topup.applied_reading_id
-          ? 'Top-up confirmed and reconciled with the meter history.'
-          : 'Top-up confirmed. It will be included at the first reading on or after its purchase date.',
+          ? t('electricity.topupReconciled')
+          : t('electricity.topupConfirmed'),
       })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not verify the top-up.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.topupVerifyFailed') })
     } finally {
       setSaving(false)
     }
@@ -255,10 +443,10 @@ export function ElectricityWorkspace() {
       setCutoffTarget(null)
       setCutoffReason('')
       setCutoffReading('')
-      setActionState({ type: 'success', message: 'Manual power action recorded. The app did not switch the meter.' })
+      setActionState({ type: 'success', message: t('electricity.actionRecorded') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not record the manual action.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.actionSaveFailed') })
     } finally {
       setSaving(false)
     }
@@ -272,10 +460,10 @@ export function ElectricityWorkspace() {
       await postJson('/api/electricity/accounts', accountForm)
       setAccountForm((current) => ({ ...current, meterKind: 'submeter', unitId: '', tenantId: '', floorLabel: '', meterNumber: '', initialMeterReading: '', initialReadingDate: todayISO(), openingBalanceUnits: '0', lowUnitsThreshold: '10' }))
       setShowAccountSetup(false)
-      setActionState({ type: 'success', message: 'Electricity meter set up.' })
+      setActionState({ type: 'success', message: t('electricity.meterSetupSaved') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not set up the meter.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.meterSetupFailed') })
     } finally {
       setSaving(false)
     }
@@ -289,10 +477,10 @@ export function ElectricityWorkspace() {
       await postJson('/api/electricity/staff', staffForm)
       setStaffForm({ propertyIds: [], staffId: '', fullName: '', pin: '' })
       setShowStaffSetup(false)
-      setActionState({ type: 'success', message: 'Staff login created with access only to the selected properties. Share the staff ID and PIN privately.' })
+      setActionState({ type: 'success', message: t('electricity.staffLoginCreated') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not create staff login.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.staffCreateFailed') })
     } finally {
       setSaving(false)
     }
@@ -316,10 +504,10 @@ export function ElectricityWorkspace() {
       await postJson('/api/electricity/staff', { id: staffId, propertyIds: assignmentPropertyIds }, 'PATCH')
       setEditingStaffId('')
       setAssignmentPropertyIds([])
-      setActionState({ type: 'success', message: 'Staff property access updated.' })
+      setActionState({ type: 'success', message: t('electricity.staffPropertiesUpdated') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not update staff properties.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.staffPropertiesFailed') })
     } finally {
       setSaving(false)
     }
@@ -329,10 +517,10 @@ export function ElectricityWorkspace() {
     setSaving(true)
     try {
       await postJson('/api/electricity/staff', { id: staff.id, active: !staff.active }, 'PATCH')
-      setActionState({ type: 'success', message: staff.active ? 'Staff access deactivated.' : 'Staff access reactivated.' })
+      setActionState({ type: 'success', message: t(staff.active ? 'electricity.staffDeactivated' : 'electricity.staffReactivated') })
       await fetchData(false)
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not update staff access.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.staffAccessFailed') })
     } finally {
       setSaving(false)
     }
@@ -346,9 +534,9 @@ export function ElectricityWorkspace() {
       await postJson('/api/electricity/staff', { id: resetStaffId, pin: resetPin }, 'PATCH')
       setResetStaffId('')
       setResetPin('')
-      setActionState({ type: 'success', message: 'Staff PIN changed.' })
+      setActionState({ type: 'success', message: t('electricity.staffPinChanged') })
     } catch (error) {
-      setActionState({ type: 'error', message: error instanceof Error ? error.message : 'Could not change staff PIN.' })
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.staffPinFailed') })
     } finally {
       setSaving(false)
     }
@@ -357,15 +545,19 @@ export function ElectricityWorkspace() {
   const selectedRecordAccount = accounts.find((account) => account.id === recordAccountId) || null
   const recordPreviousReading = selectedRecordAccount?.latest_reading?.current_meter_reading ?? selectedRecordAccount?.initial_meter_reading ?? 0
   const recordOpeningBalance = selectedRecordAccount?.latest_reading?.closing_balance_units ?? selectedRecordAccount?.opening_balance_units ?? 0
+  const applicablePendingAdjustments = data?.adjustments.filter((adjustment) =>
+    adjustment.account_id === recordAccountId && !adjustment.applied_reading_id && adjustment.adjustment_date <= readingDate
+  ).reduce((sum, adjustment) => sum + Number(adjustment.adjustment_units), 0) || 0
   const applicableVerifiedTopups = data?.topups.filter((topup) =>
     topup.account_id === recordAccountId && !topup.applied_reading_id && topup.status === 'verified' && topup.purchase_date <= readingDate
   ).reduce((sum, topup) => sum + Number(topup.units), 0) || 0
+  const effectiveOpeningBalance = Number(recordOpeningBalance) + applicablePendingAdjustments
   const parsedReadingValue = readingValue.trim() === '' ? Number.NaN : Number(readingValue)
   const readingPreview = Number.isFinite(parsedReadingValue) && parsedReadingValue >= recordPreviousReading
     ? calculateElectricityBalance({
         previousMeterReading: Number(recordPreviousReading),
         currentMeterReading: parsedReadingValue,
-        openingBalanceUnits: Number(recordOpeningBalance),
+        openingBalanceUnits: effectiveOpeningBalance,
         verifiedTopupUnits: applicableVerifiedTopups,
       })
     : null
@@ -380,23 +572,28 @@ export function ElectricityWorkspace() {
   const draftNotice = (account: AccountView) => {
     const phone = normalizeWhatsAppPhone(account.tenant_phone)
     if (!phone) {
-      setActionState({ type: 'error', message: `No phone number is recorded for ${account.tenant_name}.` })
+      setActionState({ type: 'error', message: t('electricity.noPhone', { tenant: account.tenant_name }) })
       return
     }
     const unitsLeft = numeric(account.estimated_balance_units)
-    const readOn = account.latest_reading ? formatDate(account.latest_reading.reading_date) : 'the latest check'
-    const message = `Hello ${account.tenant_name}, our electricity check for ${account.unit_name || account.floor_label} on ${readOn} estimates about ${unitsLeft} kWh remaining. Please top up your LUKU as needed. This is an estimate from the last submeter reading.`
+    const readOn = account.latest_reading ? formatDate(account.latest_reading.reading_date) : t('electricity.latestCheck')
+    const message = t('electricity.whatsAppTemplate', {
+      tenant: account.tenant_name,
+      unit: account.unit_name || account.floor_label,
+      date: readOn,
+      units: unitsLeft,
+    })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
   }
 
-  if (loading) return <div className="py-16 text-center text-slate-500">Loading electricity workspace...</div>
+  if (loading) return <div className="py-16 text-center text-slate-500">{t('electricity.loadingWorkspace')}</div>
 
   if (!data) return (
     <div className="mx-auto max-w-2xl space-y-4 py-12 text-center">
       <Bolt className="mx-auto h-9 w-9 text-amber-500" />
-      <h1 className="text-xl font-bold text-slate-950">Electricity workspace unavailable</h1>
-      <p className="text-sm text-slate-600">{actionState?.message || 'Check the database migration and your property access.'}</p>
-      <button className="btn-secondary" onClick={() => void fetchData()}><RefreshCw className="mr-2 h-4 w-4" />Try again</button>
+      <h1 className="text-xl font-bold text-slate-950">{t('electricity.unavailable')}</h1>
+      <p className="text-sm text-slate-600">{actionState?.message || t('electricity.checkMigrationAccess')}</p>
+      <button className="btn-secondary" onClick={() => void fetchData()}><RefreshCw className="mr-2 h-4 w-4" />{t('electricity.tryAgain')}</button>
     </div>
   )
 
@@ -404,100 +601,114 @@ export function ElectricityWorkspace() {
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700"><Bolt className="h-4 w-4" />Metered electricity</div>
-          <h1 className="text-2xl font-bold text-slate-950">Electricity monitoring</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">Track tenant-reported LUKU top-ups, submeter usage, estimated units left, and on-site power actions.</p>
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700"><Bolt className="h-4 w-4" />{t('electricity.metered')}</div>
+          <h1 className="text-2xl font-bold text-slate-950">{t('electricity.title')}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{t('electricity.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          {data.ownerMode && <button className="btn-secondary min-h-11" onClick={() => setShowAccountSetup((show) => !show)}><Plus className="mr-2 h-4 w-4" />Set up meter</button>}
-          <button className="icon-button h-11 w-11" onClick={() => void fetchData()} aria-label="Refresh electricity data" title="Refresh"><RefreshCw className="h-4 w-4" /></button>
+          {data.ownerMode && <button className="btn-secondary min-h-11" onClick={() => setShowAccountSetup((show) => !show)}><Plus className="mr-2 h-4 w-4" />{t('electricity.setupMeter')}</button>}
+          <button className="icon-button h-11 w-11" onClick={() => void fetchData()} aria-label={t('electricity.refresh')} title={t('electricity.refresh')}><RefreshCw className="h-4 w-4" /></button>
         </div>
       </header>
 
-      {actionState && <div role="status" className={`flex items-start gap-2 border px-4 py-3 text-sm ${actionState.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}><span className="mt-0.5">{actionState.type === 'error' ? <CircleAlert className="h-4 w-4" /> : <Check className="h-4 w-4" />}</span><span className="min-w-0 flex-1">{actionState.message}</span><button onClick={() => setActionState(null)} aria-label="Dismiss message"><X className="h-4 w-4" /></button></div>}
+      {actionState && <div role="status" className={`flex items-start gap-2 border px-4 py-3 text-sm ${actionState.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}><span className="mt-0.5">{actionState.type === 'error' ? <CircleAlert className="h-4 w-4" /> : <Check className="h-4 w-4" />}</span><span className="min-w-0 flex-1">{actionState.message}</span><button onClick={() => setActionState(null)} aria-label={t('electricity.dismissMessage')}><X className="h-4 w-4" /></button></div>}
 
       <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="w-full max-w-sm">
-          <label className="label" htmlFor="electricity-property">Property</label>
+          <label className="label" htmlFor="electricity-property">{t('electricity.property')}</label>
           <select id="electricity-property" className="input min-h-11" value={propertyId} onChange={(event) => setPropertyId(event.target.value)}>
             {data.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
           </select>
         </div>
-        <p className="text-xs text-slate-500">Balance estimates are only as current as the last physical submeter reading.</p>
+        <p className="text-xs text-slate-500">{t('electricity.balanceFreshness')}</p>
       </div>
 
-      <section aria-label="Electricity overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Active client submeters" value={String(submeters.length)} detail={selectedProperty?.name || 'Selected property'} />
-        <Metric label="Low or exhausted" value={String(lowCount)} detail="Review reading and contact tenant" tone={lowCount ? 'danger' : 'normal'} />
-        <Metric label="Estimated units left" value={numeric(verifiedReadingBalance)} detail="Sum of latest recorded balances" />
-        <Metric label="Floor main meters" value={String(mainMeters.length)} detail="Shared floor readings" />
+      <section aria-label={t('electricity.chooseArea')} className="space-y-2">
+        <div><h2 className="text-sm font-semibold text-slate-900">{t('electricity.chooseArea')}</h2><p className="mt-1 text-xs text-slate-500">{t('electricity.areaHelp')}</p></div>
+        <nav role="tablist" aria-label={t('electricity.chooseArea')} className="grid grid-cols-2 gap-2 sm:flex sm:overflow-x-auto sm:border-b sm:border-slate-200 sm:pb-2">
+          {workspaceViews.map((view) => <button
+            key={view.key}
+            type="button"
+            role="tab"
+            aria-selected={activeView === view.key}
+            onClick={() => setActiveView(view.key)}
+            className={`min-h-11 border px-3 text-left text-sm font-semibold transition sm:shrink-0 sm:border-b-2 sm:border-x-0 sm:border-t-0 sm:text-center ${activeView === view.key ? 'border-primary-300 bg-primary-50 text-primary-700 sm:border-primary-600' : 'border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:border-transparent'}`}
+          >{view.label}</button>)}
+        </nav>
       </section>
 
-      {mainMeters.length > 0 && <section aria-labelledby="main-meter-directory-heading" className="border-y border-slate-200 bg-white">
+      {activeView === 'overview' && <section aria-label={t('electricity.overview')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Metric label={t('electricity.activeSubmeters')} value={String(submeters.length)} detail={selectedProperty?.name || t('electricity.property')} />
+        <Metric label={t('electricity.lowOrEmpty')} value={String(lowCount)} detail={t('electricity.reviewContact')} tone={lowCount ? 'danger' : 'normal'} />
+        <Metric label={t('electricity.estimatedUnitsLeft')} value={numeric(verifiedReadingBalance)} detail={t('electricity.latestBalances')} />
+        <Metric label={t('electricity.mainMeters')} value={String(mainMeters.length)} detail={t('electricity.sharedReadings')} />
+      </section>}
+
+      {activeView === 'overview' && mainMeters.length > 0 && <section aria-labelledby="main-meter-directory-heading" className="border-y border-slate-200 bg-white">
         <div className="flex items-end justify-between gap-3 px-4 py-3 sm:px-5">
-          <div><h2 id="main-meter-directory-heading" className="text-base font-semibold text-slate-950">Main meter quick reference</h2><p className="mt-1 text-sm text-slate-600">{selectedProperty?.name || 'Selected property'} · tap to copy a meter number</p></div>
-          <span className="shrink-0 text-sm text-slate-500">{mainMeters.length} meters</span>
+          <div><h2 id="main-meter-directory-heading" className="text-base font-semibold text-slate-950">{t('electricity.quickReference')}</h2><p className="mt-1 text-sm text-slate-600">{selectedProperty?.name || t('electricity.property')} · {t('electricity.tapToCopy')}</p></div>
+          <span className="shrink-0 text-sm text-slate-500">{mainMeters.length} {t('electricity.meters')}</span>
         </div>
         <div className="divide-y divide-slate-200">
           {mainMeters.map((account) => {
             const copied = copiedMeterAccountId === account.id
             return <div key={account.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
-              <div className="min-w-0"><p className="font-medium text-slate-900">{account.floor_label}</p><p className="mt-0.5 break-all font-mono text-sm text-slate-600">{account.meter_number || 'Meter number not entered'}</p></div>
-              <button type="button" className="icon-button h-11 w-11" onClick={() => void copyMeterNumber(account)} disabled={!account.meter_number} aria-label={copied ? `${account.floor_label} meter number copied` : `Copy ${account.floor_label} meter number`} title={copied ? 'Copied' : 'Copy meter number'}>
+              <div className="min-w-0"><p className="font-medium text-slate-900">{account.floor_label}</p><p className="mt-0.5 break-all font-mono text-sm text-slate-600">{account.meter_number || t('electricity.numberMissing')}</p></div>
+              <button type="button" className="icon-button h-11 w-11" onClick={() => void copyMeterNumber(account)} disabled={!account.meter_number} aria-label={copied ? `${account.floor_label}: ${t('electricity.copied')}` : `${t('electricity.copyMeter')}: ${account.floor_label}`} title={copied ? t('electricity.copied') : t('electricity.copyMeter')}>
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
           })}
         </div>
-        {selectedProperty?.name.trim().toLowerCase() === 'dora tower' && <p role="note" className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-5">Verify before assigning: the source directory lists Floor 6 as 22251960989, the same number as Ground/Reception. Floor 6 is not configured as a separate meter in KodiFlow.</p>}
+        {selectedProperty?.name.trim().toLowerCase() === 'dora tower' && <p role="note" className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-5">{t('electricity.verifyFloorSix')}</p>}
       </section>}
 
       {showAccountSetup && data.ownerMode && <section className="border border-slate-200 bg-white p-4 sm:p-6" aria-labelledby="meter-setup-heading">
         <div className="mb-4 flex items-start justify-between gap-3">
-          <div><h2 id="meter-setup-heading" className="text-lg font-semibold text-slate-950">Set up an electricity meter</h2><p className="mt-1 text-sm text-slate-600">Create a client submeter or a shared floor main meter. Set the starting readings from your paper record.</p></div>
-          <button onClick={() => setShowAccountSetup(false)} className="icon-button" aria-label="Close meter setup"><X className="h-4 w-4" /></button>
+          <div><h2 id="meter-setup-heading" className="text-lg font-semibold text-slate-950">{t('electricity.setupTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.setupHelp')}</p></div>
+          <button onClick={() => setShowAccountSetup(false)} className="icon-button" aria-label={t('electricity.closeSetup')}><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={submitAccount} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Property"><select className="input" required value={accountForm.propertyId} onChange={(event) => { setAccountForm({ ...accountForm, propertyId: event.target.value, unitId: '', tenantId: '', floorLabel: '' }); setPropertyId(event.target.value) }}>{data.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></Field>
-          <Field label="Meter type"><select className="input" value={accountForm.meterKind} onChange={(event) => setAccountForm({ ...accountForm, meterKind: event.target.value as AccountForm['meterKind'], unitId: '', tenantId: '' })}><option value="submeter">Client submeter</option><option value="floor_main">Floor main meter</option></select></Field>
-          <Field label={accountForm.meterKind === 'submeter' ? 'Floor / shared group' : 'Floor or shared area'}><input className="input" required maxLength={80} placeholder="For example, FL1" value={accountForm.floorLabel} onChange={(event) => setAccountForm({ ...accountForm, floorLabel: event.target.value })} /></Field>
+          <Field label={t('electricity.property')}><select className="input" required value={accountForm.propertyId} onChange={(event) => { setAccountForm({ ...accountForm, propertyId: event.target.value, unitId: '', tenantId: '', floorLabel: '' }); setPropertyId(event.target.value) }}>{data.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></Field>
+          <Field label={t('electricity.meterType')}><select className="input" value={accountForm.meterKind} onChange={(event) => setAccountForm({ ...accountForm, meterKind: event.target.value as AccountForm['meterKind'], unitId: '', tenantId: '' })}><option value="submeter">{t('electricity.clientSubmeter')}</option><option value="floor_main">{t('electricity.floorMain')}</option></select></Field>
+          <Field label={accountForm.meterKind === 'submeter' ? t('electricity.floorGroup') : t('electricity.floorArea')}><input className="input" required maxLength={80} placeholder={t('electricity.floorLabelExample')} value={accountForm.floorLabel} onChange={(event) => setAccountForm({ ...accountForm, floorLabel: event.target.value })} /></Field>
           {accountForm.meterKind === 'submeter' && <>
-            <Field label="Unit"><select required className="input" value={accountForm.unitId} onChange={(event) => {
+            <Field label={t('electricity.unit')}><select required className="input" value={accountForm.unitId} onChange={(event) => {
               const unit = units.find((item) => item.id === event.target.value)
               const section = sections.find((item) => item.id === unit?.section_id)
               setAccountForm({ ...accountForm, unitId: event.target.value, floorLabel: accountForm.floorLabel || section?.name || '' })
-            }}><option value="">Select unit</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.unit_name}{unit.unit_identifier ? ` (${unit.unit_identifier})` : ''}</option>)}</select></Field>
-            <Field label="Client"><select required className="input" value={accountForm.tenantId} onChange={(event) => setAccountForm({ ...accountForm, tenantId: event.target.value })}><option value="">Select client</option>{data.tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name || tenant.business_name || 'Unnamed client'}</option>)}</select></Field>
+            }}><option value="">{t('electricity.selectUnit')}</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.unit_name}{unit.unit_identifier ? ` (${unit.unit_identifier})` : ''}</option>)}</select></Field>
+            <Field label={t('electricity.client')}><select required className="input" value={accountForm.tenantId} onChange={(event) => setAccountForm({ ...accountForm, tenantId: event.target.value })}><option value="">{t('electricity.selectClient')}</option>{data.tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name || tenant.business_name || 'Unnamed client'}</option>)}</select></Field>
           </>}
-          <Field label="Meter number (optional)"><input className="input" maxLength={80} value={accountForm.meterNumber} onChange={(event) => setAccountForm({ ...accountForm, meterNumber: event.target.value })} /></Field>
-          <Field label="Starting meter reading (kWh)"><input className="input" type="number" inputMode="decimal" min="0" step="0.001" required value={accountForm.initialMeterReading} onChange={(event) => setAccountForm({ ...accountForm, initialMeterReading: event.target.value })} /></Field>
-          <Field label="Date of starting reading"><input className="input" type="date" required value={accountForm.initialReadingDate} max={todayISO()} onChange={(event) => setAccountForm({ ...accountForm, initialReadingDate: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">The next reading is compared against this date. Use the actual date from the meter log.</span></Field>
+          <Field label={t('electricity.meterNumberOptional')}><input className="input" maxLength={80} value={accountForm.meterNumber} onChange={(event) => setAccountForm({ ...accountForm, meterNumber: event.target.value })} /></Field>
+          <Field label={t('electricity.startReading')}><input className="input" type="number" inputMode="decimal" min="0" step="0.001" required value={accountForm.initialMeterReading} onChange={(event) => setAccountForm({ ...accountForm, initialMeterReading: event.target.value })} /></Field>
+          <Field label={t('electricity.startDate')}><input className="input" type="date" required value={accountForm.initialReadingDate} max={todayISO()} onChange={(event) => setAccountForm({ ...accountForm, initialReadingDate: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.actualDateHelp')}</span></Field>
           {accountForm.meterKind === 'submeter' && <>
-            <Field label="Opening units carried forward"><input className="input" type="number" inputMode="decimal" step="0.001" value={accountForm.openingBalanceUnits} onChange={(event) => setAccountForm({ ...accountForm, openingBalanceUnits: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">Enter the starting LUKU balance shown on your form.</span></Field>
-            <Field label="Low-unit warning threshold"><input className="input" type="number" inputMode="decimal" min="0" step="0.001" value={accountForm.lowUnitsThreshold} onChange={(event) => setAccountForm({ ...accountForm, lowUnitsThreshold: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">“Nearly low” starts at twice this amount.</span></Field>
+            <Field label={t('electricity.openingUnits')}><input className="input" type="number" inputMode="decimal" step="0.001" value={accountForm.openingBalanceUnits} onChange={(event) => setAccountForm({ ...accountForm, openingBalanceUnits: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.openingUnitsHelp')}</span></Field>
+            <Field label={t('electricity.lowThreshold')}><input className="input" type="number" inputMode="decimal" min="0" step="0.001" value={accountForm.lowUnitsThreshold} onChange={(event) => setAccountForm({ ...accountForm, lowUnitsThreshold: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.lowThresholdHelp')}</span></Field>
           </>}
-          <div className="flex items-end"><button className="btn-primary min-h-11 w-full" disabled={saving}>{saving ? 'Saving...' : 'Save meter'}</button></div>
+          <div className="flex items-end"><button className="btn-primary min-h-11 w-full" disabled={saving}>{saving ? t('electricity.saving') : t('electricity.saveMeter')}</button></div>
         </form>
       </section>}
 
-      <section aria-labelledby="reconciliation-heading" className="scroll-mt-20 border-y border-slate-200 bg-white">
+      {activeView === 'meters' && <section aria-labelledby="reconciliation-heading" className="scroll-mt-20 border-y border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-          <h2 id="reconciliation-heading" className="text-lg font-semibold text-slate-950">Main meter reconciliation</h2>
-          <p className="mt-1 text-sm text-slate-600">Main-meter use is compared with the sum of its floor submeters for the same start and end dates. A final shortfall is shown only when every active submeter has a matching reading.</p>
+          <h2 id="reconciliation-heading" className="text-lg font-semibold text-slate-950">{t('electricity.reconciliation')}</h2>
+          <p className="mt-1 text-sm text-slate-600">{t('electricity.reconciliationHelp')}</p>
         </div>
-        {reconciliations.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">Add a main meter for each floor to track unaccounted units.</p> : <div className="divide-y divide-slate-200">
+        {reconciliations.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">{t('electricity.addMainMeter')}</p> : <div className="divide-y divide-slate-200">
           {reconciliations.map((report) => {
             const statusText = report.status === 'baseline'
-              ? 'Baseline only; record a later reading to calculate use'
+              ? t('electricity.baselineOnly')
               : report.status === 'unassigned'
-                ? 'No submeters assigned to this floor'
+                ? t('electricity.noSubmeters')
                 : report.status === 'incomplete'
-                  ? `${report.matchedSubmeterCount} of ${report.submeterAccounts.length} submeters match this period`
+                  ? `${report.matchedSubmeterCount} / ${report.submeterAccounts.length} ${t('electricity.submetersMatchPeriod')}`
                   : report.status === 'balanced'
-                    ? 'Balanced within 0.001 kWh'
+                    ? t('electricity.balanced')
                     : report.status === 'shortage'
-                      ? `${numeric(report.difference || 0)} kWh unaccounted`
-                      : `${numeric(Math.abs(report.difference || 0))} kWh more on submeters than main meter`
+                      ? `${numeric(report.difference || 0)} kWh ${t('electricity.unaccountedUnits')}`
+                      : `${numeric(Math.abs(report.difference || 0))} kWh ${t('electricity.moreSubmeterThanMain')}`
             const statusClass = report.status === 'shortage'
               ? 'border-rose-200 bg-rose-50 text-rose-800'
               : report.status === 'balanced'
@@ -509,138 +720,281 @@ export function ElectricityWorkspace() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{report.mainAccount.floor_label}</h3><span className={`border px-2 py-1 text-xs font-semibold ${statusClass}`}>{statusText}</span></div>
-                  <p className="mt-1 text-sm text-slate-600">Main meter: {numeric(report.mainCurrentReading)} kWh · {report.mainReading ? `read ${formatDate(report.mainReading.reading_date)}` : `baseline ${formatDate(report.mainAccount.initial_reading_date)}`}</p>
-                  {report.periodStart && report.periodEnd && <p className="mt-1 text-xs text-slate-500">Period {formatDate(report.periodStart)} to {formatDate(report.periodEnd)}</p>}
-                  {report.status === 'incomplete' && <p className="mt-1 text-xs text-amber-800">Still need: {report.unmatchedSubmeters.map((account) => account.tenant_name || 'Client submeter').join(', ')}. No final shortfall is calculated yet.</p>}
-                  {report.status === 'baseline' && <p className="mt-1 text-xs text-slate-500">The ledger supplies a current main reading but no earlier main reading for this period, so missing units cannot be calculated yet.</p>}
+                  <p className="mt-1 text-sm text-slate-600">{t('electricity.mainMeterReading')}: {numeric(report.mainCurrentReading)} kWh · {report.mainReading ? `${t('electricity.read')} ${formatDate(report.mainReading.reading_date)}` : `${t('electricity.baseline')} ${formatDate(report.mainAccount.initial_reading_date)}`}</p>
+                  {report.periodStart && report.periodEnd && <p className="mt-1 text-xs text-slate-500">{t('electricity.period')} {formatDate(report.periodStart)} - {formatDate(report.periodEnd)}</p>}
+                  {report.status === 'incomplete' && <p className="mt-1 text-xs text-amber-800">{t('electricity.stillNeed')}: {report.unmatchedSubmeters.map((account) => account.tenant_name || t('electricity.clientSubmeter')).join(', ')}. {t('electricity.noFinalShortfall')}</p>}
+                  {report.status === 'baseline' && <p className="mt-1 text-xs text-slate-500">{t('electricity.baselineExplanation')}</p>}
                 </div>
                 {report.mainUsage !== null && <dl className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm sm:min-w-64">
-                  <dt className="text-slate-500">Main units used</dt><dd className="text-right font-semibold text-slate-900">{numeric(report.mainUsage)} kWh</dd>
-                  <dt className="text-slate-500">Submeter units matched</dt><dd className="text-right font-semibold text-slate-900">{report.submeterUsage === null ? 'Pending' : `${numeric(report.submeterUsage)} kWh`}</dd>
-                  {report.status === 'shortage' && <><dt className="font-semibold text-rose-800">Unaccounted units</dt><dd className="text-right font-bold text-rose-800">{numeric(report.difference || 0)} kWh</dd></>}
-                  {report.status === 'excess' && <><dt className="font-semibold text-amber-800">Submeter excess</dt><dd className="text-right font-bold text-amber-800">{numeric(Math.abs(report.difference || 0))} kWh</dd></>}
+                  <dt className="text-slate-500">{t('electricity.mainUnitsUsed')}</dt><dd className="text-right font-semibold text-slate-900">{numeric(report.mainUsage)} kWh</dd>
+                  <dt className="text-slate-500">{t('electricity.submeterUnitsMatched')}</dt><dd className="text-right font-semibold text-slate-900">{report.submeterUsage === null ? t('electricity.pending') : `${numeric(report.submeterUsage)} kWh`}</dd>
+                  {report.status === 'shortage' && <><dt className="font-semibold text-rose-800">{t('electricity.unaccountedUnits')}</dt><dd className="text-right font-bold text-rose-800">{numeric(report.difference || 0)} kWh</dd></>}
+                  {report.status === 'excess' && <><dt className="font-semibold text-amber-800">{t('electricity.submeterExcess')}</dt><dd className="text-right font-bold text-amber-800">{numeric(Math.abs(report.difference || 0))} kWh</dd></>}
                 </dl>}
               </div>
               {report.submeterAccounts.length > 0 && <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-xs text-slate-500">{report.submeterAccounts.map((account) => {
                 const matched = !report.unmatchedSubmeters.some((item) => item.id === account.id)
                 const matchingReading = data.readings.find((reading) => reading.account_id === account.id && reading.previous_reading_date === report.periodStart && reading.reading_date === report.periodEnd)
-                return <span key={account.id}>{account.tenant_name || 'Client'}: {matchingReading ? `${numeric(matchingReading.usage_units)} kWh` : matched ? 'matched' : 'reading needed'}</span>
+                return <span key={account.id}>{account.tenant_name || t('electricity.client')}: {matchingReading ? `${numeric(matchingReading.usage_units)} kWh` : matched ? t('electricity.matched') : t('electricity.readingNeeded')}</span>
               })}</div>}
             </article>
           })}
         </div>}
-      </section>
+      </section>}
 
-      <section id="attention" aria-labelledby="attention-heading" className="scroll-mt-20">
-        <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="attention-heading" className="text-lg font-semibold text-slate-950">Needs attention</h2><p className="mt-1 text-sm text-slate-600">Low balances need a fresh physical check and a person to contact the client.</p></div><span className="text-sm font-semibold text-slate-500">{attention.length} items</span></div>
-        {attention.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">No low balances or overdue meter checks for this property.</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+      {activeView === 'overview' && <section id="attention" aria-labelledby="attention-heading" className="scroll-mt-20">
+        <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="attention-heading" className="text-lg font-semibold text-slate-950">{t('electricity.needsAttention')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.attentionHelp')}</p></div><span className="text-sm font-semibold text-slate-500">{attention.length} {t('electricity.items')}</span></div>
+        {attention.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noAttention')}</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
           {attention.map(({ account, status }) => {
             const presentation = statusPresentation[status]
             const StatusIcon = presentation.icon
             return <article key={account.id} className="grid grid-cols-1 gap-3 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold text-slate-950">{account.tenant_name}</h3><span className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-semibold ${presentation.className}`}><StatusIcon className="h-3.5 w-3.5" />{presentation.label}</span></div>
+                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold text-slate-950">{account.tenant_name}</h3><span className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-semibold ${presentation.className}`}><StatusIcon className="h-3.5 w-3.5" />{t(presentation.labelKey)}</span></div>
                 <p className="mt-1 text-sm text-slate-600">{account.unit_name || account.floor_label} · {account.section_name || account.floor_label}</p>
-                <p className="mt-1 text-xs text-slate-500">Estimate: <strong className="text-slate-800">{numeric(account.estimated_balance_units)} kWh</strong> · Last checked {account.latest_reading ? formatDate(account.latest_reading.reading_date) : 'not yet read'}{account.pending_reported_topup_units > 0 ? ` · ${numeric(account.pending_reported_topup_units)} reported units unverified` : ''}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('electricity.estimate')}: <strong className="text-slate-800">{numeric(account.estimated_balance_units)} kWh</strong> · {t('electricity.lastChecked')} {account.latest_reading ? formatDate(account.latest_reading.reading_date) : t('electricity.notYetRead')}{account.pending_reported_topup_units > 0 ? ` · ${numeric(account.pending_reported_topup_units)} ${t('electricity.reportedUnverified')}` : ''}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />Draft WhatsApp</button>}
-                {status === 'exhausted' && account.last_cutoff_event?.action !== 'disconnected' && <button className="min-h-11 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50" onClick={() => submitManualAction(account)}>Log manual cut-off</button>}
-                {status === 'reading_due' && <a className="btn-secondary min-h-11" href="#record">Record check</a>}
+                {account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.draftWhatsApp')}</button>}
+                {status === 'exhausted' && account.last_cutoff_event?.action !== 'disconnected' && <button className="min-h-11 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50" onClick={() => submitManualAction(account)}>{t('electricity.logCutoff')}</button>}
+                {status === 'reading_due' && <a className="btn-secondary min-h-11" href="#record">{t('electricity.recordCheck')}</a>}
               </div>
             </article>
           })}
         </div>}
-      </section>
+      </section>}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section id="record" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="record-heading">
-          <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-amber-50 text-amber-700"><Gauge className="h-5 w-5" /></span><div><h2 id="record-heading" className="text-lg font-semibold text-slate-950">Record a physical reading</h2><p className="mt-1 text-sm text-slate-600">Select a client submeter or shared floor main meter. Usage is calculated from the last recorded reading.</p></div></div>
+      {activeView === 'readings' && <section id="record" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="record-heading">
+          <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-amber-50 text-amber-700"><Gauge className="h-5 w-5" /></span><div><h2 id="record-heading" className="text-lg font-semibold text-slate-950">{t('electricity.recordReadingTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.recordReadingHelp')}</p></div></div>
           <form onSubmit={submitReading} className="space-y-4">
-            <Field label="Meter"><select required className="input min-h-11" value={recordAccountId} onChange={(event) => setRecordAccountId(event.target.value)}><option value="">Select meter</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.meter_kind === 'floor_main' ? `${account.floor_label} · Main meter` : `${account.tenant_name} · ${account.unit_name || account.floor_label}`}</option>)}</select></Field>
+            <Field label={t('electricity.meterType')}><select required className="input min-h-11" value={recordAccountId} onChange={(event) => setRecordAccountId(event.target.value)}><option value="">{t('electricity.selectMeter')}</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.meter_kind === 'floor_main' ? `${account.floor_label} · ${t('electricity.mainMeter')}` : `${account.tenant_name} · ${account.unit_name || account.floor_label}`}</option>)}</select></Field>
             {selectedRecordAccount && <div className="grid grid-cols-2 gap-3 border border-slate-200 bg-slate-50 p-3 text-sm">
-              <div><p className="text-xs text-slate-500">Previous submeter reading</p><p className="mt-1 font-semibold text-slate-950">{numeric(recordPreviousReading)} kWh</p></div>
-              <div><p className="text-xs text-slate-500">Starting unit balance</p><p className="mt-1 font-semibold text-slate-950">{selectedRecordAccount.meter_kind === 'floor_main' ? 'Not applicable' : `${numeric(recordOpeningBalance + applicableVerifiedTopups)} kWh`}</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.previousReading')}</p><p className="mt-1 font-semibold text-slate-950">{numeric(recordPreviousReading)} kWh</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.startingBalance')}</p><p className="mt-1 font-semibold text-slate-950">{selectedRecordAccount.meter_kind === 'floor_main' ? t('electricity.notApplicable') : `${numeric(effectiveOpeningBalance + applicableVerifiedTopups)} kWh`}</p></div>
             </div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Current reading (kWh)"><input required className="input min-h-11" type="number" inputMode="decimal" min="0" step="0.001" value={readingValue} onChange={(event) => setReadingValue(event.target.value)} /></Field>
-              <Field label="Reading date"><input required className="input min-h-11" type="date" value={readingDate} onChange={(event) => setReadingDate(event.target.value)} /></Field>
+              <Field label={t('electricity.currentReading')}><input required className="input min-h-11" type="number" inputMode="decimal" min="0" step="0.001" value={readingValue} onChange={(event) => setReadingValue(event.target.value)} /></Field>
+              <Field label={t('electricity.readingDate')}><input required className="input min-h-11" type="date" value={readingDate} onChange={(event) => setReadingDate(event.target.value)} /></Field>
             </div>
-            <Field label="Note (optional)"><input className="input min-h-11" maxLength={500} placeholder="Reading checked by, meter condition..." value={readingNotes} onChange={(event) => setReadingNotes(event.target.value)} /></Field>
+            <Field label={t('electricity.noteOptional')}><input className="input min-h-11" maxLength={500} placeholder={t('electricity.readingNotePlaceholder')} value={readingNotes} onChange={(event) => setReadingNotes(event.target.value)} /></Field>
             {selectedRecordAccount && readingPreview && <div className="grid grid-cols-2 gap-3 border border-amber-200 bg-amber-50 p-3 text-sm">
-              <div><p className="text-xs text-amber-800">Calculated usage</p><p className="mt-1 font-bold text-slate-950">{numeric(readingPreview.usageUnits)} kWh</p></div>
-              <div><p className="text-xs text-amber-800">Estimated units remaining</p><p className={`mt-1 font-bold ${readingPreview.closingBalanceUnits <= selectedRecordAccount.low_units_threshold ? 'text-rose-700' : 'text-slate-950'}`}>{selectedRecordAccount.meter_kind === 'floor_main' ? 'Main meter only' : `${numeric(readingPreview.closingBalanceUnits)} kWh`}</p></div>
+              <div><p className="text-xs text-amber-800">{t('electricity.calculatedUsage')}</p><p className="mt-1 font-bold text-slate-950">{numeric(readingPreview.usageUnits)} kWh</p></div>
+              <div><p className="text-xs text-amber-800">{t('electricity.unitsRemaining')}</p><p className={`mt-1 font-bold ${readingPreview.closingBalanceUnits <= selectedRecordAccount.low_units_threshold ? 'text-rose-700' : 'text-slate-950'}`}>{selectedRecordAccount.meter_kind === 'floor_main' ? t('electricity.mainMeterOnly') : `${numeric(readingPreview.closingBalanceUnits)} kWh`}</p></div>
             </div>}
-            {selectedRecordAccount && !readingValue.trim() && <p className="text-sm text-slate-600">Enter the reading shown on the physical meter to preview usage and remaining units.</p>}
-            {selectedRecordAccount && readingValue.trim() && !readingPreview && <p className="text-sm text-rose-700">The new reading is below the last value ({numeric(recordPreviousReading)}). Check the digits or set up a new meter if it reset.</p>}
-            <button className="btn-primary min-h-12 w-full sm:w-auto" disabled={saving || !selectedRecordAccount || !readingPreview}>{saving ? 'Saving...' : 'Save meter reading'}</button>
+            {selectedRecordAccount && !readingValue.trim() && <p className="text-sm text-slate-600">{t('electricity.enterReadingPreview')}</p>}
+            {selectedRecordAccount && readingValue.trim() && !readingPreview && <p className="text-sm text-rose-700">{t('electricity.readingBelowPrevious')} ({numeric(recordPreviousReading)}).</p>}
+            <button className="btn-primary min-h-12 w-full sm:w-auto" disabled={saving || !selectedRecordAccount || !readingPreview}>{saving ? t('electricity.saving') : t('electricity.saveReading')}</button>
           </form>
-        </section>
+      </section>}
 
-        <section id="topups" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="topup-heading">
-          <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-emerald-50 text-emerald-700"><Bolt className="h-5 w-5" /></span><div><h2 id="topup-heading" className="text-lg font-semibold text-slate-950">Record tenant LUKU top-up</h2><p className="mt-1 text-sm text-slate-600">The tenant buys their own units. Record the amount they loaded; only a meter-verified top-up affects the estimate.</p></div></div>
+      {activeView === 'readings' && <section className="border-y border-slate-200 bg-white" aria-labelledby="quick-sheet-heading">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+          <div><h2 id="quick-sheet-heading" className="text-lg font-semibold text-slate-950">{t('electricity.quickEntrySheet')}</h2><p className="mt-1 max-w-2xl text-sm text-slate-600">{t('electricity.quickEntryHelp')}</p></div>
+          <div className="w-full sm:w-56"><Field label={t('electricity.visitDate')}><input className="input min-h-11" type="date" value={quickReadingDate} max={todayISO()} onChange={(event) => setQuickReadingDate(event.target.value)} /></Field></div>
+        </div>
+        {activeAccounts.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">{t('electricity.noMeters')}</p> : <>
+          <div className="divide-y divide-slate-200 md:hidden">
+            {activeAccounts.map((account) => {
+              const previous = account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+              const previousDate = account.latest_reading?.reading_date ?? account.initial_reading_date
+              const value = quickReadingValues[account.id] || ''
+              const current = value.trim() ? Number(value) : Number.NaN
+              const canSave = Number.isFinite(current) && current >= previous && quickReadingDate > previousDate
+              const usage = canSave ? current - previous : null
+              const opening = account.latest_reading?.closing_balance_units ?? account.opening_balance_units
+              const topups = data.topups.filter((item) => item.account_id === account.id && !item.applied_reading_id && item.status === 'verified' && item.purchase_date <= quickReadingDate).reduce((sum, item) => sum + Number(item.units), 0)
+              const adjustments = data.adjustments.filter((item) => item.account_id === account.id && !item.applied_reading_id && item.adjustment_date <= quickReadingDate).reduce((sum, item) => sum + Number(item.adjustment_units), 0)
+              const remaining = account.meter_kind === 'submeter' && usage !== null ? Number(opening) + topups + adjustments - usage : null
+              return <article key={account.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold text-slate-950">{account.meter_kind === 'floor_main' ? account.floor_label : account.tenant_name}</h3><p className="truncate text-xs text-slate-500">{account.unit_name || account.floor_label} · {account.meter_kind === 'floor_main' ? t('electricity.floorMain') : t('electricity.clientSubmeter')}</p></div><span className="shrink-0 text-xs text-slate-500">{t('electricity.previousReading')}: {numeric(previous)}</span></div>
+                <div className="grid grid-cols-2 gap-3"><Field label={t('electricity.currentMeterReading')}><input className="input min-h-11" type="number" inputMode="decimal" min={previous} step="0.001" value={value} onChange={(event) => setQuickReadingValues((currentValues) => ({ ...currentValues, [account.id]: event.target.value }))} /></Field><div className="self-end border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">{t('electricity.unitsConsumed')}</p><p className="mt-1 font-semibold text-slate-900">{usage === null ? '—' : `${numeric(usage)} kWh`}</p></div></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-600">{t('electricity.carriedForward')}: <strong>{remaining === null ? t('electricity.mainMeterOnly') : `${numeric(remaining)} kWh`}</strong></p><button type="button" className="btn-primary min-h-11 shrink-0" disabled={saving || !canSave} onClick={() => void submitQuickReading(account)}>{saving ? t('electricity.saving') : t('electricity.saveMeterRow')}</button></div>
+                {value && quickReadingDate <= previousDate && <p className="text-xs text-rose-700">{t('electricity.chooseLaterReadingDate')} {formatDate(previousDate)}.</p>}
+              </article>
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[900px] w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-4 py-3">{t('electricity.client')}</th><th className="px-4 py-3">{t('electricity.previousReading')}</th><th className="px-4 py-3">{t('electricity.currentMeterReading')}</th><th className="px-4 py-3">{t('electricity.unitsConsumed')}</th><th className="px-4 py-3">{t('electricity.carriedForward')}</th><th className="px-4 py-3"><span className="sr-only">{t('electricity.saveMeterRow')}</span></th></tr></thead>
+              <tbody className="divide-y divide-slate-100">{activeAccounts.map((account) => {
+                const previous = account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+                const previousDate = account.latest_reading?.reading_date ?? account.initial_reading_date
+                const value = quickReadingValues[account.id] || ''
+                const current = value.trim() ? Number(value) : Number.NaN
+                const canSave = Number.isFinite(current) && current >= previous && quickReadingDate > previousDate
+                const usage = canSave ? current - previous : null
+                const opening = account.latest_reading?.closing_balance_units ?? account.opening_balance_units
+                const topups = data.topups.filter((item) => item.account_id === account.id && !item.applied_reading_id && item.status === 'verified' && item.purchase_date <= quickReadingDate).reduce((sum, item) => sum + Number(item.units), 0)
+                const adjustments = data.adjustments.filter((item) => item.account_id === account.id && !item.applied_reading_id && item.adjustment_date <= quickReadingDate).reduce((sum, item) => sum + Number(item.adjustment_units), 0)
+                const remaining = account.meter_kind === 'submeter' && usage !== null ? Number(opening) + topups + adjustments - usage : null
+                return <tr key={account.id}>
+                  <td className="px-4 py-3"><p className="font-medium text-slate-900">{account.meter_kind === 'floor_main' ? account.floor_label : account.tenant_name}</p><p className="text-xs text-slate-500">{account.unit_name || account.floor_label}</p></td><td className="whitespace-nowrap px-4 py-3">{numeric(previous)} kWh</td><td className="w-52 px-4 py-3"><input aria-label={`${t('electricity.currentMeterReading')} ${accountTitle(account)}`} className="input min-h-11" type="number" inputMode="decimal" min={previous} step="0.001" value={value} onChange={(event) => setQuickReadingValues((currentValues) => ({ ...currentValues, [account.id]: event.target.value }))} /></td><td className="whitespace-nowrap px-4 py-3">{usage === null ? '—' : `${numeric(usage)} kWh`}</td><td className="whitespace-nowrap px-4 py-3 font-semibold">{remaining === null ? t('electricity.mainMeterOnly') : `${numeric(remaining)} kWh`}</td><td className="px-4 py-3"><button type="button" className="btn-primary min-h-11 whitespace-nowrap" disabled={saving || !canSave} onClick={() => void submitQuickReading(account)}>{saving ? t('electricity.saving') : t('electricity.saveMeterRow')}</button></td>
+                </tr>
+              })}</tbody>
+            </table>
+          </div>
+        </>}
+      </section>}
+
+      {activeView === 'topups' && <section id="topups" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="topup-heading">
+          <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-emerald-50 text-emerald-700"><Bolt className="h-5 w-5" /></span><div><h2 id="topup-heading" className="text-lg font-semibold text-slate-950">{t('electricity.topupTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.topupHelp')}</p></div></div>
           <form onSubmit={submitTopup} className="space-y-4">
-            <Field label="Client submeter"><select required className="input min-h-11" value={topupAccountId} onChange={(event) => setTopupAccountId(event.target.value)}><option value="">Select client</option>{submeters.map((account) => <option key={account.id} value={account.id}>{account.tenant_name} · {account.unit_name || account.floor_label}</option>)}</select></Field>
+            <Field label={t('electricity.clientSubmeter')}><select required className="input min-h-11" value={topupAccountId} onChange={(event) => setTopupAccountId(event.target.value)}><option value="">{t('electricity.selectClient')}</option>{submeters.map((account) => <option key={account.id} value={account.id}>{account.tenant_name} · {account.unit_name || account.floor_label}</option>)}</select></Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Purchase date"><input required className="input min-h-11" type="date" value={topupDate} onChange={(event) => setTopupDate(event.target.value)} /></Field>
-              <Field label="Units loaded (kWh)"><input required className="input min-h-11" type="number" inputMode="decimal" min="0.001" step="0.001" value={topupUnits} onChange={(event) => setTopupUnits(event.target.value)} /></Field>
+              <Field label={t('electricity.purchaseDate')}><input required className="input min-h-11" type="date" value={topupDate} onChange={(event) => setTopupDate(event.target.value)} /></Field>
+              <Field label={t('electricity.unitsLoaded')}><input required className="input min-h-11" type="number" inputMode="decimal" min="0.001" step="0.001" value={topupUnits} onChange={(event) => setTopupUnits(event.target.value)} /></Field>
+              <Field label={t('electricity.confirmUnits')}><input required className="input min-h-11" type="number" inputMode="decimal" min="0.001" step="0.001" value={topupUnitsConfirmation} onChange={(event) => setTopupUnitsConfirmation(event.target.value)} />{topupUnitsConfirmation && !topupAmountMatches && <span className="mt-1 block text-xs text-rose-700">{t('electricity.unitsMismatch')}</span>}</Field>
             </div>
-            <Field label="Token reference (optional, last 2–8 characters only)"><input className="input min-h-11" maxLength={8} value={tokenSuffix} onChange={(event) => setTokenSuffix(event.target.value.replace(/[^a-z0-9-]/gi, '').slice(0, 8))} /><span className="mt-1 block text-xs text-slate-500">Do not enter or store the full prepaid token.</span></Field>
-            <label className="flex min-h-12 items-center gap-3 border border-slate-200 px-3 py-2 text-sm text-slate-700"><input type="checkbox" className="h-5 w-5 accent-emerald-600" checked={topupVerified} onChange={(event) => setTopupVerified(event.target.checked)} /><span><strong>Verified against the submeter</strong><span className="block text-xs text-slate-500">Leave unchecked until the units are observed on the meter.</span></span></label>
-            <Field label="Note (optional)"><input className="input min-h-11" maxLength={500} placeholder="Receipt/reference detail" value={topupNotes} onChange={(event) => setTopupNotes(event.target.value)} /></Field>
-            <button className="btn-secondary min-h-12 w-full sm:w-auto" disabled={saving || !submeters.length}>{saving ? 'Saving...' : 'Record top-up'}</button>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label={t('electricity.tokenSuffix')}><input className="input min-h-11" maxLength={8} value={tokenSuffix} onChange={(event) => setTokenSuffix(event.target.value.replace(/[^a-z0-9-]/gi, '').slice(0, 8))} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.noFullToken')}</span></Field>
+              <Field label={t('electricity.confirmTokenReference')}><input className="input min-h-11" maxLength={8} value={tokenSuffixConfirmation} onChange={(event) => setTokenSuffixConfirmation(event.target.value.replace(/[^a-z0-9-]/gi, '').slice(0, 8))} />{tokenSuffixConfirmation && !topupTokenMatches && <span className="mt-1 block text-xs text-rose-700">{t('electricity.tokenMismatch')}</span>}</Field>
+            </div>
+            <p className="border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">{t('electricity.topupDoubleCheck')}</p>
+            <Field label={t('electricity.noteOptional')}><input className="input min-h-11" maxLength={500} placeholder={t('electricity.receiptNote')} value={topupNotes} onChange={(event) => setTopupNotes(event.target.value)} /></Field>
+            <button className="btn-secondary min-h-12 w-full sm:w-auto" disabled={saving || !submeters.length || !topupAccountId || !topupReady}>{saving ? t('electricity.saving') : t('electricity.recordTopup')}</button>
           </form>
           {(data.topups.filter((topup) => topup.account_id && accountById.has(topup.account_id) && topup.status === 'reported').length > 0) && <div className="mt-5 border-t border-slate-200 pt-4">
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">Reported, not yet verified</h3>
+            <h3 className="mb-2 text-sm font-semibold text-slate-900">{t('electricity.reportedNotVerified')}</h3>
             <div className="divide-y divide-slate-100">
-              {data.topups.filter((topup) => accountById.has(topup.account_id) && topup.status === 'reported').slice(0, 6).map((topup) => <div key={topup.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-                <div className="min-w-0"><p className="truncate font-medium text-slate-900">{accountById.get(topup.account_id)?.tenant_name} · {numeric(topup.units)} kWh</p><p className="text-xs text-slate-500">Reported {formatDate(topup.purchase_date)}</p></div>
-                <button className="min-h-10 shrink-0 border border-emerald-300 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-50" disabled={saving} onClick={() => void verifyTopup(topup)}>Confirm</button>
+              {data.topups.filter((topup) => accountById.has(topup.account_id) && topup.status === 'reported').map((topup) => <div key={topup.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div className="min-w-0"><p className="truncate font-medium text-slate-900">{accountById.get(topup.account_id)?.tenant_name} · {numeric(topup.units)} kWh</p><p className="text-xs text-slate-500">{t('electricity.reported')} {formatDate(topup.purchase_date)}</p></div>
+                <button className="min-h-10 shrink-0 border border-emerald-300 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-50" disabled={saving} onClick={() => void verifyTopup(topup)}>{t('electricity.confirm')}</button>
               </div>)}
             </div>
           </div>}
-        </section>
-      </div>
+        </section>}
 
-      <section id="meters" className="scroll-mt-20" aria-labelledby="meters-heading">
-        <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="meters-heading" className="text-lg font-semibold text-slate-950">Meters and latest balances</h2><p className="mt-1 text-sm text-slate-600">Floor main readings are tracked separately from tenant submeters; shared usage is not charged to tenants by this screen.</p></div><span className="text-sm text-slate-500">{activeAccounts.length} active meters</span></div>
-        {activeAccounts.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">No meters have been set up for this property yet.</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+      {activeView === 'reports' && <section id="electricity-ledger" className="space-y-4 scroll-mt-20" aria-labelledby="ledger-heading">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div><h2 id="ledger-heading" className="text-lg font-semibold text-slate-950">{t('electricity.weeklyReport')}</h2><p className="mt-1 max-w-3xl text-sm text-slate-600">{t('electricity.weeklyReportHelp')}</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary min-h-11" onClick={downloadReport} disabled={!reportRows.length}><Download className="mr-2 h-4 w-4" />{t('electricity.downloadCsv')}</button><button type="button" className="btn-secondary min-h-11" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />{t('electricity.printReport')}</button></div>
+        </header>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label={t('electricity.fromDate')}><input className="input min-h-11" type="date" value={reportStartDate} max={reportEndDate} onChange={(event) => setReportStartDate(event.target.value)} /></Field>
+          <Field label={t('electricity.toDate')}><input className="input min-h-11" type="date" value={reportEndDate} min={reportStartDate} max={todayISO()} onChange={(event) => setReportEndDate(event.target.value)} /></Field>
+          <Field label={t('electricity.weeklyTarget')}><select className="input min-h-11" value={weeklyTarget} onChange={(event) => setWeeklyTarget(Number(event.target.value) as 2 | 3)}><option value={2}>{t('electricity.targetTwo')}</option><option value={3}>{t('electricity.targetThree')}</option></select></Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Metric label={t('electricity.activeClients')} value={String(submeters.length)} detail={selectedProperty?.name || t('electricity.property')} />
+          <Metric label={t('electricity.readingsThisWeek')} value={String(Array.from(weeklyReadingsByAccount.values()).reduce((sum, count) => sum + count, 0))} detail={t('electricity.weeklyTargetHelp')} />
+          <Metric label={t('electricity.clientsOnTrack')} value={String(clientsOnTrack)} detail={`${t('electricity.weeklyTarget')}: ${weeklyTarget}`} tone="normal" />
+          <Metric label={t('electricity.clientsNeedReadings')} value={String(clientsNeedingReadings)} detail={t('electricity.noTargetYet')} tone={clientsNeedingReadings ? 'danger' : 'normal'} />
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Metric label={t('electricity.periodTotals')} value={`${numeric(reportTotals.usage)} kWh`} detail={t('electricity.unitsConsumed')} />
+          <Metric label={t('electricity.unitsPurchased')} value={`${numeric(reportTotals.purchased)} kWh`} detail={`${numeric(reportTotals.verified)} ${t('electricity.unitsVerified')}`} />
+          <Metric label={t('electricity.unitsReported')} value={`${numeric(reportTotals.reported)} kWh`} detail={t('electricity.awaitingMeterCheck')} />
+          <Metric label={t('electricity.carriedForward')} value={`${numeric(reportTotals.carried)} kWh`} detail={`${t('electricity.adjustmentAmount')}: ${reportTotals.adjustments > 0 ? '+' : ''}${numeric(reportTotals.adjustments)}`} />
+        </div>
+        <section className="border-y border-slate-200 bg-white" aria-labelledby="reading-coverage-heading">
+          <div className="border-b border-slate-200 px-4 py-3"><h3 id="reading-coverage-heading" className="font-semibold text-slate-900">{t('electricity.weeklyTarget')}</h3></div>
+          <div className="divide-y divide-slate-100">
+            {submeters.map((account) => {
+              const count = weeklyReadingsByAccount.get(account.id) || 0
+              const complete = count >= weeklyTarget
+              return <div key={account.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0"><p className="truncate font-medium text-slate-900">{account.tenant_name}</p><p className="truncate text-xs text-slate-500">{account.unit_name || account.floor_label}</p></div>
+                <span className={`shrink-0 border px-2 py-1 text-xs font-semibold ${complete ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{count}/{weeklyTarget} · {complete ? t('electricity.clientsOnTrack') : t('electricity.clientsNeedReadings')}</span>
+              </div>
+            })}
+            {submeters.length === 0 && <p className="px-4 py-5 text-sm text-slate-500">{t('electricity.noMeters')}</p>}
+          </div>
+        </section>
+        <section className="border-y border-slate-200 bg-white" aria-label={t('electricity.weeklyReport')}>
+          {reportRows.length === 0 ? <p className="px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noReadingsForPeriod')}</p> : <>
+            <div className="divide-y divide-slate-200 md:hidden">
+              {reportRows.map(({ id, account, reading, periodStart, unitsPurchased, verifiedTopupUnits, reportedTopupUnits, cutoffReading, adjustmentUnits }) => <article key={id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold text-slate-950">{account.tenant_name}</h3><p className="truncate text-xs text-slate-500">{account.unit_name || account.floor_label} · {formatDate(reading.reading_date)}</p></div><span className="shrink-0 border border-slate-200 px-2 py-1 text-xs text-slate-600">{account.meter_kind === 'floor_main' ? t('electricity.floorMain') : t('electricity.clientSubmeter')}</span></div>
+                <p className="text-xs text-slate-600">{formatDate(periodStart)} {t('electricity.to')} {formatDate(reading.reading_date)}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <LedgerValue label={t('electricity.previousReading')} value={`${numeric(reading.previous_meter_reading)} kWh`} />
+                  <LedgerValue label={t('electricity.currentMeterReading')} value={`${numeric(reading.current_meter_reading)} kWh`} />
+                  <LedgerValue label={t('electricity.broughtForward')} value={reading.opening_balance_units === null ? '—' : `${numeric(reading.opening_balance_units)} kWh`} />
+                  <LedgerValue label={t('electricity.unitsConsumed')} value={`${numeric(reading.usage_units)} kWh`} />
+                  <LedgerValue label={t('electricity.unitsPurchased')} value={`${numeric(unitsPurchased)} kWh`} />
+                  <LedgerValue label={t('electricity.unitsVerified')} value={`${numeric(verifiedTopupUnits)} kWh`} />
+                  <LedgerValue label={t('electricity.unitsReported')} value={`${numeric(reportedTopupUnits)} kWh`} />
+                  <LedgerValue label={t('electricity.cutoffReading')} value={cutoffReading === null ? '—' : `${numeric(cutoffReading)} kWh`} />
+                  <LedgerValue label={t('electricity.adjustmentAmount')} value={`${adjustmentUnits > 0 ? '+' : ''}${numeric(adjustmentUnits)} kWh`} />
+                  <LedgerValue label={t('electricity.carriedForward')} value={reading.closing_balance_units === null ? '—' : `${numeric(reading.closing_balance_units)} kWh`} emphasized />
+                </div>
+              </article>)}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="min-w-[1500px] w-full border-collapse text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600"><tr>{['electricity.client', 'electricity.unit', 'electricity.period', 'electricity.previousReading', 'electricity.currentMeterReading', 'electricity.broughtForward', 'electricity.unitsConsumed', 'electricity.unitsPurchased', 'electricity.unitsVerified', 'electricity.unitsReported', 'electricity.cutoffReading', 'electricity.adjustmentAmount', 'electricity.carriedForward'].map((key) => <th key={key} className="whitespace-nowrap border-b border-slate-200 px-3 py-3 font-semibold">{t(key as TranslationKey)}</th>)}</tr></thead>
+                <tbody className="divide-y divide-slate-100">{reportRows.map(({ id, account, reading, periodStart, unitsPurchased, verifiedTopupUnits, reportedTopupUnits, cutoffReading, adjustmentUnits }) => <tr key={id}>
+                  <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-900">{account.tenant_name}</td><td className="whitespace-nowrap px-3 py-3">{account.unit_name || account.floor_label}</td><td className="whitespace-nowrap px-3 py-3">{formatDate(periodStart)} {t('electricity.to')} {formatDate(reading.reading_date)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reading.previous_meter_reading)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reading.current_meter_reading)}</td><td className="whitespace-nowrap px-3 py-3">{reading.opening_balance_units === null ? '—' : numeric(reading.opening_balance_units)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reading.usage_units)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(unitsPurchased)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(verifiedTopupUnits)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reportedTopupUnits)}</td><td className="whitespace-nowrap px-3 py-3">{cutoffReading === null ? '—' : numeric(cutoffReading)}</td><td className="whitespace-nowrap px-3 py-3">{adjustmentUnits > 0 ? '+' : ''}{numeric(adjustmentUnits)}</td><td className="whitespace-nowrap px-3 py-3 font-semibold">{reading.closing_balance_units === null ? '—' : numeric(reading.closing_balance_units)}</td>
+                </tr>)}</tbody>
+                <tfoot className="bg-slate-50 font-semibold text-slate-900"><tr><th colSpan={6} className="whitespace-nowrap px-3 py-3 text-left">{t('electricity.periodTotals')}</th><td className="whitespace-nowrap px-3 py-3">{numeric(reportTotals.usage)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reportTotals.purchased)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reportTotals.verified)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reportTotals.reported)}</td><td className="px-3 py-3">—</td><td className="whitespace-nowrap px-3 py-3">{reportTotals.adjustments > 0 ? '+' : ''}{numeric(reportTotals.adjustments)}</td><td className="whitespace-nowrap px-3 py-3">{numeric(reportTotals.carried)}</td></tr></tfoot>
+              </table>
+            </div>
+          </>}
+        </section>
+        <section className="border-y border-slate-200 bg-white" aria-labelledby="adjustment-history-heading">
+          <div className="border-b border-slate-200 px-4 py-3"><h3 id="adjustment-history-heading" className="font-semibold text-slate-900">{t('electricity.adjustmentHistory')}</h3></div>
+          {data.adjustments.filter((adjustment) => accountById.has(adjustment.account_id)).length === 0 ? <p className="px-4 py-5 text-sm text-slate-500">{t('electricity.noAdjustments')}</p> : <div className="divide-y divide-slate-100">{data.adjustments.filter((adjustment) => accountById.has(adjustment.account_id)).map((adjustment) => {
+            const account = accountById.get(adjustment.account_id)
+            const staff = data.staff.find((item) => item.auth_user_id === adjustment.recorded_by)
+            const actorName = staff?.full_name || (adjustment.recorded_by === data.currentUserId ? t('electricity.propertyOwner') : adjustment.recorded_by.slice(0, 8))
+            return <article key={adjustment.id} className="grid grid-cols-1 gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center"><div className="min-w-0"><p className="font-medium text-slate-900">{account ? accountTitle(account) : t('electricity.clientSubmeter')} · {adjustment.adjustment_units > 0 ? '+' : ''}{numeric(adjustment.adjustment_units)} kWh</p><p className="mt-1 text-xs text-slate-600">{adjustment.reason}</p><p className="mt-1 text-xs text-slate-500">{formatDate(adjustment.adjustment_date)} · {t('electricity.readingBy')} {actorName}</p></div><span className="text-xs text-slate-500">{adjustment.applied_reading_id ? t('electricity.adjustmentApplied') : t('electricity.adjustmentPending')}</span></article>
+          })}</div>}
+        </section>
+      </section>}
+
+      {activeView === 'meters' && <section id="meters" className="scroll-mt-20" aria-labelledby="meters-heading">
+        <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="meters-heading" className="text-lg font-semibold text-slate-950">{t('electricity.metersLatest')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.metersHelp')}</p></div><span className="text-sm text-slate-500">{activeAccounts.length} {t('electricity.activeMeters')}</span></div>
+        {activeAccounts.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noMeters')}</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
           {activeAccounts.map((account) => {
             const status = account.meter_kind === 'submeter' ? classifyElectricityBalance({ balanceUnits: account.estimated_balance_units, lowThresholdUnits: Number(account.low_units_threshold), readingDate: account.latest_reading?.reading_date || null }) : null
             const presentation = status ? statusPresentation[status] : null
             const cutOff = account.last_cutoff_event?.action === 'disconnected'
             return <article key={account.id} className="grid grid-cols-1 gap-3 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{accountTitle(account)}</h3><span className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600">{account.meter_kind === 'floor_main' ? 'Floor main meter' : 'Client submeter'}</span>{presentation && <span className={`border px-2 py-1 text-xs font-semibold ${presentation.className}`}>{presentation.label}</span>}{cutOff && <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800">Manually disconnected</span>}</div>
+                <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{accountTitle(account)}</h3><span className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600">{account.meter_kind === 'floor_main' ? t('electricity.floorMain') : t('electricity.clientSubmeter')}</span>{presentation && <span className={`border px-2 py-1 text-xs font-semibold ${presentation.className}`}>{t(presentation.labelKey)}</span>}{cutOff && <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800">{t('electricity.disconnected')}</span>}</div>
                 <p className="mt-1 text-sm text-slate-600">{account.property_name} · {account.unit_name || account.floor_label}{account.section_name ? ` · ${account.section_name}` : ''}{account.meter_number ? ` · Meter ${account.meter_number}` : ''}</p>
-                <p className="mt-1 text-xs text-slate-500">Last reading {account.latest_reading ? `${numeric(account.latest_reading.current_meter_reading)} kWh on ${formatDate(account.latest_reading.reading_date)}` : `${numeric(account.initial_meter_reading)} kWh baseline on ${formatDate(account.initial_reading_date)}`}{account.meter_kind === 'submeter' ? ` · Estimated balance ${numeric(account.estimated_balance_units)} kWh` : ''}</p>
-                {account.pending_reported_topup_units > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{numeric(account.pending_reported_topup_units)} reported kWh still needs meter verification.</p>}
+                <p className="mt-1 text-xs text-slate-500">{t('electricity.lastReading')} {account.latest_reading ? `${numeric(account.latest_reading.current_meter_reading)} kWh · ${formatDate(account.latest_reading.reading_date)}` : `${numeric(account.initial_meter_reading)} kWh ${t('electricity.baselineOn')} ${formatDate(account.initial_reading_date)}`}{account.meter_kind === 'submeter' ? ` · ${t('electricity.estimatedBalance')} ${numeric(account.estimated_balance_units)} kWh` : ''}</p>
+                {account.pending_reported_topup_units > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{numeric(account.pending_reported_topup_units)} {t('electricity.pendingVerification')}</p>}
+                {account.pending_adjustment_count > 0 && <p className="mt-1 text-xs font-medium text-blue-700">{numeric(account.pending_adjustment_units)} kWh {t('electricity.adjustmentPending')}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
-                <a href="#record" onClick={() => setRecordAccountId(account.id)} className="btn-secondary min-h-11 flex-1 sm:flex-none">Record reading</a>
-                {account.meter_kind === 'submeter' && account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />Notify</button>}
-                {account.meter_kind === 'submeter' && <button className={`min-h-11 border px-3 text-sm font-semibold ${cutOff ? 'border-emerald-300 text-emerald-800 hover:bg-emerald-50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`} onClick={() => submitManualAction(account)}>{cutOff ? 'Log restore' : 'Log manual cut-off'}</button>}
+                <button type="button" onClick={() => { setRecordAccountId(account.id); setActiveView('readings') }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordReading')}</button>
+                {data.ownerMode && account.meter_kind === 'submeter' && <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => { setAdjustmentTarget(account); setAdjustmentUnits(''); setAdjustmentDate(todayISO()); setAdjustmentReason('') }}>{t('electricity.adjustBalance')}</button>}
+                {account.meter_kind === 'submeter' && account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.notify')}</button>}
+                {account.meter_kind === 'submeter' && <button className={`min-h-11 border px-3 text-sm font-semibold ${cutOff ? 'border-emerald-300 text-emerald-800 hover:bg-emerald-50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`} onClick={() => submitManualAction(account)}>{cutOff ? t('electricity.logRestore') : t('electricity.logCutoff')}</button>}
               </div>
             </article>
           })}
         </div>}
-      </section>
+      </section>}
 
-      {cutoffTarget && <section className="border border-rose-200 bg-rose-50 p-4 sm:p-5" aria-labelledby="manual-action-heading">
-        <div className="mb-3 flex items-start justify-between gap-3"><div><h2 id="manual-action-heading" className="font-semibold text-rose-950">Record {cutoffTarget.action === 'disconnected' ? 'manual power cut-off' : 'power restoration'}</h2><p className="mt-1 text-sm text-rose-800">This only records the action after staff operate the electrical switch on site. No remote disconnection occurs.</p></div><button className="icon-button" onClick={() => setCutoffTarget(null)} aria-label="Cancel manual action"><X className="h-4 w-4" /></button></div>
-        <form onSubmit={submitCutoffEvent} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="Reason"><input required minLength={3} maxLength={500} className="input min-h-11" value={cutoffReason} onChange={(event) => setCutoffReason(event.target.value)} placeholder="Reason for on-site action" /></Field>
-          <Field label="Meter reading (optional)"><input className="input min-h-11" type="number" inputMode="decimal" min="0" step="0.001" value={cutoffReading} onChange={(event) => setCutoffReading(event.target.value)} /></Field>
-          <div className="flex items-end gap-2"><button className="min-h-11 flex-1 bg-rose-700 px-4 text-sm font-semibold text-white hover:bg-rose-800" disabled={saving}>{saving ? 'Saving...' : 'Confirm action logged'}</button><button type="button" className="btn-secondary min-h-11" onClick={() => setCutoffTarget(null)}>Cancel</button></div>
+      {adjustmentTarget && data.ownerMode && <section className="border border-blue-200 bg-blue-50 p-4 sm:p-5" aria-labelledby="adjustment-heading">
+        <div className="mb-3 flex items-start justify-between gap-3"><div><h2 id="adjustment-heading" className="font-semibold text-blue-950">{t('electricity.ownerBalanceTools')} · {accountTitle(adjustmentTarget)}</h2><p className="mt-1 text-sm text-blue-900">{t('electricity.adjustmentHelp')}</p></div><button type="button" className="icon-button" onClick={() => setAdjustmentTarget(null)} aria-label={t('electricity.cancel')}><X className="h-4 w-4" /></button></div>
+        <form onSubmit={submitAdjustment} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="border border-blue-200 bg-white px-3 py-2"><p className="text-xs text-slate-500">{t('electricity.currentUnits')}</p><p className="mt-1 font-semibold text-slate-950">{numeric(adjustmentTarget.estimated_balance_units)} kWh</p></div>
+          <Field label={t('electricity.adjustmentAmount')}><input required className="input min-h-11" type="number" inputMode="decimal" step="0.001" min="-100000" max="100000" value={adjustmentUnits} onChange={(event) => setAdjustmentUnits(event.target.value)} /></Field>
+          <div className="border border-blue-200 bg-white px-3 py-2"><p className="text-xs text-slate-500">{t('electricity.adjustmentPreview')}</p><p className="mt-1 font-semibold text-slate-950">{numeric(adjustmentTarget.estimated_balance_units + (Number(adjustmentUnits) || 0))} kWh</p></div>
+          <Field label={t('electricity.adjustmentDate')}><input required className="input min-h-11" type="date" max={todayISO()} value={adjustmentDate} onChange={(event) => setAdjustmentDate(event.target.value)} /></Field>
+          <Field label={t('electricity.adjustmentReason')}><input required minLength={3} maxLength={500} className="input min-h-11" placeholder={t('electricity.adjustmentReasonPlaceholder')} value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} /></Field>
+          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3"><button className="btn-primary min-h-11 flex-1 sm:flex-none" disabled={saving || !Number(adjustmentUnits) || !adjustmentReason.trim()}>{saving ? t('electricity.saving') : t('electricity.saveAdjustment')}</button><button type="button" className="btn-secondary min-h-11" onClick={() => setAdjustmentTarget(null)}>{t('electricity.cancel')}</button></div>
         </form>
       </section>}
 
-      {data.ownerMode && <section className="space-y-4 border-t border-slate-200 pt-6" aria-labelledby="access-heading">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 id="access-heading" className="text-lg font-semibold text-slate-950">Staff access</h2><p className="mt-1 text-sm text-slate-600">Each staff login is restricted to this electricity workspace and its assigned properties.</p></div><button className="btn-secondary min-h-11" onClick={() => setShowStaffSetup((show) => !show)}><UserPlus className="mr-2 h-4 w-4" />Add staff login</button></div>
+      {cutoffTarget && <section className="border border-rose-200 bg-rose-50 p-4 sm:p-5" aria-labelledby="manual-action-heading">
+        <div className="mb-3 flex items-start justify-between gap-3"><div><h2 id="manual-action-heading" className="font-semibold text-rose-950">{cutoffTarget.action === 'disconnected' ? t('electricity.recordManualAction') : t('electricity.recordRestoration')}</h2><p className="mt-1 text-sm text-rose-800">{t('electricity.manualActionHelp')}</p></div><button className="icon-button" onClick={() => setCutoffTarget(null)} aria-label={t('electricity.cancelAction')}><X className="h-4 w-4" /></button></div>
+        <form onSubmit={submitCutoffEvent} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label={t('electricity.reason')}><input required minLength={3} maxLength={500} className="input min-h-11" value={cutoffReason} onChange={(event) => setCutoffReason(event.target.value)} placeholder={t('electricity.onSiteReason')} /></Field>
+          <Field label={t('electricity.readingOptional')}><input className="input min-h-11" type="number" inputMode="decimal" min="0" step="0.001" value={cutoffReading} onChange={(event) => setCutoffReading(event.target.value)} /></Field>
+          <div className="flex items-end gap-2"><button className="min-h-11 flex-1 bg-rose-700 px-4 text-sm font-semibold text-white hover:bg-rose-800" disabled={saving}>{saving ? t('electricity.saving') : t('electricity.confirmLogged')}</button><button type="button" className="btn-secondary min-h-11" onClick={() => setCutoffTarget(null)}>{t('electricity.cancel')}</button></div>
+        </form>
+      </section>}
+
+      {data.ownerMode && activeView === 'staff' && <section className="space-y-4 border-t border-slate-200 pt-6" aria-labelledby="access-heading">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 id="access-heading" className="text-lg font-semibold text-slate-950">{t('electricity.staffAccess')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.staffAccessHelp')}</p></div><button className="btn-secondary min-h-11" onClick={() => setShowStaffSetup((show) => !show)}><UserPlus className="mr-2 h-4 w-4" />{t('electricity.addStaff')}</button></div>
         {showStaffSetup && <form onSubmit={submitStaff} className="grid grid-cols-1 gap-3 border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
           <fieldset className="sm:col-span-2 lg:col-span-4">
-            <legend className="text-sm font-medium text-slate-700">Properties this staff member can access</legend>
-            <p className="mb-2 mt-1 text-xs text-slate-500">Only selected properties will appear after sign-in. Each selection grants access to all electricity records in that property.</p>
+            <legend className="text-sm font-medium text-slate-700">{t('electricity.allowedProperties')}</legend>
+            <p className="mb-2 mt-1 text-xs text-slate-500">{t('electricity.staffPropertiesHelp')}</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {data.properties.map((property) => <label key={property.id} className="flex min-h-11 cursor-pointer items-center gap-3 border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50">
                 <input type="checkbox" className="h-4 w-4 accent-blue-700" checked={staffForm.propertyIds.includes(property.id)} onChange={(event) => setStaffForm((current) => ({ ...current, propertyIds: event.target.checked ? [...current.propertyIds, property.id] : current.propertyIds.filter((id) => id !== property.id) }))} />
@@ -648,23 +1002,23 @@ export function ElectricityWorkspace() {
               </label>)}
             </div>
           </fieldset>
-          <Field label="Staff ID"><input required minLength={3} maxLength={24} className="input min-h-11" value={staffForm.staffId} onChange={(event) => setStaffForm({ ...staffForm, staffId: event.target.value.toUpperCase() })} placeholder="For example, DT-014" /></Field>
-          <Field label="Staff name"><input required minLength={2} maxLength={100} className="input min-h-11" value={staffForm.fullName} onChange={(event) => setStaffForm({ ...staffForm, fullName: event.target.value })} /></Field>
-          <Field label="8–12 digit PIN"><input required pattern="[0-9]{8,12}" inputMode="numeric" autoComplete="new-password" className="input min-h-11" type="password" value={staffForm.pin} onChange={(event) => setStaffForm({ ...staffForm, pin: event.target.value.replace(/\D/g, '').slice(0, 12) })} /></Field>
-          <div className="sm:col-span-2 lg:col-span-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" className="btn-secondary min-h-11" onClick={() => setShowStaffSetup(false)}>Cancel</button><button className="btn-primary min-h-11" disabled={saving || staffForm.propertyIds.length === 0}>{saving ? 'Creating...' : 'Create staff login'}</button></div>
+          <Field label={t('electricity.staffId')}><input required minLength={3} maxLength={24} className="input min-h-11" value={staffForm.staffId} onChange={(event) => setStaffForm({ ...staffForm, staffId: event.target.value.toUpperCase() })} placeholder="For example, DT-014" /></Field>
+          <Field label={t('electricity.staffName')}><input required minLength={2} maxLength={100} className="input min-h-11" value={staffForm.fullName} onChange={(event) => setStaffForm({ ...staffForm, fullName: event.target.value })} /></Field>
+          <Field label={t('electricity.pinLength')}><input required pattern="[0-9]{8,12}" inputMode="numeric" autoComplete="new-password" className="input min-h-11" type="password" value={staffForm.pin} onChange={(event) => setStaffForm({ ...staffForm, pin: event.target.value.replace(/\D/g, '').slice(0, 12) })} /></Field>
+          <div className="sm:col-span-2 lg:col-span-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" className="btn-secondary min-h-11" onClick={() => setShowStaffSetup(false)}>{t('electricity.cancel')}</button><button className="btn-primary min-h-11" disabled={saving || staffForm.propertyIds.length === 0}>{saving ? t('electricity.creating') : t('electricity.createStaff')}</button></div>
         </form>}
-        {data.staff.length === 0 ? <p className="border-y border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">No staff logins yet.</p> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+        {data.staff.length === 0 ? <p className="border-y border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">{t('electricity.noStaff')}</p> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
           {data.staff.map((staff) => <div key={staff.id} className="flex flex-col gap-3 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <div><p className="font-semibold text-slate-950">{staff.full_name} <span className="font-normal text-slate-500">· {staff.staff_id}</span></p><p className="mt-1 text-xs text-slate-500">{staff.property_ids.map((id) => data.properties.find((property) => property.id === id)?.name || 'Assigned property').join(', ') || 'No property assigned'} · {staff.active ? 'Active' : 'Deactivated'}</p></div>
+            <div><p className="font-semibold text-slate-950">{staff.full_name} <span className="font-normal text-slate-500">· {staff.staff_id}</span></p><p className="mt-1 text-xs text-slate-500">{staff.property_ids.map((id) => data.properties.find((property) => property.id === id)?.name || t('electricity.assignedProperty')).join(', ') || t('electricity.noProperty')} · {staff.active ? t('electricity.active') : t('electricity.deactivated')}</p></div>
             <div className="flex flex-wrap gap-2">
-              <button className="btn-secondary min-h-10" onClick={() => openStaffAssignments(staff)} aria-expanded={editingStaffId === staff.id}><Building2 className="mr-2 h-4 w-4" />{editingStaffId === staff.id ? 'Close properties' : 'Edit properties'}</button>
-              <button className="btn-secondary min-h-10" onClick={() => { setResetStaffId(resetStaffId === staff.id ? '' : staff.id); setResetPin('') }}><KeyRound className="mr-2 h-4 w-4" />Reset PIN</button>
-              <button className={`min-h-10 border px-3 text-sm font-semibold ${staff.active ? 'border-rose-200 text-rose-700 hover:bg-rose-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`} onClick={() => void toggleStaff(staff)} disabled={saving}>{staff.active ? 'Deactivate' : 'Reactivate'}</button>
+              <button className="btn-secondary min-h-10" onClick={() => openStaffAssignments(staff)} aria-expanded={editingStaffId === staff.id}><Building2 className="mr-2 h-4 w-4" />{editingStaffId === staff.id ? t('electricity.closeProperties') : t('electricity.editProperties')}</button>
+              <button className="btn-secondary min-h-10" onClick={() => { setResetStaffId(resetStaffId === staff.id ? '' : staff.id); setResetPin('') }}><KeyRound className="mr-2 h-4 w-4" />{t('electricity.resetPin')}</button>
+              <button className={`min-h-10 border px-3 text-sm font-semibold ${staff.active ? 'border-rose-200 text-rose-700 hover:bg-rose-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`} onClick={() => void toggleStaff(staff)} disabled={saving}>{staff.active ? t('electricity.deactivate') : t('electricity.reactivate')}</button>
             </div>
             {editingStaffId === staff.id && <form onSubmit={(event) => void submitStaffAssignments(event, staff.id)} className="w-full border-t border-slate-200 pt-3">
               <fieldset>
-                <legend className="text-sm font-medium text-slate-700">Allowed properties for {staff.full_name}</legend>
-                <p className="mb-2 mt-1 text-xs text-slate-500">Each selection grants access to all electricity records in that property. New requests are restricted immediately; ask the staff member to reload to clear records already loaded on their device.</p>
+                <legend className="text-sm font-medium text-slate-700">{t('electricity.allowedPropertiesFor')} {staff.full_name}</legend>
+                <p className="mb-2 mt-1 text-xs text-slate-500">{t('electricity.staffPropertyAccessHelp')}</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {data.properties.map((property) => <label key={property.id} className="flex min-h-11 cursor-pointer items-center gap-3 border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50">
                     <input type="checkbox" className="h-4 w-4 accent-blue-700" checked={assignmentPropertyIds.includes(property.id)} onChange={(event) => setAssignmentPropertyIds((current) => event.target.checked ? [...current, property.id] : current.filter((id) => id !== property.id))} />
@@ -672,30 +1026,30 @@ export function ElectricityWorkspace() {
                   </label>)}
                 </div>
               </fieldset>
-              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" className="btn-secondary min-h-11" onClick={() => openStaffAssignments(staff)}>Cancel</button><button className="btn-primary min-h-11" disabled={saving}>{saving ? 'Saving...' : 'Save property access'}</button></div>
+              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" className="btn-secondary min-h-11" onClick={() => openStaffAssignments(staff)}>{t('electricity.cancel')}</button><button className="btn-primary min-h-11" disabled={saving}>{saving ? t('electricity.saving') : t('electricity.savePropertyAccess')}</button></div>
             </form>}
-            {resetStaffId === staff.id && <form onSubmit={submitResetPin} className="flex w-full flex-col gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:items-end sm:justify-end"><Field label="New 8–12 digit PIN"><input required pattern="[0-9]{8,12}" inputMode="numeric" autoComplete="new-password" className="input min-h-11" type="password" value={resetPin} onChange={(event) => setResetPin(event.target.value.replace(/\D/g, '').slice(0, 12))} /></Field><button className="btn-primary min-h-11" disabled={saving}>{saving ? 'Saving...' : 'Update PIN'}</button></form>}
+            {resetStaffId === staff.id && <form onSubmit={submitResetPin} className="flex w-full flex-col gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:items-end sm:justify-end"><Field label={t('electricity.pinLength')}><input required pattern="[0-9]{8,12}" inputMode="numeric" autoComplete="new-password" className="input min-h-11" type="password" value={resetPin} onChange={(event) => setResetPin(event.target.value.replace(/\D/g, '').slice(0, 12))} /></Field><button className="btn-primary min-h-11" disabled={saving}>{saving ? t('electricity.saving') : t('electricity.updatePin')}</button></form>}
           </div>)}
         </div>}
-        <p className="flex items-start gap-2 text-xs text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />Staff PINs are stored by Supabase Auth, not in this app’s electricity tables. Use a unique PIN per person; access changes are attributed to their account.</p>
+        <p className="flex items-start gap-2 text-xs text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />{t('electricity.staffPinPrivacy')}</p>
       </section>}
 
-      <section aria-labelledby="history-heading" className="border-t border-slate-200 pt-5">
-        <h2 id="history-heading" className="text-base font-semibold text-slate-950">Recent meter activity</h2>
-        {data.readings.filter((reading) => accountById.has(reading.account_id)).length === 0 ? <p className="mt-3 border-y border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">No readings have been recorded.</p> : <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200 bg-white">
+      {activeView === 'overview' && <section aria-labelledby="history-heading" className="border-t border-slate-200 pt-5">
+        <h2 id="history-heading" className="text-base font-semibold text-slate-950">{t('electricity.recentActivity')}</h2>
+        {data.readings.filter((reading) => accountById.has(reading.account_id)).length === 0 ? <p className="mt-3 border-y border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">{t('electricity.noReadings')}</p> : <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200 bg-white">
           {data.readings.filter((reading) => accountById.has(reading.account_id)).slice(0, 8).map((reading) => {
             const account = accountById.get(reading.account_id)
             return <div key={reading.id} className="grid grid-cols-2 gap-2 px-3 py-3 text-sm sm:grid-cols-4 sm:px-4">
-              <div><p className="text-xs text-slate-500">Meter / client</p><p className="mt-1 truncate font-medium text-slate-900">{account ? accountTitle(account) : 'Meter'}</p></div>
-              <div><p className="text-xs text-slate-500">Period</p><p className="mt-1 text-slate-800">{reading.previous_reading_date ? `${formatDate(reading.previous_reading_date)} to ${formatDate(reading.reading_date)}` : `Start date unknown · ${formatDate(reading.reading_date)}`}</p></div>
-              <div><p className="text-xs text-slate-500">Used</p><p className="mt-1 text-slate-800">{numeric(reading.usage_units)} kWh</p></div>
-              <div><p className="text-xs text-slate-500">Units carried forward</p><p className="mt-1 font-semibold text-slate-900">{reading.closing_balance_units === null ? 'Main meter' : `${numeric(reading.closing_balance_units)} kWh`}</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.meterClient')}</p><p className="mt-1 truncate font-medium text-slate-900">{account ? accountTitle(account) : t('electricity.meterType')}</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.period')}</p><p className="mt-1 text-slate-800">{reading.previous_reading_date ? `${formatDate(reading.previous_reading_date)} ${t('electricity.to')} ${formatDate(reading.reading_date)}` : `${t('electricity.startDateUnknown')} · ${formatDate(reading.reading_date)}`}</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.used')}</p><p className="mt-1 text-slate-800">{numeric(reading.usage_units)} kWh</p></div>
+              <div><p className="text-xs text-slate-500">{t('electricity.unitsCarried')}</p><p className="mt-1 font-semibold text-slate-900">{reading.closing_balance_units === null ? t('electricity.mainMeter') : `${numeric(reading.closing_balance_units)} kWh`}</p></div>
             </div>
           })}
         </div>}
-      </section>
+      </section>}
 
-      {data.currentStaffId && <p className="border-t border-slate-200 pt-4 text-xs text-slate-500">Signed in with staff ID {data.currentStaffId}. Readings and manual actions are recorded under your login.</p>}
+      {data.currentStaffId && <p className="border-t border-slate-200 pt-4 text-xs text-slate-500">{t('electricity.signedInStaff')} {data.currentStaffId}. {t('electricity.activityRecorded')}</p>}
     </div>
   )
 }
@@ -710,4 +1064,8 @@ function Metric({ label, value, detail, tone = 'normal' }: { label: string; valu
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block min-w-0 text-sm font-medium text-slate-700">{label}<span className="mt-1 block">{children}</span></label>
+}
+
+function LedgerValue({ label, value, emphasized = false }: { label: string; value: string; emphasized?: boolean }) {
+  return <div className="min-w-0"><p className="text-xs text-slate-500">{label}</p><p className={`mt-0.5 truncate ${emphasized ? 'font-semibold text-slate-950' : 'text-slate-800'}`}>{value}</p></div>
 }

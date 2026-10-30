@@ -8,6 +8,8 @@ import { Header } from '@/components/layout/Header'
 import { LoadingState, PageSkeleton } from '@/components/ui/LoadingState'
 import { MobileBottomBar } from '@/components/layout/MobileBottomBar'
 import { useMobileViewport } from '@/components/layout/useMobileViewport'
+import { LanguageProvider } from '@/components/i18n/LanguageProvider'
+import { normalizeLanguage, type LanguageCode } from '@/utils/i18n'
 
 type AppRole = 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin' | 'electricity_staff'
 
@@ -22,6 +24,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [adminRole, setAdminRole] = useState<AppRole>('none')
+  const [language, setLanguage] = useState<LanguageCode>('en')
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -48,6 +51,7 @@ export function AppShell({ children }: AppShellProps) {
         if (!mounted) return
         setUser(data.user ?? null)
         setAdminRole((data.adminRole ?? 'none') as AppRole)
+        setLanguage(normalizeLanguage(data.languagePreference))
       })
       .catch(() => {
         if (!mounted) return
@@ -104,18 +108,20 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-gray-50">
-      <div className="flex min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden">
-        <Sidebar user={user} adminRole={adminRole} />
-        <MobileSidebar user={user} adminRole={adminRole} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
-        <div className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
-          <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
-          <main id="main-content" className="mobile-page-content min-w-0 flex-1 p-4 sm:p-6 lg:overflow-y-auto lg:p-8">
-            {children}
-          </main>
-          <MobileBottomBar onOpenMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
+    <LanguageProvider initialLanguage={language}>
+      <div className="min-h-[100dvh] bg-gray-50">
+        <div className="flex min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden">
+          <Sidebar user={user} adminRole={adminRole} />
+          <MobileSidebar user={user} adminRole={adminRole} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+          <div className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
+            <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
+            <main id="main-content" className="mobile-page-content min-w-0 flex-1 p-4 sm:p-6 lg:overflow-y-auto lg:p-8">
+              {children}
+            </main>
+            <MobileBottomBar onOpenMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
+          </div>
         </div>
       </div>
-    </div>
+    </LanguageProvider>
   )
 }

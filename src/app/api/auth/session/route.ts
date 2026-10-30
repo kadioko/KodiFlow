@@ -17,22 +17,30 @@ export async function GET() {
     const serviceClient = createServiceClient()
     const { data: electricityStaff } = await serviceClient
       .from('electricity_staff')
-      .select('active')
+      .select('active, language_preference')
       .eq('auth_user_id', user.id)
       .maybeSingle()
 
     if (electricityStaff) {
       if (!electricityStaff.active) return NextResponse.json({ user: null }, { status: 401 })
-      return NextResponse.json({ user, adminRole: 'electricity_staff' })
+      return NextResponse.json({
+        user,
+        adminRole: 'electricity_staff',
+        languagePreference: electricityStaff.language_preference || 'en',
+      })
     }
 
     const { data: profile } = await serviceClient
       .from('profiles')
-      .select('admin_role')
+      .select('admin_role, language_preference')
       .eq('id', user.id)
       .single()
 
-    return NextResponse.json({ user, adminRole: (profile as { admin_role?: string } | null)?.admin_role || 'none' })
+    return NextResponse.json({
+      user,
+      adminRole: profile?.admin_role || 'none',
+      languagePreference: profile?.language_preference || 'en',
+    })
   } catch {
     return NextResponse.json({ user: null }, { status: 503 })
   }

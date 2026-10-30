@@ -10,15 +10,22 @@ export async function POST(request: NextRequest) {
     const accountId = typeof body.accountId === 'string' ? body.accountId : ''
     const purchaseDate = typeof body.purchaseDate === 'string' ? body.purchaseDate : ''
     const units = Number(body.units)
+    const unitsConfirmation = Number(body.unitsConfirmation)
     const tokenSuffix = typeof body.tokenSuffix === 'string' ? body.tokenSuffix.trim() : ''
+    const tokenSuffixConfirmation = typeof body.tokenSuffixConfirmation === 'string' ? body.tokenSuffixConfirmation.trim() : ''
     const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
-    const verified = body.verified === true
 
     if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || !Number.isFinite(units) || units <= 0) {
       return NextResponse.json({ error: 'Enter a valid meter, purchase date, and positive number of units.' }, { status: 400 })
     }
+    if (!Number.isFinite(unitsConfirmation) || Math.round(units * 1000) !== Math.round(unitsConfirmation * 1000)) {
+      return NextResponse.json({ error: 'The confirmed unit amount must match the amount purchased.' }, { status: 400 })
+    }
     if (tokenSuffix && !/^[A-Za-z0-9-]{2,8}$/.test(tokenSuffix)) {
       return NextResponse.json({ error: 'Only the last 2–8 characters of the token may be recorded.' }, { status: 400 })
+    }
+    if (tokenSuffix.toUpperCase() !== tokenSuffixConfirmation.toUpperCase()) {
+      return NextResponse.json({ error: 'The confirmed token reference must match.' }, { status: 400 })
     }
     if (notes.length > 500) return NextResponse.json({ error: 'Notes must be 500 characters or less.' }, { status: 400 })
 
@@ -27,7 +34,7 @@ export async function POST(request: NextRequest) {
       p_purchase_date: purchaseDate,
       p_units: units,
       p_token_suffix: tokenSuffix || null,
-      p_verified: verified,
+      p_verified: false,
       p_notes: notes || null,
     })
 

@@ -237,7 +237,13 @@ The **Electricity** workspace is for properties that track prepaid electricity m
 
 Owners can create a submeter account for a unit/client or a floor main meter. For each meter, record the starting reading and its actual date; later readings are compared against that dated baseline. For each submeter, also set any opening units already available and the low-balance alert threshold. Floor main readings are recorded separately and are not automatically divided between tenants.
 
-Staff sign in with the Staff ID and numeric PIN provided by the owner. When creating or editing a staff login, explicitly select only the properties that person is responsible for; unselected properties and their meter history are not available to that login. Owners can change the assignment later, including removing all property access. To record a meter visit, staff enter the current physical reading: KodiFlow calculates usage from the previous reading, applies verified tenant-reported top-ups, and shows the remaining unit balance. Readings are saved atomically so concurrent updates cannot reuse the same previous reading.
+When entering Electricity, use the workspace tabs for **Overview**, **Record readings**, **Record LUKU**, **Meters and balances**, and **Ledger and reports**. Owners also have **Staff access**. To create a staff login, an owner opens **Staff access**, enters a unique Staff ID, name, 8-12 digit PIN, and selects the specific properties the staff member may work on. The owner can later change property access, reset the PIN, or deactivate the account. Staff sign in with the Staff ID and PIN provided privately by the owner; they only see assigned properties.
+
+For each physical meter visit, staff enter the current reading and date. KodiFlow calculates consumption from the previous reading and displays the resulting balance. The **Ledger and reports** view updates as readings are saved and lists the previous/current meter readings, brought-forward units, usage, reported and verified LUKU units, any cut-off reading, balance corrections, and carried-forward units. Set the weekly target to two or three readings per active client meter; the coverage list counts the last seven days and flags clients who still need a check. Filter the ledger by date, then export CSV or print it for sharing/filing.
+
+When a tenant reports a LUKU purchase, staff enter the unit amount twice and re-enter the optional short token reference. The values must match before saving. Only a short reference may be recorded, never the full prepaid token. The entry remains reported until the meter check is verified; unverified units do not increase the estimated balance.
+
+Owners can use **Adjust unit balance** on a client submeter to correct a balance after a physical recheck. Enter a signed amount (positive adds units; negative reduces them), the date, and a reason. KodiFlow preserves the correction with the owner and timestamp, shows it in the report, and applies it to the next meter reading rather than rewriting prior history. Staff cannot make these balance corrections.
 
 The **Main meter reconciliation** section compares a floor main meter's usage against the sum of its active tenant submeters. It uses matching start and end dates only. A floor is marked incomplete until every active submeter has a reading for that exact period; no final missing-unit amount is shown for partial periods. Positive variance means main-meter use exceeds tenant submeter use (unaccounted units); negative variance means submeters report more usage than the main meter. Starting readings from the Dora Tower ledger are baselines only because the paper sheet does not include the previous main-meter readings; record the next round of main and submeter readings to get a valid comparison.
 
@@ -284,10 +290,12 @@ Good searches include:
 
 Use **Settings** to configure app preferences.
 
+Choose English or Kiswahili from the language selector in the top app bar. The choice is saved to your account, applies immediately, and follows you across devices. Electricity staff accounts have their own language preference too, so one staff member's choice does not change another user's language. You can also change it under **Settings**.
+
 Available settings include:
 
 - Default currency.
-- Language preference.
+- Language preference (English or Kiswahili).
 - Late fee rate.
 - App installation controls.
 - Light and dark mode.

@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { NotificationManager } from '@/components/notifications/NotificationManager'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { useState } from 'react'
+import { useLanguage } from '@/components/i18n/LanguageProvider'
+import { normalizeLanguage } from '@/utils/i18n'
 
 interface HeaderProps {
   user: User
@@ -19,7 +21,10 @@ interface HeaderProps {
 export function Header({ user: _user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu, electricityStaff = false }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
+  const { language, saveLanguage, t } = useLanguage()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [savingLanguage, setSavingLanguage] = useState(false)
+  const [languageError, setLanguageError] = useState('')
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -36,7 +41,7 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
           type="button"
           onClick={onOpenMobileMenu}
           className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
-          aria-label="Open navigation menu"
+          aria-label={t('header.openMenu')}
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -48,14 +53,14 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
             type="button"
             onClick={onToggleDashboard}
             className="hidden items-center rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 lg:flex"
-            title={dashboardVisible ? 'Hide dashboard navigation' : 'Show dashboard navigation'}
+            title={dashboardVisible ? t('header.hideDashboard') : t('header.showDashboard')}
           >
             {dashboardVisible ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
-            <span className="ml-2 hidden xl:inline">{dashboardVisible ? 'Hide dashboard' : 'Show dashboard'}</span>
+            <span className="ml-2 hidden xl:inline">{dashboardVisible ? t('header.hideDashboard') : t('header.showDashboard')}</span>
           </button>
         )}
         {!electricityStaff && <form action="/search" className="hidden w-full max-w-xl md:block lg:max-w-md">
-          <label htmlFor="search" className="sr-only">Search</label>
+          <label htmlFor="search" className="sr-only">{t('header.searchLabel')}</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-slate-400" />
@@ -64,7 +69,7 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
               id="search"
               name="q"
               className="block w-full rounded-2xl border border-slate-200 bg-slate-50/80 py-2.5 pl-11 pr-4 text-sm leading-5 text-slate-800 shadow-inner placeholder:text-slate-400 outline-none transition-all focus:border-primary-300 focus:bg-white focus:ring-4 focus:ring-primary-100"
-              placeholder="Search properties, tenants..."
+              placeholder={t('header.searchPlaceholder')}
               type="search"
             />
           </div>
@@ -72,6 +77,25 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
+        <label className="sr-only" htmlFor="header-language">{t('header.language')}</label>
+        <select
+          id="header-language"
+          className="input h-10 w-[100px] min-w-0 px-2 text-xs sm:w-32 sm:text-sm"
+          value={language}
+          disabled={savingLanguage}
+          title={languageError || t('header.language')}
+          onChange={(event) => {
+            const nextLanguage = normalizeLanguage(event.target.value)
+            setLanguageError('')
+            setSavingLanguage(true)
+            void saveLanguage(nextLanguage)
+              .catch(() => setLanguageError(t('language.saveError')))
+              .finally(() => setSavingLanguage(false))
+          }}
+        >
+          <option value="en">English</option>
+          <option value="sw">Kiswahili</option>
+        </select>
         {!electricityStaff && <NotificationManager />}
 
         <div className="h-6 w-px bg-slate-200"></div>
@@ -80,10 +104,10 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
           onClick={handleLogout}
           disabled={loggingOut}
           className="flex items-center rounded-xl px-2 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:px-3"
-          aria-label="Logout"
+          aria-label={t('header.logout')}
         >
           {loggingOut ? <Loader2 className="mr-0 h-5 w-5 animate-spin sm:mr-1" /> : <LogOut className="mr-0 h-5 w-5 sm:mr-1" />}
-          <span className="hidden sm:inline">{loggingOut ? 'Signing out...' : 'Logout'}</span>
+          <span className="hidden sm:inline">{loggingOut ? t('header.signingOut') : t('header.logout')}</span>
         </button>
       </div>
     </header>

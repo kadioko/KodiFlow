@@ -60,6 +60,7 @@ describe('electricity meter reading transaction', () => {
     db = new PGlite()
     await db.exec(`
       CREATE ROLE authenticated;
+      CREATE ROLE anon;
       CREATE ROLE service_role;
       CREATE SCHEMA auth;
       CREATE TABLE auth.users (id UUID PRIMARY KEY);
@@ -82,6 +83,9 @@ describe('electricity meter reading transaction', () => {
       '202610300002_electricity_staff_property_scope.sql',
       '202610300003_electricity_reading_periods.sql',
       '202610300004_dora_tower_electricity_ledger_seed.sql',
+      '202610300005_dora_tower_main_meter_numbers.sql',
+      '202610300006_electricity_staff_language_preference.sql',
+      '202610300007_electricity_balance_adjustments_and_ledger.sql',
     ]) {
       const migration = readFileSync(resolve('supabase/migrations', migrationFile), 'utf8')
       for (const [index, statement] of splitSqlStatements(migration).entries()) {
@@ -199,6 +203,53 @@ describe('electricity meter reading transaction', () => {
     expect(result.rows[0]).toMatchObject({ topup_units: '0.000', closing_balance_units: '5.000' })
   })
 
+  it('applies owner balance corrections exactly once to the next reading and carries them forward', async () => {
+    await db.query(
+      "SELECT public.adjust_electricity_balance($1, 5, '2026-10-25', 'Paper sheet correction')",
+      [accountId],
+    )
+    const first = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.record_electricity_meter_reading($1, $2, $3, $4)',
+      [accountId, 115, '2026-10-26', null],
+    )
+    expect(first.rows[0]).toMatchObject({ adjustment_units: '5.000', closing_balance_units: '10.000' })
+
+    await db.query(
+      "SELECT public.adjust_electricity_balance($1, -2, '2026-10-26', 'Correct a duplicated entry')",
+      [accountId],
+    )
+    const next = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.record_electricity_meter_reading($1, $2, $3, $4)',
+      [accountId, 118, '2026-10-27', null],
+    )
+    expect(next.rows[0]).toMatchObject({ opening_balance_units: '10.000', adjustment_units: '-2.000', closing_balance_units: '5.000' })
+
+    const adjustments = await db.query<{ count: number }>(
+      'SELECT count(*)::INTEGER AS count FROM public.electricity_balance_adjustments WHERE account_id = $1 AND applied_reading_id IS NULL',
+      [accountId],
+    )
+    expect(adjustments.rows[0].count).toBe(0)
+  })
+
+  it('rejects balance corrections from non-owners and adjustments predating the last reading', async () => {
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [otherUserId])
+    await db.exec('SAVEPOINT before_non_owner_adjustment;')
+    await expect(db.query(
+      "SELECT public.adjust_electricity_balance($1, 3, '2026-10-25', 'Wrong account')",
+      [accountId],
+    )).rejects.toThrow(/Only the property owner/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_non_owner_adjustment;')
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [ownerId])
+
+    await db.query('SELECT public.record_electricity_meter_reading($1, 110, $2, NULL)', [accountId, '2026-10-26'])
+    await db.exec('SAVEPOINT before_backdated_adjustment;')
+    await expect(db.query(
+      "SELECT public.adjust_electricity_balance($1, 3, '2026-10-25', 'Backdated correction')",
+      [accountId],
+    )).rejects.toThrow(/cannot be earlier than the last meter reading/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_backdated_adjustment;')
+  })
+
   it('reconciles a top-up verified after its purchase-period reading and carries the corrected balance forward', async () => {
     await db.query("SELECT public.record_electricity_topup($1, '2026-10-25', 12, NULL, FALSE, NULL)", [accountId])
     const first = await db.query<Record<string, unknown>>(
@@ -246,7 +297,7 @@ describe('electricity meter reading transaction', () => {
     await expect(db.query(
       'SELECT * FROM public.record_electricity_meter_reading($1, $2, $3, $4)',
       [accountId, 110, '2099-01-01', null],
-    )).rejects.toThrow(/cannot be in the future/)
+    )).rejects.toThrow(/today or earlier/)
     await db.exec('ROLLBACK TO SAVEPOINT before_future_reading;')
 
     await db.exec('SAVEPOINT before_future_topup;')

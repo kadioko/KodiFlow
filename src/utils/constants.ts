@@ -103,7 +103,7 @@ export const UTILITY_TYPES = [
 
 export const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
-  { value: 'sw', label: 'Swahili' },
+  { value: 'sw', label: 'Kiswahili' },
 ] as const;
 
 // Charge frequencies

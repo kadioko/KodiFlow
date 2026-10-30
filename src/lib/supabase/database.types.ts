@@ -710,6 +710,7 @@ export interface Database {
           login_email: string
           full_name: string
           active: boolean
+          language_preference: 'en' | 'sw'
           created_by: string
           created_at: string
           updated_at: string
@@ -722,6 +723,7 @@ export interface Database {
           login_email: string
           full_name: string
           active?: boolean
+          language_preference?: 'en' | 'sw'
           created_by: string
           created_at?: string
           updated_at?: string
@@ -734,6 +736,7 @@ export interface Database {
           login_email?: string
           full_name?: string
           active?: boolean
+          language_preference?: 'en' | 'sw'
           created_by?: string
           created_at?: string
           updated_at?: string
@@ -862,6 +865,7 @@ export interface Database {
           previous_reading_date: string | null
           opening_balance_units: number | null
           topup_units: number
+          adjustment_units: number
           closing_balance_units: number | null
           reading_date: string
           notes: string | null
@@ -877,6 +881,7 @@ export interface Database {
           previous_reading_date?: string | null
           opening_balance_units?: number | null
           topup_units?: number
+          adjustment_units?: number
           closing_balance_units?: number | null
           reading_date: string
           notes?: string | null
@@ -892,6 +897,7 @@ export interface Database {
           previous_reading_date?: string | null
           opening_balance_units?: number | null
           topup_units?: number
+          adjustment_units?: number
           closing_balance_units?: number | null
           reading_date?: string
           notes?: string | null
@@ -930,6 +936,42 @@ export interface Database {
           reason?: string
           performed_by?: string
           performed_at?: string
+        }
+        Relationships: []
+      }
+      electricity_balance_adjustments: {
+        Row: {
+          id: string
+          account_id: string
+          owner_user_id: string
+          adjustment_date: string
+          adjustment_units: number
+          reason: string
+          applied_reading_id: string | null
+          recorded_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          account_id: string
+          owner_user_id: string
+          adjustment_date: string
+          adjustment_units: number
+          reason: string
+          applied_reading_id?: string | null
+          recorded_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          account_id?: string
+          owner_user_id?: string
+          adjustment_date?: string
+          adjustment_units?: number
+          reason?: string
+          applied_reading_id?: string | null
+          recorded_by?: string
+          created_at?: string
         }
         Relationships: []
       }
@@ -1010,6 +1052,15 @@ export interface Database {
       record_electricity_meter_reading: {
         Args: { p_account_id: string; p_current_reading: number; p_reading_date: string; p_notes?: string | null }
         Returns: Database['public']['Tables']['electricity_readings']['Row']
+      }
+      adjust_electricity_balance: {
+        Args: {
+          p_account_id: string
+          p_adjustment_units: number
+          p_adjustment_date: string
+          p_reason: string
+        }
+        Returns: Database['public']['Tables']['electricity_balance_adjustments']['Row']
       }
       record_electricity_topup: {
         Args: {
