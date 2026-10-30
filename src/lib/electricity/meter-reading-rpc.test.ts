@@ -86,6 +86,11 @@ describe('electricity meter reading transaction', () => {
       '202610300005_dora_tower_main_meter_numbers.sql',
       '202610300006_electricity_staff_language_preference.sql',
       '202610300007_electricity_balance_adjustments_and_ledger.sql',
+      '202610300008_allow_historical_electricity_sessions.sql',
+      '202610300009_electricity_staff_login_audit.sql',
+      '202610300010_electricity_main_meter_balances.sql',
+      '202610300012_electricity_topup_purchase_value.sql',
+      '202610300013_store_complete_luku_tokens.sql',
     ]) {
       const migration = readFileSync(resolve('supabase/migrations', migrationFile), 'utf8')
       for (const [index, statement] of splitSqlStatements(migration).entries()) {
@@ -136,7 +141,7 @@ describe('electricity meter reading transaction', () => {
       WHERE a.property_id = $1 AND a.tenant_id = $2
     `, [doraPropertyId, doraTenantId])
     const tokenStorage = await db.query<{ count: number }>(
-      "SELECT count(*)::INTEGER AS count FROM public.electricity_topups WHERE token_suffix IS NOT NULL",
+      "SELECT count(*)::INTEGER AS count FROM public.electricity_topups WHERE token_code IS NOT NULL",
     )
 
     expect(mainMeters.rows[0].count).toBe(8)
@@ -280,6 +285,154 @@ describe('electricity meter reading transaction', () => {
     expect(result.rows[0].opening_balance_units).toBeNull()
   })
 
+  it('records main-meter prepaid balance snapshots that may rise or fall', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    const latestDate = new Date(`${today}T00:00:00.000Z`)
+    const earlierDate = new Date(latestDate)
+    earlierDate.setUTCDate(earlierDate.getUTCDate() - 1)
+    const dateAfterPurchase = latestDate.toISOString().slice(0, 10)
+    const dateBeforePurchase = earlierDate.toISOString().slice(0, 10)
+
+    await db.query('SELECT public.record_electricity_main_meter_balance($1, 36.23, $2, $3)', [mainAccountId, dateBeforePurchase, 'Before purchase'])
+    await db.query('SELECT public.record_electricity_main_meter_balance($1, 410.37, $2, $3)', [mainAccountId, dateAfterPurchase, 'After purchase'])
+
+    const balances = await db.query<{ reading_date: Date; units_remaining: string; notes: string }>(
+      'SELECT reading_date, units_remaining, notes FROM public.electricity_main_meter_balances WHERE account_id = $1 ORDER BY reading_date',
+      [mainAccountId],
+    )
+    expect(balances.rows).toMatchObject([
+      { units_remaining: '36.230', notes: 'Before purchase' },
+      { units_remaining: '410.370', notes: 'After purchase' },
+    ])
+
+    await db.exec('SAVEPOINT before_duplicate_main_balance;')
+    await expect(db.query(
+      'SELECT public.record_electricity_main_meter_balance($1, 20, $2, NULL)',
+      [mainAccountId, dateAfterPurchase],
+    )).rejects.toThrow(/duplicate key/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_duplicate_main_balance;')
+  })
+
+  it('rejects main-meter balance snapshots from users without property access', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [otherUserId])
+    await expect(db.query(
+      'SELECT public.record_electricity_main_meter_balance($1, 5, $2, NULL)',
+      [mainAccountId, today],
+    )).rejects.toThrow(/not found or access denied/)
+  })
+
+  it('saves the complete LUKU token, purchase value, and rejects duplicate token reuse', async () => {
+    const purchaseDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    const tokenCode = '12345678901234567890'
+    const result = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.record_electricity_topup_with_value($1, $2, 50, $3, $4, 6500, $5)',
+      [accountId, purchaseDate, '7890', tokenCode, 'Client-reported LUKU purchase'],
+    )
+    expect(result.rows[0].token_suffix).toBe('7890')
+    expect(result.rows[0].token_code).toBe(tokenCode)
+    expect(Number(result.rows[0].purchase_amount_tzs)).toBe(6500)
+    expect(result.rows[0].status).toBe('reported')
+
+    await db.exec('SAVEPOINT before_duplicate_token;')
+    await expect(db.query(
+      'SELECT * FROM public.record_electricity_topup_with_value($1, $2, 5, $3, $4, 800, NULL)',
+      [accountId, purchaseDate, '7890', tokenCode],
+    )).rejects.toThrow(/duplicate key/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_duplicate_token;')
+
+    await db.exec('SAVEPOINT before_invalid_topup_value;')
+    await expect(db.query(
+      'SELECT * FROM public.record_electricity_topup_with_value($1, $2, 5, $3, $4, 0, NULL)',
+      [accountId, purchaseDate, '7890', '09876543210987657890'],
+    )).rejects.toThrow(/purchase value greater than zero/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_invalid_topup_value;')
+    const topupCount = await db.query<{ count: number }>(
+      'SELECT count(*)::INTEGER AS count FROM public.electricity_topups WHERE account_id = $1',
+      [accountId],
+    )
+    expect(topupCount.rows[0].count).toBe(1)
+  })
+
+  it('accepts out-of-order dated sessions and rebuilds later usage and balances', async () => {
+    await db.query('SELECT public.record_electricity_meter_reading($1, 130, $2, $3)', [accountId, '2026-10-30', 'latest session'])
+    await db.query('SELECT public.record_electricity_meter_reading($1, 120, $2, $3)', [accountId, '2026-10-29', 'second session'])
+    const inserted = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.record_electricity_meter_reading($1, 110, $2, $3)',
+      [accountId, '2026-10-27', 'missed midweek session'],
+    )
+    expect(inserted.rows[0]).toMatchObject({
+      previous_meter_reading: '100.000',
+      previous_reading_date: new Date('2026-10-25T00:00:00.000Z'),
+      usage_units: '10.000',
+      opening_balance_units: '20.000',
+      closing_balance_units: '10.000',
+    })
+
+    const sessions = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.electricity_readings WHERE account_id = $1 ORDER BY reading_date',
+      [accountId],
+    )
+    expect(sessions.rows[1]).toMatchObject({
+      reading_date: new Date('2026-10-29T00:00:00.000Z'),
+      previous_meter_reading: '110.000',
+      previous_reading_date: new Date('2026-10-27T00:00:00.000Z'),
+      usage_units: '10.000',
+      opening_balance_units: '10.000',
+      closing_balance_units: '0.000',
+    })
+    expect(sessions.rows[2]).toMatchObject({
+      reading_date: new Date('2026-10-30T00:00:00.000Z'),
+      previous_meter_reading: '120.000',
+      previous_reading_date: new Date('2026-10-29T00:00:00.000Z'),
+      usage_units: '10.000',
+      opening_balance_units: '0.000',
+      closing_balance_units: '-10.000',
+    })
+
+    await db.exec('SAVEPOINT before_duplicate_session_date;')
+    await expect(db.query(
+      'SELECT public.record_electricity_meter_reading($1, 115, $2, NULL)',
+      [accountId, '2026-10-29'],
+    )).rejects.toThrow(/already exists for this meter/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_duplicate_session_date;')
+  })
+
+  it('reassigns verified top-ups and owner corrections to the correct dated session', async () => {
+    await db.query("SELECT public.record_electricity_topup($1, '2026-10-28', 12, NULL, TRUE, NULL)", [accountId])
+    await db.query("SELECT public.adjust_electricity_balance($1, 5, '2026-10-28', 'Paper sheet correction')", [accountId])
+    await db.query('SELECT public.record_electricity_meter_reading($1, 130, $2, NULL)', [accountId, '2026-10-30'])
+    await db.query('SELECT public.record_electricity_meter_reading($1, 120, $2, NULL)', [accountId, '2026-10-29'])
+
+    const entries = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.electricity_readings WHERE account_id = $1 ORDER BY reading_date',
+      [accountId],
+    )
+    expect(entries.rows[0]).toMatchObject({
+      reading_date: new Date('2026-10-29T00:00:00.000Z'),
+      topup_units: '12.000',
+      adjustment_units: '5.000',
+      closing_balance_units: '17.000',
+    })
+    expect(entries.rows[1]).toMatchObject({
+      reading_date: new Date('2026-10-30T00:00:00.000Z'),
+      previous_meter_reading: '120.000',
+      topup_units: '0.000',
+      adjustment_units: '0.000',
+      closing_balance_units: '7.000',
+    })
+  })
+
+  it('rejects an entered value that exceeds the next dated reading', async () => {
+    await db.query('SELECT public.record_electricity_meter_reading($1, 120, $2, NULL)', [accountId, '2026-10-30'])
+    await db.exec('SAVEPOINT before_out_of_order_meter_value;')
+    await expect(db.query(
+      'SELECT public.record_electricity_meter_reading($1, 130, $2, NULL)',
+      [accountId, '2026-10-27'],
+    )).rejects.toThrow(/cannot exceed the next saved reading/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_out_of_order_meter_value;')
+  })
+
   it('rejects a meter value below the last reading without consuming the pending top-up', async () => {
     await db.query("SELECT public.record_electricity_topup($1, '2026-10-25', 12, NULL, TRUE, NULL)", [accountId])
     await db.exec('SAVEPOINT before_bad_reading;')
@@ -351,6 +504,35 @@ describe('electricity meter reading transaction', () => {
       'SELECT * FROM public.record_electricity_meter_reading($1, $2, $3, $4)',
       [accountId, 120, '2026-10-27', null],
     )).rejects.toThrow(/not found or access denied/)
+  })
+
+  it('records successful staff sign-ins and maintains the latest login timestamp', async () => {
+    await db.query(`
+      INSERT INTO public.electricity_staff (owner_user_id, auth_user_id, staff_id, login_email, full_name, created_by)
+      VALUES ($1, $2, 'DT-02', 'staff-login@test.invalid', 'Login Staff', $1)
+    `, [ownerId, staffAuthId])
+    const staff = await db.query<{ id: string; last_login_at: Date | null }>(
+      'SELECT id, last_login_at FROM public.electricity_staff WHERE staff_id = $1',
+      ['DT-02'],
+    )
+    await db.query(
+      'INSERT INTO public.electricity_staff_login_events (staff_id, owner_user_id, logged_in_at) VALUES ($1, $2, $3)',
+      [staff.rows[0].id, ownerId, '2026-10-30T08:00:00.000Z'],
+    )
+    await db.query(
+      'INSERT INTO public.electricity_staff_login_events (staff_id, owner_user_id, logged_in_at) VALUES ($1, $2, $3)',
+      [staff.rows[0].id, ownerId, '2026-10-30T09:00:00.000Z'],
+    )
+
+    const latest = await db.query<{ last_login_at: Date; event_count: number }>(`
+      SELECT s.last_login_at, count(e.id)::INTEGER AS event_count
+      FROM public.electricity_staff s
+      JOIN public.electricity_staff_login_events e ON e.staff_id = s.id
+      WHERE s.id = $1
+      GROUP BY s.last_login_at
+    `, [staff.rows[0].id])
+    expect(latest.rows[0].last_login_at).toEqual(new Date('2026-10-30T09:00:00.000Z'))
+    expect(latest.rows[0].event_count).toBe(2)
   })
 
   it('does not grant authenticated clients direct writes that bypass the atomic workflow', async () => {

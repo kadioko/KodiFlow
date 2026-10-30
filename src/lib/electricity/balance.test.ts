@@ -34,6 +34,16 @@ describe('electricity unit balance', () => {
     })).toThrow('Current meter reading cannot be below the previous reading.')
   })
 
+  it('includes an audited owner correction in the estimated carried balance', () => {
+    expect(calculateElectricityBalance({
+      previousMeterReading: 100,
+      currentMeterReading: 110,
+      openingBalanceUnits: 20,
+      verifiedTopupUnits: 0,
+      adjustmentUnits: 5,
+    })).toEqual({ usageUnits: 10, closingBalanceUnits: 15 })
+  })
+
   it('marks estimates from an old reading as needing a fresh check', () => {
     expect(classifyElectricityBalance({
       balanceUnits: 0,

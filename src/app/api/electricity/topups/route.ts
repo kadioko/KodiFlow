@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getElectricityActor } from '@/lib/electricity/server'
+import { parseLukuToken } from '@/lib/electricity/luku-token'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +12,9 @@ export async function POST(request: NextRequest) {
     const purchaseDate = typeof body.purchaseDate === 'string' ? body.purchaseDate : ''
     const units = Number(body.units)
     const unitsConfirmation = Number(body.unitsConfirmation)
-    const tokenSuffix = typeof body.tokenSuffix === 'string' ? body.tokenSuffix.trim() : ''
-    const tokenSuffixConfirmation = typeof body.tokenSuffixConfirmation === 'string' ? body.tokenSuffixConfirmation.trim() : ''
+    const tokenCode = typeof body.tokenCode === 'string' ? parseLukuToken(body.tokenCode) : null
+    const tokenCodeConfirmation = typeof body.tokenCodeConfirmation === 'string' ? parseLukuToken(body.tokenCodeConfirmation) : null
+    const purchaseAmountTzs = Number(body.purchaseAmountTzs)
     const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
 
     if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || !Number.isFinite(units) || units <= 0) {
@@ -21,20 +23,24 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(unitsConfirmation) || Math.round(units * 1000) !== Math.round(unitsConfirmation * 1000)) {
       return NextResponse.json({ error: 'The confirmed unit amount must match the amount purchased.' }, { status: 400 })
     }
-    if (tokenSuffix && !/^[A-Za-z0-9-]{2,8}$/.test(tokenSuffix)) {
-      return NextResponse.json({ error: 'Only the last 2–8 characters of the token may be recorded.' }, { status: 400 })
+    if (!tokenCode || !tokenCodeConfirmation) {
+      return NextResponse.json({ error: 'Enter both complete 20-digit LUKU token fields.' }, { status: 400 })
     }
-    if (tokenSuffix.toUpperCase() !== tokenSuffixConfirmation.toUpperCase()) {
-      return NextResponse.json({ error: 'The confirmed token reference must match.' }, { status: 400 })
+    if (tokenCode !== tokenCodeConfirmation) {
+      return NextResponse.json({ error: 'The two 20-digit LUKU token entries do not match.' }, { status: 400 })
+    }
+    if (!Number.isFinite(purchaseAmountTzs) || purchaseAmountTzs <= 0 || purchaseAmountTzs > 1_000_000_000) {
+      return NextResponse.json({ error: 'Enter a purchase value greater than zero and no more than TZS 1,000,000,000.' }, { status: 400 })
     }
     if (notes.length > 500) return NextResponse.json({ error: 'Notes must be 500 characters or less.' }, { status: 400 })
 
-    const { data, error } = await actor.client.rpc('record_electricity_topup', {
+    const { data, error } = await actor.client.rpc('record_electricity_topup_with_value', {
       p_account_id: accountId,
       p_purchase_date: purchaseDate,
       p_units: units,
-      p_token_suffix: tokenSuffix || null,
-      p_verified: false,
+      p_token_suffix: tokenCode.slice(-4),
+      p_token_code: tokenCode,
+      p_purchase_amount_tzs: purchaseAmountTzs,
       p_notes: notes || null,
     })
 

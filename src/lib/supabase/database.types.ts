@@ -711,6 +711,7 @@ export interface Database {
           full_name: string
           active: boolean
           language_preference: 'en' | 'sw'
+          last_login_at: string | null
           created_by: string
           created_at: string
           updated_at: string
@@ -724,6 +725,7 @@ export interface Database {
           full_name: string
           active?: boolean
           language_preference?: 'en' | 'sw'
+          last_login_at?: string | null
           created_by: string
           created_at?: string
           updated_at?: string
@@ -737,6 +739,7 @@ export interface Database {
           full_name?: string
           active?: boolean
           language_preference?: 'en' | 'sw'
+          last_login_at?: string | null
           created_by?: string
           created_at?: string
           updated_at?: string
@@ -749,6 +752,12 @@ export interface Database {
         Update: { id?: string; staff_id?: string; owner_user_id?: string; property_id?: string; created_at?: string }
         Relationships: []
       }
+      electricity_staff_login_events: {
+        Row: { id: string; staff_id: string; owner_user_id: string; logged_in_at: string; created_at: string }
+        Insert: { id?: string; staff_id: string; owner_user_id: string; logged_in_at?: string; created_at?: string }
+        Update: { id?: string; staff_id?: string; owner_user_id?: string; logged_in_at?: string; created_at?: string }
+        Relationships: []
+      }
       electricity_accounts: {
         Row: {
           id: string
@@ -758,6 +767,7 @@ export interface Database {
           unit_id: string | null
           tenant_id: string | null
           floor_label: string
+          ledger_tenant_label: string | null
           meter_number: string | null
           initial_meter_reading: number
           initial_reading_date: string
@@ -776,6 +786,7 @@ export interface Database {
           unit_id?: string | null
           tenant_id?: string | null
           floor_label: string
+          ledger_tenant_label?: string | null
           meter_number?: string | null
           initial_meter_reading?: number
           initial_reading_date?: string
@@ -794,6 +805,7 @@ export interface Database {
           unit_id?: string | null
           tenant_id?: string | null
           floor_label?: string
+          ledger_tenant_label?: string | null
           meter_number?: string | null
           initial_meter_reading?: number
           initial_reading_date?: string
@@ -814,6 +826,8 @@ export interface Database {
           purchase_date: string
           units: number
           token_suffix: string | null
+          token_code: string | null
+          purchase_amount_tzs: number | null
           status: 'reported' | 'verified'
           verified_at: string | null
           verified_by: string | null
@@ -829,6 +843,8 @@ export interface Database {
           purchase_date: string
           units: number
           token_suffix?: string | null
+          token_code?: string | null
+          purchase_amount_tzs?: number | null
           status?: 'reported' | 'verified'
           verified_at?: string | null
           verified_by?: string | null
@@ -844,12 +860,47 @@ export interface Database {
           purchase_date?: string
           units?: number
           token_suffix?: string | null
+          token_code?: string | null
+          purchase_amount_tzs?: number | null
           status?: 'reported' | 'verified'
           verified_at?: string | null
           verified_by?: string | null
           applied_reading_id?: string | null
           recorded_by?: string
           notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      electricity_main_meter_balances: {
+        Row: {
+          id: string
+          account_id: string
+          owner_user_id: string
+          reading_date: string
+          units_remaining: number
+          notes: string | null
+          recorded_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          account_id: string
+          owner_user_id: string
+          reading_date: string
+          units_remaining: number
+          notes?: string | null
+          recorded_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          account_id?: string
+          owner_user_id?: string
+          reading_date?: string
+          units_remaining?: number
+          notes?: string | null
+          recorded_by?: string
           created_at?: string
         }
         Relationships: []
@@ -1053,6 +1104,10 @@ export interface Database {
         Args: { p_account_id: string; p_current_reading: number; p_reading_date: string; p_notes?: string | null }
         Returns: Database['public']['Tables']['electricity_readings']['Row']
       }
+      record_electricity_main_meter_balance: {
+        Args: { p_account_id: string; p_units_remaining: number; p_reading_date: string; p_notes?: string | null }
+        Returns: Database['public']['Tables']['electricity_main_meter_balances']['Row']
+      }
       adjust_electricity_balance: {
         Args: {
           p_account_id: string
@@ -1069,6 +1124,18 @@ export interface Database {
           p_units: number
           p_token_suffix?: string | null
           p_verified?: boolean
+          p_notes?: string | null
+        }
+        Returns: Database['public']['Tables']['electricity_topups']['Row']
+      }
+      record_electricity_topup_with_value: {
+        Args: {
+          p_account_id: string
+          p_purchase_date: string
+          p_units: number
+          p_token_suffix: string
+          p_token_code: string
+          p_purchase_amount_tzs: number
           p_notes?: string | null
         }
         Returns: Database['public']['Tables']['electricity_topups']['Row']

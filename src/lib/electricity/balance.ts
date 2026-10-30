@@ -5,6 +5,7 @@ export type ElectricityBalanceInput = {
   currentMeterReading: number
   openingBalanceUnits: number
   verifiedTopupUnits: number
+  adjustmentUnits?: number
 }
 
 export function calculateElectricityBalance(input: ElectricityBalanceInput) {
@@ -13,7 +14,7 @@ export function calculateElectricityBalance(input: ElectricityBalanceInput) {
   }
 
   const usageUnits = roundUnits(input.currentMeterReading - input.previousMeterReading)
-  const closingBalanceUnits = roundUnits(input.openingBalanceUnits + input.verifiedTopupUnits - usageUnits)
+  const closingBalanceUnits = roundUnits(input.openingBalanceUnits + input.verifiedTopupUnits + (input.adjustmentUnits || 0) - usageUnits)
 
   return { usageUnits, closingBalanceUnits }
 }

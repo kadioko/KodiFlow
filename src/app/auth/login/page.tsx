@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
+import type { LanguageCode } from '@/utils/i18n'
+import { getLanguagePreference } from '@/utils/language-preference'
 import { safeLoginDestination } from '@/utils/navigation'
 
 export default function LoginPage() {
@@ -12,8 +14,18 @@ export default function LoginPage() {
   const [staffId, setStaffId] = useState('')
   const [pin, setPin] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [language, setLanguage] = useState<LanguageCode>('en')
+  const [hasLanguagePreference, setHasLanguagePreference] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const preferredLanguage = getLanguagePreference()
+    if (preferredLanguage) {
+      setLanguage(preferredLanguage)
+      setHasLanguagePreference(true)
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +51,24 @@ export default function LoginPage() {
       if (!response.ok) {
         setError(result?.error || 'Unable to sign in right now. Please try again.')
         return
+      }
+
+      const preferredLanguage = getLanguagePreference()
+      if (preferredLanguage) {
+        const languageController = new AbortController()
+        const languageTimeout = window.setTimeout(() => languageController.abort(), 4000)
+        try {
+          await fetch('/api/auth/language', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language: preferredLanguage }),
+            signal: languageController.signal,
+          })
+        } catch {
+          // Sign-in should still complete if saving this preference is temporarily unavailable.
+        } finally {
+          window.clearTimeout(languageTimeout)
+        }
       }
 
       const params = new URLSearchParams(window.location.search)
@@ -164,7 +194,7 @@ export default function LoginPage() {
 
         <div className="mt-6">
           <Link
-            href="/auth/register"
+            href={hasLanguagePreference ? `/auth/register?lang=${language}` : '/auth/register'}
             className="btn-secondary w-full"
           >
             Create new account

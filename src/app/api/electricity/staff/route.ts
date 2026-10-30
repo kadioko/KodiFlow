@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         created_by: actor.user.id,
       })
-      .select('id, staff_id, full_name, active, created_at')
+      .select('id, staff_id, full_name, active, created_at, last_login_at')
       .single()
     if (staffError || !staff) throw staffError || new Error('Could not save the staff record.')
 

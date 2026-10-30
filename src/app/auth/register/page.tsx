@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import type { LanguageCode } from '@/utils/i18n'
+import { getLanguagePreference } from '@/utils/language-preference'
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState('')
@@ -12,6 +14,16 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [language, setLanguage] = useState<LanguageCode>('en')
+  const [hasLanguagePreference, setHasLanguagePreference] = useState(false)
+
+  useEffect(() => {
+    const preferredLanguage = getLanguagePreference()
+    if (preferredLanguage) {
+      setLanguage(preferredLanguage)
+      setHasLanguagePreference(true)
+    }
+  }, [])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,6 +43,7 @@ export default function RegisterPage() {
     }
 
     const supabase = createClient()
+    const preferredLanguage = getLanguagePreference() || 'en'
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
@@ -51,6 +64,7 @@ export default function RegisterPage() {
           full_name: fullName,
           email,
           currency_preference: 'TZS',
+          language_preference: preferredLanguage,
         }
 
         const { error: profileError } = await supabase.from('profiles').insert(profile)
@@ -80,7 +94,7 @@ export default function RegisterPage() {
             Please check your email to verify your account.
           </p>
           <div className="mt-6">
-            <Link href="/auth/login" className="btn-primary w-full">
+            <Link href={hasLanguagePreference ? `/auth/login?lang=${language}` : '/auth/login'} className="btn-primary w-full">
               Go to login
             </Link>
           </div>
@@ -183,7 +197,7 @@ export default function RegisterPage() {
 
         <div className="mt-6">
           <Link
-            href="/auth/login"
+            href={hasLanguagePreference ? `/auth/login?lang=${language}` : '/auth/login'}
             className="btn-secondary w-full"
           >
             Sign in

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const service = asElectricityClient(createServiceClient())
     const { data: staff, error } = await service
       .from('electricity_staff')
-      .select('id, login_email, active')
+      .select('id, owner_user_id, login_email, active')
       .eq('staff_id', staffId)
       .maybeSingle()
 
@@ -28,6 +28,15 @@ export async function POST(request: NextRequest) {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: staff.login_email, password: pin })
     if (signInError) {
       return NextResponse.json({ error: 'Staff ID or PIN is incorrect, or the account is inactive.' }, { status: 401 })
+    }
+
+    const { error: auditError } = await service.from('electricity_staff_login_events').insert({
+      staff_id: staff.id,
+      owner_user_id: staff.owner_user_id,
+    })
+    if (auditError) {
+      await supabase.auth.signOut()
+      return NextResponse.json({ error: 'Could not record this sign-in. Please try again.' }, { status: 503 })
     }
 
     return NextResponse.json({ ok: true, destination: '/electricity' })
