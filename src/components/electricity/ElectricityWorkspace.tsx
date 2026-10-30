@@ -944,16 +944,36 @@ export function ElectricityWorkspace() {
 
       {activeView === 'meters' && <section id="meters" className="scroll-mt-20" aria-labelledby="meters-heading">
         <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="meters-heading" className="text-lg font-semibold text-slate-950">{t('electricity.metersLatest')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.metersHelp')}</p></div><span className="text-sm text-slate-500">{activeAccounts.length} {t('electricity.activeMeters')}</span></div>
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <Metric label={t('electricity.estimatedUnitsLeft')} value={`${numeric(verifiedReadingBalance)} kWh`} detail={t('electricity.latestBalances')} />
+          <Metric label={t('electricity.lowOrEmpty')} value={String(lowCount)} detail={t('electricity.reviewContact')} tone={lowCount ? 'danger' : 'normal'} />
+          <div className="col-span-2 lg:col-span-1"><Metric label={t('electricity.activeSubmeters')} value={String(submeters.length)} detail={selectedProperty?.name || t('electricity.property')} /></div>
+        </div>
         {activeAccounts.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noMeters')}</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
           {activeAccounts.map((account) => {
             const status = account.meter_kind === 'submeter' ? classifyElectricityBalance({ balanceUnits: account.estimated_balance_units, lowThresholdUnits: Number(account.low_units_threshold), readingDate: account.latest_reading?.reading_date || null }) : null
             const presentation = status ? statusPresentation[status] : null
             const cutOff = account.last_cutoff_event?.action === 'disconnected'
+            const balanceClass = status === 'exhausted' || status === 'low'
+              ? 'border-rose-300 bg-rose-50 text-rose-950'
+              : status === 'soon'
+                ? 'border-amber-300 bg-amber-50 text-amber-950'
+                : status === 'okay'
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                  : status === 'reading_due'
+                    ? 'border-slate-300 bg-slate-100 text-slate-900'
+                    : 'border-sky-200 bg-sky-50 text-sky-950'
+            const displayedUnits = account.meter_kind === 'submeter'
+              ? account.estimated_balance_units
+              : account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
             return <article key={account.id} className="grid grid-cols-1 gap-3 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{accountTitle(account)}</h3><span className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600">{account.meter_kind === 'floor_main' ? t('electricity.floorMain') : t('electricity.clientSubmeter')}</span>{presentation && <span className={`border px-2 py-1 text-xs font-semibold ${presentation.className}`}>{t(presentation.labelKey)}</span>}{cutOff && <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800">{t('electricity.disconnected')}</span>}</div>
                 <p className="mt-1 text-sm text-slate-600">{account.property_name} · {account.unit_name || account.floor_label}{account.section_name ? ` · ${account.section_name}` : ''}{account.meter_number ? ` · Meter ${account.meter_number}` : ''}</p>
-                <p className="mt-1 text-xs text-slate-500">{t('electricity.lastReading')} {account.latest_reading ? `${numeric(account.latest_reading.current_meter_reading)} kWh · ${formatDate(account.latest_reading.reading_date)}` : `${numeric(account.initial_meter_reading)} kWh ${t('electricity.baselineOn')} ${formatDate(account.initial_reading_date)}`}{account.meter_kind === 'submeter' ? ` · ${t('electricity.estimatedBalance')} ${numeric(account.estimated_balance_units)} kWh` : ''}</p>
+                <div className={`mt-3 flex min-h-[76px] items-center justify-between gap-3 border px-3 py-3 sm:min-h-[84px] sm:px-4 ${balanceClass}`}>
+                  <div className="min-w-0"><p className="text-xs font-semibold">{account.meter_kind === 'submeter' ? t('electricity.estimatedBalance') : t('electricity.currentMeterReading')}</p>{status && <p className="mt-1 text-xs font-medium">{t(statusPresentation[status].labelKey)}</p>}<p className="mt-1 text-xs opacity-80">{account.latest_reading ? `${t('electricity.lastReading')} ${formatDate(account.latest_reading.reading_date)}` : `${t('electricity.baselineOn')} ${formatDate(account.initial_reading_date)}`}</p></div>
+                  <p className="flex shrink-0 items-baseline gap-1 tabular-nums"><span className="text-3xl font-bold leading-none sm:text-4xl">{numeric(displayedUnits)}</span><span className="text-sm font-semibold">kWh</span></p>
+                </div>
                 {account.pending_reported_topup_units > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{numeric(account.pending_reported_topup_units)} {t('electricity.pendingVerification')}</p>}
                 {account.pending_adjustment_count > 0 && <p className="mt-1 text-xs font-medium text-blue-700">{numeric(account.pending_adjustment_units)} kWh {t('electricity.adjustmentPending')}</p>}
               </div>
