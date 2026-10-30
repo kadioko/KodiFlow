@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bolt, Building2, Check, CircleAlert, Clock3, Gauge, KeyRound, MessageCircle, Plus, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
+import { Bolt, Building2, Check, CircleAlert, Clock3, Copy, Gauge, KeyRound, MessageCircle, Plus, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { calculateElectricityBalance, classifyElectricityBalance, type ElectricityBalanceStatus } from '@/lib/electricity/balance'
 import { reconcileMainMeters } from '@/lib/electricity/reconciliation'
 import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electricity/database.types'
@@ -91,6 +91,7 @@ export function ElectricityWorkspace() {
   const [cutoffReading, setCutoffReading] = useState('')
   const [showAccountSetup, setShowAccountSetup] = useState(false)
   const [showStaffSetup, setShowStaffSetup] = useState(false)
+  const [copiedMeterAccountId, setCopiedMeterAccountId] = useState('')
   const [accountForm, setAccountForm] = useState<AccountForm>({
     propertyId: '', meterKind: 'submeter', unitId: '', tenantId: '', floorLabel: '', meterNumber: '', initialReadingDate: todayISO(),
     initialMeterReading: '', openingBalanceUnits: '0', lowUnitsThreshold: '10',
@@ -155,6 +156,19 @@ export function ElectricityWorkspace() {
     const result = await response.json()
     if (!response.ok) throw new Error(result.error || 'The request could not be saved.')
     return result
+  }
+
+  const copyMeterNumber = async (account: AccountView) => {
+    if (!account.meter_number) return
+    try {
+      await navigator.clipboard.writeText(account.meter_number)
+      setCopiedMeterAccountId(account.id)
+      window.setTimeout(() => {
+        setCopiedMeterAccountId((current) => current === account.id ? '' : current)
+      }, 1800)
+    } catch {
+      setActionState({ type: 'error', message: 'Could not copy the meter number. You can still select and copy it from the list.' })
+    }
   }
 
   const submitReading = async (event: React.FormEvent) => {
@@ -418,6 +432,25 @@ export function ElectricityWorkspace() {
         <Metric label="Estimated units left" value={numeric(verifiedReadingBalance)} detail="Sum of latest recorded balances" />
         <Metric label="Floor main meters" value={String(mainMeters.length)} detail="Shared floor readings" />
       </section>
+
+      {mainMeters.length > 0 && <section aria-labelledby="main-meter-directory-heading" className="border-y border-slate-200 bg-white">
+        <div className="flex items-end justify-between gap-3 px-4 py-3 sm:px-5">
+          <div><h2 id="main-meter-directory-heading" className="text-base font-semibold text-slate-950">Main meter quick reference</h2><p className="mt-1 text-sm text-slate-600">{selectedProperty?.name || 'Selected property'} · tap to copy a meter number</p></div>
+          <span className="shrink-0 text-sm text-slate-500">{mainMeters.length} meters</span>
+        </div>
+        <div className="divide-y divide-slate-200">
+          {mainMeters.map((account) => {
+            const copied = copiedMeterAccountId === account.id
+            return <div key={account.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
+              <div className="min-w-0"><p className="font-medium text-slate-900">{account.floor_label}</p><p className="mt-0.5 break-all font-mono text-sm text-slate-600">{account.meter_number || 'Meter number not entered'}</p></div>
+              <button type="button" className="icon-button h-11 w-11" onClick={() => void copyMeterNumber(account)} disabled={!account.meter_number} aria-label={copied ? `${account.floor_label} meter number copied` : `Copy ${account.floor_label} meter number`} title={copied ? 'Copied' : 'Copy meter number'}>
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+          })}
+        </div>
+        {selectedProperty?.name.trim().toLowerCase() === 'dora tower' && <p role="note" className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-5">Verify before assigning: the source directory lists Floor 6 as 22251960989, the same number as Ground/Reception. Floor 6 is not configured as a separate meter in KodiFlow.</p>}
+      </section>}
 
       {showAccountSetup && data.ownerMode && <section className="border border-slate-200 bg-white p-4 sm:p-6" aria-labelledby="meter-setup-heading">
         <div className="mb-4 flex items-start justify-between gap-3">
