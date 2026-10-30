@@ -91,6 +91,9 @@ describe('electricity meter reading transaction', () => {
       '202610300010_electricity_main_meter_balances.sql',
       '202610300012_electricity_topup_purchase_value.sql',
       '202610300013_store_complete_luku_tokens.sql',
+      '202610300014_main_luku_balance_alerts_and_reconciliation.sql',
+      '202610300015_electricity_submeter_handoffs.sql',
+      '202610300016_electricity_corrections_and_issues.sql',
     ]) {
       const migration = readFileSync(resolve('supabase/migrations', migrationFile), 'utf8')
       for (const [index, statement] of splitSqlStatements(migration).entries()) {
@@ -199,6 +202,26 @@ describe('electricity meter reading transaction', () => {
     expect(topups.rows.find((row) => row.status === 'reported')?.applied_reading_id).toBeNull()
   })
 
+  it('preserves a paper-imported first reading and balance when a later reading triggers recalculation', async () => {
+    const imported = await db.query<{ id: string }>(
+      'SELECT id FROM public.electricity_accounts WHERE property_id = $1 AND tenant_id = $2',
+      [doraPropertyId, doraTenantId],
+    )
+    await db.query('SELECT public.record_electricity_meter_reading($1, 15427.4, $2, NULL)', [imported.rows[0].id, '2026-10-30'])
+    const readings = await db.query<Record<string, unknown>>(
+      'SELECT previous_meter_reading, previous_reading_date, usage_units, opening_balance_units, closing_balance_units FROM public.electricity_readings WHERE account_id = $1 ORDER BY reading_date',
+      [imported.rows[0].id],
+    )
+    expect(readings.rows[0]).toMatchObject({
+      previous_meter_reading: '15372.900', previous_reading_date: null,
+      usage_units: '44.500', opening_balance_units: '21.100', closing_balance_units: '-23.400',
+    })
+    expect(readings.rows[1]).toMatchObject({
+      previous_meter_reading: '15417.400', usage_units: '10.000',
+      opening_balance_units: '-23.400', closing_balance_units: '-33.400',
+    })
+  })
+
   it('leaves unverified tenant-reported top-ups out of the estimate', async () => {
     await db.query("SELECT public.record_electricity_topup($1, '2026-10-25', 100, NULL, FALSE, NULL)", [accountId])
     const result = await db.query<Record<string, unknown>>(
@@ -275,17 +298,14 @@ describe('electricity meter reading transaction', () => {
     expect(next.rows[0]).toMatchObject({ opening_balance_units: '17.000', usage_units: '15.000', closing_balance_units: '2.000' })
   })
 
-  it('records floor main usage without a tenant balance', async () => {
-    const result = await db.query<Record<string, unknown>>(
+  it('does not record TANESCO main meters as rising cumulative readings', async () => {
+    await expect(db.query<Record<string, unknown>>(
       'SELECT * FROM public.record_electricity_meter_reading($1, $2, $3, $4)',
       [mainAccountId, 930, '2026-10-26', null],
-    )
-    expect(result.rows[0]).toMatchObject({ previous_meter_reading: '900.000', previous_reading_date: new Date('2026-10-25T00:00:00.000Z'), usage_units: '30.000' })
-    expect(result.rows[0].closing_balance_units).toBeNull()
-    expect(result.rows[0].opening_balance_units).toBeNull()
+    )).rejects.toThrow(/Shared main meters use decreasing TANESCO LUKU balance snapshots/)
   })
 
-  it('records main-meter prepaid balance snapshots that may rise or fall', async () => {
+  it('records main-meter credit snapshots and the recharge added since the prior check', async () => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
     const latestDate = new Date(`${today}T00:00:00.000Z`)
     const earlierDate = new Date(latestDate)
@@ -293,16 +313,16 @@ describe('electricity meter reading transaction', () => {
     const dateAfterPurchase = latestDate.toISOString().slice(0, 10)
     const dateBeforePurchase = earlierDate.toISOString().slice(0, 10)
 
-    await db.query('SELECT public.record_electricity_main_meter_balance($1, 36.23, $2, $3)', [mainAccountId, dateBeforePurchase, 'Before purchase'])
-    await db.query('SELECT public.record_electricity_main_meter_balance($1, 410.37, $2, $3)', [mainAccountId, dateAfterPurchase, 'After purchase'])
+    await db.query('SELECT public.record_electricity_main_meter_balance($1, 36.23, $2, $3, 0)', [mainAccountId, dateBeforePurchase, 'Before purchase'])
+    await db.query('SELECT public.record_electricity_main_meter_balance($1, 410.37, $2, $3, 500)', [mainAccountId, dateAfterPurchase, 'After purchase'])
 
-    const balances = await db.query<{ reading_date: Date; units_remaining: string; notes: string }>(
-      'SELECT reading_date, units_remaining, notes FROM public.electricity_main_meter_balances WHERE account_id = $1 ORDER BY reading_date',
+    const balances = await db.query<{ reading_date: Date; units_remaining: string; units_purchased_since_previous: string; notes: string }>(
+      'SELECT reading_date, units_remaining, units_purchased_since_previous, notes FROM public.electricity_main_meter_balances WHERE account_id = $1 ORDER BY reading_date',
       [mainAccountId],
     )
     expect(balances.rows).toMatchObject([
-      { units_remaining: '36.230', notes: 'Before purchase' },
-      { units_remaining: '410.370', notes: 'After purchase' },
+      { units_remaining: '36.230', units_purchased_since_previous: '0.000', notes: 'Before purchase' },
+      { units_remaining: '410.370', units_purchased_since_previous: '500.000', notes: 'After purchase' },
     ])
 
     await db.exec('SAVEPOINT before_duplicate_main_balance;')
@@ -311,6 +331,112 @@ describe('electricity meter reading transaction', () => {
       [mainAccountId, dateAfterPurchase],
     )).rejects.toThrow(/duplicate key/)
     await db.exec('ROLLBACK TO SAVEPOINT before_duplicate_main_balance;')
+  })
+
+  it('records a verified zero balance and rejects out-of-order snapshots', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    await db.exec('SAVEPOINT before_unconfirmed_zero;')
+    await expect(db.query(
+      'SELECT public.record_electricity_main_meter_balance($1, 0, $2, $3, 0, false)',
+      [mainAccountId, today, 'Unconfirmed empty meter'],
+    )).rejects.toThrow(/Confirm that the main LUKU balance is truly zero/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_unconfirmed_zero;')
+    await db.query('SELECT public.record_electricity_main_meter_balance($1, 0, $2, $3, 0, true)', [mainAccountId, today, 'Verified empty meter'])
+    const zero = await db.query<{ units_remaining: string }>(
+      'SELECT units_remaining FROM public.electricity_main_meter_balances WHERE account_id = $1 AND reading_date = $2',
+      [mainAccountId, today],
+    )
+    expect(zero.rows[0].units_remaining).toBe('0.000')
+
+    const yesterday = new Date(`${today}T00:00:00.000Z`)
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+    await expect(db.query(
+      'SELECT public.record_electricity_main_meter_balance($1, 5, $2, NULL, 0)',
+      [mainAccountId, yesterday.toISOString().slice(0, 10)],
+    )).rejects.toThrow(/entered oldest to newest/)
+  })
+
+  it('reassigns a client submeter by archiving its old ledger and starting a new baseline atomically', async () => {
+    const newTenantId = '40000000-0000-0000-0000-000000000002'
+    await db.query('INSERT INTO public.tenants (id, user_id, full_name) VALUES ($1, $2, $3)', [newTenantId, ownerId, 'New Client'])
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    const priorDate = new Date(`${today}T00:00:00.000Z`)
+    priorDate.setUTCDate(priorDate.getUTCDate() - 1)
+    const lastReadingDate = priorDate.toISOString().slice(0, 10)
+
+    await db.query(
+      'SELECT * FROM public.record_electricity_meter_reading($1, 130, $2, NULL)',
+      [accountId, lastReadingDate],
+    )
+    const result = await db.query<Record<string, unknown>>(
+      'SELECT * FROM public.replace_electricity_submeter($1, $2, 145, $3, 12.5, $4)',
+      [accountId, newTenantId, today, 'New Client · Unit 1'],
+    )
+    const oldAccount = await db.query<Record<string, unknown>>(
+      'SELECT active, tenant_id FROM public.electricity_accounts WHERE id = $1',
+      [accountId],
+    )
+    const oldReadingCount = await db.query<{ count: number }>(
+      'SELECT count(*)::INTEGER AS count FROM public.electricity_readings WHERE account_id = $1',
+      [accountId],
+    )
+    const finalOldReading = await db.query<Record<string, unknown>>(
+      'SELECT current_meter_reading, closing_balance_units, reading_date, notes FROM public.electricity_readings WHERE account_id = $1 ORDER BY reading_date DESC LIMIT 1',
+      [accountId],
+    )
+
+    expect(result.rows[0]).toMatchObject({
+      tenant_id: newTenantId,
+      unit_id: unitId,
+      initial_meter_reading: '145.000',
+      opening_balance_units: '12.500',
+      display_name: 'New Client · Unit 1',
+      active: true,
+    })
+    expect(result.rows[0].id).not.toBe(accountId)
+    expect(oldAccount.rows[0]).toMatchObject({ active: false, tenant_id: tenantId })
+    expect(oldReadingCount.rows[0].count).toBe(2)
+    expect(finalOldReading.rows[0]).toMatchObject({
+      current_meter_reading: '145.000',
+      closing_balance_units: '-25.000',
+      reading_date: new Date(`${today}T00:00:00.000Z`),
+      notes: 'Final reading at tenant handoff',
+    })
+  })
+
+  it('leaves the old meter and ledger unchanged when a handoff is invalid', async () => {
+    const foreignTenantId = '40000000-0000-0000-0000-000000000003'
+    await db.query('INSERT INTO public.tenants (id, user_id, full_name) VALUES ($1, $2, $3)', [foreignTenantId, otherUserId, 'Other Owner Client'])
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+
+    await db.exec('SAVEPOINT before_invalid_handoff;')
+    await expect(db.query(
+      'SELECT * FROM public.replace_electricity_submeter($1, $2, 110, $3, 0, NULL)',
+      [accountId, foreignTenantId, today],
+    )).rejects.toThrow(/does not belong to this owner/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_invalid_handoff;')
+    const account = await db.query<{ active: boolean; tenant_id: string }>(
+      'SELECT active, tenant_id FROM public.electricity_accounts WHERE id = $1',
+      [accountId],
+    )
+    const readingCount = await db.query<{ count: number }>(
+      'SELECT count(*)::INTEGER AS count FROM public.electricity_readings WHERE account_id = $1',
+      [accountId],
+    )
+    expect(account.rows[0]).toEqual({ active: true, tenant_id: tenantId })
+    expect(readingCount.rows[0].count).toBe(0)
+  })
+
+  it('does not allow staff to reassign the owner submeter account', async () => {
+    const newTenantId = '40000000-0000-0000-0000-000000000002'
+    await db.query('INSERT INTO public.tenants (id, user_id, full_name) VALUES ($1, $2, $3)', [newTenantId, ownerId, 'New Client'])
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [staffAuthId])
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+
+    await expect(db.query(
+      'SELECT * FROM public.replace_electricity_submeter($1, $2, 110, $3, 0, NULL)',
+      [accountId, newTenantId, today],
+    )).rejects.toThrow(/not found or access denied/)
   })
 
   it('rejects main-meter balance snapshots from users without property access', async () => {
@@ -533,6 +659,124 @@ describe('electricity meter reading transaction', () => {
     `, [staff.rows[0].id])
     expect(latest.rows[0].last_login_at).toEqual(new Date('2026-10-30T09:00:00.000Z'))
     expect(latest.rows[0].event_count).toBe(2)
+  })
+
+  it('allows staff to correct entries, keeps corrections audited, and reserves reversal for owners', async () => {
+    const reading = await db.query<{ id: string }>(
+      'SELECT id FROM public.record_electricity_meter_reading($1, 115, $2, $3)',
+      [accountId, '2026-10-26', 'Initial entry'],
+    )
+    await db.query(`
+      INSERT INTO public.electricity_staff (owner_user_id, auth_user_id, staff_id, login_email, full_name, created_by)
+      VALUES ($1, $2, 'DT-03', 'correction-staff@test.invalid', 'Correction Staff', $1)
+    `, [ownerId, staffAuthId])
+    const staff = await db.query<{ id: string }>('SELECT id FROM public.electricity_staff WHERE auth_user_id = $1', [staffAuthId])
+    await db.query('SELECT public.set_electricity_staff_properties($1, ARRAY[$2::UUID])', [staff.rows[0].id, propertyId])
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [staffAuthId])
+
+    await db.query(
+      "SELECT public.manage_electricity_entry('reading', $1, 'edit', $2::JSONB, 'Correct a mistyped meter value')",
+      [reading.rows[0].id, JSON.stringify({ current_meter_reading: 120, notes: 'Corrected after recheck' })],
+    )
+    const corrected = await db.query<{ current_meter_reading: string; usage_units: string; closing_balance_units: string }>(
+      'SELECT current_meter_reading, usage_units, closing_balance_units FROM public.electricity_readings WHERE id = $1',
+      [reading.rows[0].id],
+    )
+    expect(corrected.rows[0]).toEqual({ current_meter_reading: '120.000', usage_units: '20.000', closing_balance_units: '0.000' })
+
+    await db.exec('SAVEPOINT before_staff_reversal;')
+    await expect(db.query(
+      "SELECT public.manage_electricity_entry('reading', $1, 'reverse', '{}'::JSONB, 'Incorrect record')",
+      [reading.rows[0].id],
+    )).rejects.toThrow(/Only the property owner/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_staff_reversal;')
+
+    const audit = await db.query<{ action: string; reason: string; acted_by: string; previous_values: Record<string, unknown>; new_values: Record<string, unknown> }>(
+      'SELECT action, reason, acted_by, previous_values, new_values FROM public.electricity_entry_audit WHERE entry_id = $1',
+      [reading.rows[0].id],
+    )
+    expect(audit.rows[0]).toMatchObject({ action: 'edited', reason: 'Correct a mistyped meter value', acted_by: staffAuthId })
+    expect(Number(audit.rows[0].previous_values.current_meter_reading)).toBe(115)
+    expect(Number(audit.rows[0].new_values.current_meter_reading)).toBe(120)
+
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [ownerId])
+    await db.query(
+      "SELECT public.manage_electricity_entry('reading', $1, 'reverse', '{}'::JSONB, 'Duplicate entry was entered')",
+      [reading.rows[0].id],
+    )
+    const reversed = await db.query<{ reversed_at: Date; reversed_by: string; reversal_reason: string }>(
+      'SELECT reversed_at, reversed_by, reversal_reason FROM public.electricity_readings WHERE id = $1',
+      [reading.rows[0].id],
+    )
+    expect(reversed.rows[0]).toMatchObject({ reversed_by: ownerId, reversal_reason: 'Duplicate entry was entered' })
+    expect(reversed.rows[0].reversed_at).toBeInstanceOf(Date)
+
+    const replacement = await db.query(
+      'SELECT * FROM public.record_electricity_meter_reading($1, 110, $2, $3)',
+      [accountId, '2026-10-26', 'Replacement after reversal'],
+    )
+    expect(replacement.rows).toHaveLength(1)
+  })
+
+  it('records confirmation identity and time without copying the full token into the audit trail', async () => {
+    const purchaseDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    const tokenCode = '12345678901234567890'
+    const topup = await db.query<{ id: string }>(
+      'SELECT id FROM public.record_electricity_topup_with_value($1, $2, 20, $3, $4, 2400, $5)',
+      [accountId, purchaseDate, '7890', tokenCode, 'Confirmation audit test'],
+    )
+    await db.query('SELECT public.verify_electricity_topup($1)', [topup.rows[0].id])
+
+    const confirmation = await db.query<{ verified_by: string; verified_at: Date; action: string; previous_values: Record<string, unknown>; new_values: Record<string, unknown>; acted_by: string }>(`
+      SELECT t.verified_by, t.verified_at, a.action, a.previous_values, a.new_values, a.acted_by
+      FROM public.electricity_topups t
+      JOIN public.electricity_entry_audit a ON a.entry_id = t.id AND a.action = 'confirmed'
+      WHERE t.id = $1
+    `, [topup.rows[0].id])
+    expect(confirmation.rows[0]).toMatchObject({ verified_by: ownerId, action: 'confirmed', acted_by: ownerId })
+    expect(confirmation.rows[0].verified_at).toBeInstanceOf(Date)
+    expect(confirmation.rows[0].previous_values).not.toHaveProperty('token_code')
+    expect(confirmation.rows[0].new_values).not.toHaveProperty('token_code')
+
+    await db.query(
+      "SELECT public.manage_electricity_entry('topup', $1, 'edit', $2::JSONB, 'Correct units from receipt')",
+      [topup.rows[0].id, JSON.stringify({ units: 21 })],
+    )
+    const correctedTopup = await db.query<{ status: string; verified_at: Date | null; verified_by: string | null }>(
+      'SELECT status, verified_at, verified_by FROM public.electricity_topups WHERE id = $1',
+      [topup.rows[0].id],
+    )
+    expect(correctedTopup.rows[0]).toEqual({ status: 'reported', verified_at: null, verified_by: null })
+  })
+
+  it('keeps issue comments and status changes in a resolution and reopen history', async () => {
+    const ticket = await db.query<{ id: string }>(`
+      INSERT INTO public.electricity_issue_tickets (
+        owner_user_id, property_id, account_id, title, description, opened_by, updated_by
+      ) VALUES ($1, $2, $3, 'Unexpected balance drop', 'Main balance changed unexpectedly', $1, $1)
+      RETURNING id
+    `, [ownerId, propertyId, mainAccountId])
+    await db.query(`
+      INSERT INTO public.electricity_issue_comments (ticket_id, owner_user_id, body, created_by)
+      VALUES ($1, $2, 'I rechecked the display and it is still low.', $2)
+    `, [ticket.rows[0].id, ownerId])
+    await db.query("UPDATE public.electricity_issue_tickets SET status = 'in_progress', updated_by = $2 WHERE id = $1", [ticket.rows[0].id, ownerId])
+    await db.query(`
+      UPDATE public.electricity_issue_tickets
+      SET status = 'resolved', resolution = 'Found and corrected a missed recharge entry.', updated_by = $2
+      WHERE id = $1
+    `, [ticket.rows[0].id, ownerId])
+    await db.query("UPDATE public.electricity_issue_tickets SET status = 'closed', updated_by = $2 WHERE id = $1", [ticket.rows[0].id, ownerId])
+    await db.query("UPDATE public.electricity_issue_tickets SET status = 'in_progress', updated_by = $2 WHERE id = $1", [ticket.rows[0].id, ownerId])
+
+    const history = await db.query<{ action: string; previous_status: string | null; new_status: string | null; performed_by: string }>(
+      'SELECT action, previous_status, new_status, performed_by FROM public.electricity_issue_events WHERE ticket_id = $1 ORDER BY performed_at, id',
+      [ticket.rows[0].id],
+    )
+    const comments = await db.query<{ body: string }>('SELECT body FROM public.electricity_issue_comments WHERE ticket_id = $1', [ticket.rows[0].id])
+    expect(history.rows.map((event) => event.action).sort()).toEqual(['opened', 'reopened', 'resolved', 'status_changed', 'status_changed'])
+    expect(history.rows.every((event) => event.performed_by === ownerId)).toBe(true)
+    expect(comments.rows[0].body).toBe('I rechecked the display and it is still low.')
   })
 
   it('does not grant authenticated clients direct writes that bypass the atomic workflow', async () => {

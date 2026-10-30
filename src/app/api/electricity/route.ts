@@ -48,13 +48,14 @@ export async function GET() {
       : { data: [], error: null }
     if (tenantResult.error) return NextResponse.json({ error: tenantResult.error.message }, { status: 500 })
 
-    const [readingResult, topupResult, cutoffResult, adjustmentResult, mainBalanceResult] = accountIds.length > 0
+    const [readingResult, topupResult, cutoffResult, adjustmentResult, mainBalanceResult, entryAuditResult] = accountIds.length > 0
       ? await Promise.all([
-          service.from('electricity_readings').select('*').in('account_id', accountIds).order('created_at', { ascending: false }).limit(2000),
-          service.from('electricity_topups').select('*').in('account_id', accountIds).order('created_at', { ascending: false }).limit(1000),
-          service.from('electricity_cutoff_events').select('*').in('account_id', accountIds).order('performed_at', { ascending: false }).limit(1000),
-          service.from('electricity_balance_adjustments').select('*').in('account_id', accountIds).order('created_at', { ascending: false }).limit(1000),
-          service.from('electricity_main_meter_balances').select('*').in('account_id', accountIds).order('reading_date', { ascending: false }).limit(1000),
+          service.from('electricity_readings').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(2000),
+          service.from('electricity_topups').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
+          service.from('electricity_cutoff_events').select('*').in('account_id', accountIds).is('reversed_at', null).order('performed_at', { ascending: false }).limit(1000),
+          service.from('electricity_balance_adjustments').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
+          service.from('electricity_main_meter_balances').select('*').in('account_id', accountIds).is('reversed_at', null).order('reading_date', { ascending: false }).limit(1000),
+          service.from('electricity_entry_audit').select('*').in('account_id', accountIds).order('acted_at', { ascending: false }).limit(1000),
         ])
       : [
           { data: [], error: null },
@@ -62,9 +63,10 @@ export async function GET() {
           { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
+          { data: [], error: null },
         ]
 
-    const secondaryErrors = [readingResult.error, topupResult.error, cutoffResult.error, adjustmentResult.error]
+    const secondaryErrors = [readingResult.error, topupResult.error, cutoffResult.error, adjustmentResult.error, entryAuditResult.error]
     const secondaryError = secondaryErrors.find(Boolean)
     if (secondaryError) return NextResponse.json({ error: secondaryError.message }, { status: 500 })
     if (mainBalanceResult.error && !['42P01', 'PGRST205'].includes(mainBalanceResult.error.code)) {
@@ -131,7 +133,7 @@ export async function GET() {
         ...account,
         property_name: propertiesById.get(account.property_id)?.name || 'Property',
         unit_name: unit?.unit_name || null,
-        tenant_name: account.ledger_tenant_label || tenant?.full_name || tenant?.business_name || 'Unassigned client',
+        tenant_name: account.display_name || account.ledger_tenant_label || tenant?.full_name || tenant?.business_name || 'Unassigned client',
         tenant_phone: tenant?.phone || null,
         section_name: section?.name || null,
         latest_reading: latestReading,
@@ -179,6 +181,10 @@ export async function GET() {
       last_activity: lastActivityByUser.get(item.auth_user_id) || null,
     }))
     const staffById = new Map(staff.map((item) => [item.id, item]))
+    const staffNamesByAuthId = new Map(staff.map((item) => [item.auth_user_id, item.full_name || item.staff_id]))
+    if (actor.staff) staffNamesByAuthId.set(actor.user.id, actor.staff.full_name || actor.staff.staff_id)
+    const actorName = (userId: string) => staffNamesByAuthId.get(userId)
+      || (userId === ownerId ? 'Owner' : userId === actor.user.id ? actor.staff?.staff_id || actor.user.email || 'You' : userId.slice(0, 8))
     const staffLoginEvents = (staffLoginResult.data || []).map((event) => ({
       ...event,
       staff_name: staffById.get(event.staff_id)?.full_name || 'Staff',
@@ -196,9 +202,14 @@ export async function GET() {
       accounts: enrichedAccounts,
       readings: readingResult.data || [],
       mainMeterBalances: mainBalanceResult.data || [],
-      topups: topupResult.data || [],
+      topups: (topupResult.data || []).map((topup) => ({
+        ...topup,
+        verified_by_name: topup.verified_by ? actorName(topup.verified_by) : null,
+        recorded_by_name: actorName(topup.recorded_by),
+      })),
       cutoffEvents: cutoffResult.data || [],
       adjustments: adjustmentResult.data || [],
+      entryAudit: (entryAuditResult.data || []).map((event) => ({ ...event, actor_name: actorName(event.acted_by) })),
       staff,
       staffLoginEvents,
     })

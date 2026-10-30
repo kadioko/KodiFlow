@@ -1,4 +1,5 @@
 import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electricity/database.types'
+import { calculateMainMeterUsage, type MainMeterBalanceSnapshot } from './main-meter-balance'
 
 type MeterAccount = Pick<
   ElectricityAccountRow,
@@ -10,19 +11,23 @@ type MeterReading = Pick<
   'account_id' | 'previous_reading_date' | 'reading_date' | 'current_meter_reading' | 'usage_units'
 >
 
+type MainMeterBalance = MainMeterBalanceSnapshot & { account_id: string }
+
 export type MainMeterReconciliation = {
   mainAccount: MeterAccount
-  mainReading: MeterReading | null
+  currentBalance: MainMeterBalance | null
+  previousBalance: MainMeterBalance | null
   submeterAccounts: MeterAccount[]
   matchedSubmeterCount: number
   unmatchedSubmeters: MeterAccount[]
   periodStart: string | null
   periodEnd: string | null
-  mainCurrentReading: number
+  mainCurrentBalance: number | null
   mainUsage: number | null
+  unexplainedBalanceIncrease: number | null
   submeterUsage: number | null
   difference: number | null
-  status: 'baseline' | 'unassigned' | 'incomplete' | 'balanced' | 'shortage' | 'excess'
+  status: 'baseline' | 'purchase_unknown' | 'balance_anomaly' | 'unassigned' | 'incomplete' | 'balanced' | 'shortage' | 'excess'
 }
 
 const floorAliases: Record<string, string> = {
@@ -57,27 +62,30 @@ export function normalizeElectricityFloor(label: string) {
   return floorAliases[normalized] || normalized
 }
 
-function latestReading(accountId: string, readings: MeterReading[]) {
-  return readings
+function latestBalances(accountId: string, balances: MainMeterBalance[]) {
+  return balances
     .filter((reading) => reading.account_id === accountId)
-    .sort((left, right) => right.reading_date.localeCompare(left.reading_date))[0] || null
+    .sort((left, right) => left.reading_date.localeCompare(right.reading_date))
 }
 
 export function reconcileMainMeters(
   accounts: MeterAccount[],
   readings: MeterReading[],
+  balances: MainMeterBalance[],
 ): MainMeterReconciliation[] {
   const activeMainMeters = accounts.filter((account) => account.meter_kind === 'floor_main')
 
   return activeMainMeters.map((mainAccount) => {
-    const mainReading = latestReading(mainAccount.id, readings)
+    const meterBalances = latestBalances(mainAccount.id, balances)
+    const currentBalance = meterBalances.at(-1) || null
+    const previousBalance = meterBalances.at(-2) || null
     const submeterAccounts = accounts.filter((account) =>
       account.meter_kind === 'submeter'
       && account.property_id === mainAccount.property_id
       && normalizeElectricityFloor(account.floor_label) === normalizeElectricityFloor(mainAccount.floor_label),
     )
-    const periodStart = mainReading?.previous_reading_date ?? null
-    const periodEnd = mainReading?.reading_date ?? null
+    const periodStart = previousBalance?.reading_date ?? null
+    const periodEnd = currentBalance?.reading_date ?? null
     const matchedReadings = periodStart && periodEnd
       ? submeterAccounts.flatMap((account) => {
           const match = readings.find((reading) =>
@@ -90,7 +98,15 @@ export function reconcileMainMeters(
       : []
     const matchedIds = new Set(matchedReadings.map(({ account }) => account.id))
     const unmatchedSubmeters = submeterAccounts.filter((account) => !matchedIds.has(account.id))
-    const mainUsage = mainReading && periodStart ? Number(mainReading.usage_units) : null
+    const calculatedUsage = currentBalance && previousBalance
+      ? calculateMainMeterUsage(previousBalance, currentBalance)
+      : null
+    const mainUsage = calculatedUsage !== null && calculatedUsage >= -0.001
+      ? Math.max(0, calculatedUsage)
+      : null
+    const unexplainedBalanceIncrease = calculatedUsage !== null && calculatedUsage < -0.001
+      ? Math.abs(calculatedUsage)
+      : null
     const submeterUsage = matchedReadings.length > 0
       ? matchedReadings.reduce((total, { reading }) => total + Number(reading.usage_units), 0)
       : submeterAccounts.length === 0 ? 0 : null
@@ -99,7 +115,9 @@ export function reconcileMainMeters(
       : null
 
     let status: MainMeterReconciliation['status']
-    if (!mainReading || !periodStart) status = 'baseline'
+    if (!currentBalance || !previousBalance) status = 'baseline'
+    else if (currentBalance.units_purchased_since_previous === null) status = 'purchase_unknown'
+    else if (unexplainedBalanceIncrease !== null) status = 'balance_anomaly'
     else if (submeterAccounts.length === 0) status = 'unassigned'
     else if (unmatchedSubmeters.length > 0) status = 'incomplete'
     else if (Math.abs(difference || 0) <= 0.001) status = 'balanced'
@@ -108,14 +126,16 @@ export function reconcileMainMeters(
 
     return {
       mainAccount,
-      mainReading,
+      currentBalance,
+      previousBalance,
       submeterAccounts,
       matchedSubmeterCount: matchedReadings.length,
       unmatchedSubmeters,
       periodStart,
       periodEnd,
-      mainCurrentReading: Number(mainReading?.current_meter_reading ?? mainAccount.initial_meter_reading),
+      mainCurrentBalance: currentBalance ? Number(currentBalance.units_remaining) : null,
       mainUsage,
+      unexplainedBalanceIncrease,
       submeterUsage,
       difference,
       status,

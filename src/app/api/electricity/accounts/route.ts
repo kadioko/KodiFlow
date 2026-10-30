@@ -12,12 +12,15 @@ export async function POST(request: NextRequest) {
     const meterKind = body.meterKind === 'floor_main' ? 'floor_main' : 'submeter'
     const floorLabel = typeof body.floorLabel === 'string' ? body.floorLabel.trim() : ''
     const meterNumber = typeof body.meterNumber === 'string' ? body.meterNumber.trim() : ''
-    const initialReadingDate = typeof body.initialReadingDate === 'string' ? body.initialReadingDate : ''
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+    const initialReadingDate = meterKind === 'floor_main'
+      ? today
+      : typeof body.initialReadingDate === 'string' ? body.initialReadingDate : ''
     const hasInitialMeterReading = typeof body.initialMeterReading === 'number'
       || (typeof body.initialMeterReading === 'string' && body.initialMeterReading.trim() !== '')
-    const initialMeterReading = hasInitialMeterReading ? Number(body.initialMeterReading) : Number.NaN
+    const initialMeterReading = meterKind === 'floor_main' ? 0 : hasInitialMeterReading ? Number(body.initialMeterReading) : Number.NaN
     const openingBalanceUnits = Number(body.openingBalanceUnits ?? 0)
-    const lowUnitsThreshold = Number(body.lowUnitsThreshold ?? 10)
+    const lowUnitsThreshold = Number(body.lowUnitsThreshold ?? (meterKind === 'floor_main' ? 50 : 10))
     const unitId = typeof body.unitId === 'string' ? body.unitId : ''
     const tenantId = typeof body.tenantId === 'string' ? body.tenantId : ''
 
@@ -31,7 +34,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Enter a valid initial meter reading.' }, { status: 400 })
     }
     const parsedInitialDate = new Date(`${initialReadingDate}T00:00:00.000Z`)
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
     if (!/^\d{4}-\d{2}-\d{2}$/.test(initialReadingDate)
       || Number.isNaN(parsedInitialDate.getTime())
       || parsedInitialDate.toISOString().slice(0, 10) !== initialReadingDate
@@ -44,7 +46,8 @@ export async function POST(request: NextRequest) {
     if (meterKind === 'floor_main' && (unitId || tenantId)) {
       return NextResponse.json({ error: 'A floor main meter cannot be assigned to a client unit.' }, { status: 400 })
     }
-    if (!Number.isFinite(openingBalanceUnits) || !Number.isFinite(lowUnitsThreshold) || lowUnitsThreshold < 0) {
+    if (!Number.isFinite(openingBalanceUnits) || !Number.isFinite(lowUnitsThreshold) || lowUnitsThreshold < 0
+      || (meterKind === 'floor_main' && lowUnitsThreshold === 0)) {
       return NextResponse.json({ error: 'Opening units and low-unit threshold must be valid numbers.' }, { status: 400 })
     }
 
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
         initial_meter_reading: initialMeterReading,
         initial_reading_date: initialReadingDate,
         opening_balance_units: meterKind === 'submeter' ? openingBalanceUnits : 0,
-        low_units_threshold: meterKind === 'submeter' ? lowUnitsThreshold : 0,
+        low_units_threshold: lowUnitsThreshold,
         created_by: actor.user.id,
       })
       .select('*')
@@ -98,7 +101,30 @@ export async function PATCH(request: NextRequest) {
     const id = typeof body.id === 'string' ? body.id : ''
     if (!id) return NextResponse.json({ error: 'Meter is required.' }, { status: 400 })
 
-    const update: { active?: boolean; low_units_threshold?: number } = {}
+    if (body.replaceTenantId !== undefined) {
+      const tenantId = typeof body.replaceTenantId === 'string' ? body.replaceTenantId : ''
+      const currentMeterReading = Number(body.currentMeterReading)
+      const openingBalanceUnits = Number(body.openingBalanceUnits)
+      const readingDate = typeof body.readingDate === 'string' ? body.readingDate : ''
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : ''
+      if (!tenantId || !/^\d{4}-\d{2}-\d{2}$/.test(readingDate)
+        || !Number.isFinite(currentMeterReading) || !Number.isFinite(openingBalanceUnits)
+        || displayName.length > 100) {
+        return NextResponse.json({ error: 'Enter a new tenant, valid handoff reading/date, opening balance, and display name.' }, { status: 400 })
+      }
+      const { data, error } = await actor.client.rpc('replace_electricity_submeter', {
+        p_account_id: id,
+        p_tenant_id: tenantId,
+        p_current_meter_reading: currentMeterReading,
+        p_reading_date: readingDate,
+        p_opening_balance_units: openingBalanceUnits,
+        p_display_name: displayName || null,
+      })
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ account: data })
+    }
+
+    const update: { active?: boolean; low_units_threshold?: number; display_name?: string; updated_at?: string } = {}
     if (typeof body.active === 'boolean') update.active = body.active
     if (body.lowUnitsThreshold !== undefined) {
       const threshold = Number(body.lowUnitsThreshold)
@@ -107,14 +133,32 @@ export async function PATCH(request: NextRequest) {
       }
       update.low_units_threshold = threshold
     }
+    if (body.displayName !== undefined) {
+      if (typeof body.displayName !== 'string') return NextResponse.json({ error: 'Enter a valid submeter name.' }, { status: 400 })
+      const displayName = body.displayName.trim()
+      if (!displayName || displayName.length > 100) {
+        return NextResponse.json({ error: 'Submeter name must be between 1 and 100 characters.' }, { status: 400 })
+      }
+      const { data: account, error: accountError } = await actor.service
+        .from('electricity_accounts')
+        .select('meter_kind')
+        .eq('id', id)
+        .eq('owner_user_id', actor.ownerUserId)
+        .maybeSingle()
+      if (accountError) return NextResponse.json({ error: accountError.message }, { status: 400 })
+      if (!account) return NextResponse.json({ error: 'Meter not found.' }, { status: 404 })
+      if (account.meter_kind !== 'submeter') return NextResponse.json({ error: 'Only client submeters can have a tenant display name.' }, { status: 400 })
+      update.display_name = displayName
+    }
     if (Object.keys(update).length === 0) return NextResponse.json({ error: 'No meter changes were provided.' }, { status: 400 })
+    update.updated_at = new Date().toISOString()
 
     const { data, error } = await actor.service
       .from('electricity_accounts')
       .update(update)
       .eq('id', id)
       .eq('owner_user_id', actor.ownerUserId)
-      .select('id, active, low_units_threshold')
+      .select('id, active, low_units_threshold, display_name')
       .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     if (!data) return NextResponse.json({ error: 'Meter not found.' }, { status: 404 })

@@ -25,11 +25,21 @@ function reading(accountId: string, start: string | null, end: string, current: 
   } as ElectricityReadingRow
 }
 
+function balance(accountId: string, date: string, remaining: number, added = 0) {
+  return {
+    account_id: accountId,
+    reading_date: date,
+    units_remaining: remaining,
+    units_purchased_since_previous: added,
+  }
+}
+
 describe('main meter reconciliation', () => {
-  it('reports exact unaccounted units only when all submeters cover the same period', () => {
+  it('compares main LUKU depletion plus added units with exact-period submeter usage', () => {
     const result = reconcileMainMeters(
       [main, firstSubmeter, secondSubmeter],
-      [reading('main-1', '2026-10-01', '2026-10-29', 1090, 90), reading('sub-1', '2026-10-01', '2026-10-29', 240, 40), reading('sub-2', '2026-10-01', '2026-10-29', 280, 20)],
+      [reading('sub-1', '2026-10-01', '2026-10-29', 240, 40), reading('sub-2', '2026-10-01', '2026-10-29', 280, 20)],
+      [balance('main-1', '2026-10-01', 100), balance('main-1', '2026-10-29', 20, 10)],
     )[0]
 
     expect(result).toMatchObject({ status: 'shortage', mainUsage: 90, submeterUsage: 60, difference: 30, matchedSubmeterCount: 2 })
@@ -38,7 +48,8 @@ describe('main meter reconciliation', () => {
   it('does not call the shortfall final when a submeter has a different period', () => {
     const result = reconcileMainMeters(
       [main, firstSubmeter, secondSubmeter],
-      [reading('main-1', '2026-10-01', '2026-10-29', 1090, 90), reading('sub-1', '2026-10-01', '2026-10-29', 240, 40), reading('sub-2', '2026-10-02', '2026-10-29', 280, 20)],
+      [reading('sub-1', '2026-10-01', '2026-10-29', 240, 40), reading('sub-2', '2026-10-02', '2026-10-29', 280, 20)],
+      [balance('main-1', '2026-10-01', 100), balance('main-1', '2026-10-29', 10)],
     )[0]
 
     expect(result.status).toBe('incomplete')
@@ -49,14 +60,35 @@ describe('main meter reconciliation', () => {
   it('identifies when tenant submeters exceed main-meter usage', () => {
     const result = reconcileMainMeters(
       [main, firstSubmeter],
-      [reading('main-1', '2026-10-01', '2026-10-29', 1020, 20), reading('sub-1', '2026-10-01', '2026-10-29', 240, 40)],
+      [reading('sub-1', '2026-10-01', '2026-10-29', 240, 40)],
+      [balance('main-1', '2026-10-01', 100), balance('main-1', '2026-10-29', 80)],
     )[0]
 
     expect(result).toMatchObject({ status: 'excess', difference: -20 })
   })
 
-  it('shows a dated baseline without inventing usage when the main has no reading history', () => {
-    const result = reconcileMainMeters([main, firstSubmeter], [])[0]
-    expect(result).toMatchObject({ status: 'baseline', mainCurrentReading: 1000, mainUsage: null, difference: null })
+  it('shows a baseline without inventing use before a second balance snapshot', () => {
+    const result = reconcileMainMeters([main, firstSubmeter], [], [balance('main-1', '2026-10-01', 100)])[0]
+    expect(result).toMatchObject({ status: 'baseline', mainCurrentBalance: 100, mainUsage: null, difference: null })
+  })
+
+  it('does not infer usage from imported snapshots that have no known recharge amount', () => {
+    const result = reconcileMainMeters(
+      [main, firstSubmeter],
+      [reading('sub-1', '2026-10-01', '2026-10-29', 240, 40)],
+      [balance('main-1', '2026-10-01', 100), { ...balance('main-1', '2026-10-29', 80), units_purchased_since_previous: null }],
+    )[0]
+
+    expect(result).toMatchObject({ status: 'purchase_unknown', mainUsage: null, difference: null })
+  })
+
+  it('flags a balance increase that is larger than the entered recharge', () => {
+    const result = reconcileMainMeters(
+      [main, firstSubmeter],
+      [],
+      [balance('main-1', '2026-10-01', 20), balance('main-1', '2026-10-02', 45, 0)],
+    )[0]
+
+    expect(result).toMatchObject({ status: 'balance_anomaly', mainUsage: null, unexplainedBalanceIncrease: 25 })
   })
 })

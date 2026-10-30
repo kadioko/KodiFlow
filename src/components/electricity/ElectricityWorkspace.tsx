@@ -1,13 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bolt, Building2, Check, CircleAlert, Clock3, Copy, Download, Gauge, KeyRound, MessageCircle, Minus, Plus, Printer, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
+import { Archive, Bolt, Building2, Check, CircleAlert, Clock3, Copy, Download, Gauge, KeyRound, MessageCircle, Minus, Pencil, Plus, Printer, RefreshCw, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { calculateElectricityBalance, classifyElectricityBalance, type ElectricityBalanceStatus } from '@/lib/electricity/balance'
 import { getElectricityReadingContext } from '@/lib/electricity/reading-context'
 import { digitsOnlyLukuToken, formatLukuToken } from '@/lib/electricity/luku-token'
+import { calculateMainMeterUsage, classifyMainMeterBalance, estimateMainMeterDaysRemaining } from '@/lib/electricity/main-meter-balance'
 import { reconcileMainMeters } from '@/lib/electricity/reconciliation'
 import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electricity/database.types'
 import type { Database } from '@/lib/supabase/database.types'
+import { ElectricityEntryCorrections, type CorrectableEntry, type ElectricityEntryType, type EditorField } from '@/components/electricity/ElectricityEntryCorrections'
+import { ElectricityHistoryPanel } from '@/components/electricity/ElectricityHistoryPanel'
+import { ElectricityIssuesPanel } from '@/components/electricity/ElectricityIssuesPanel'
 import { formatCurrency, formatDate } from '@/utils/currency'
 import { normalizeWhatsAppPhone } from '@/utils/phone'
 import { useLanguage } from '@/components/i18n/LanguageProvider'
@@ -17,9 +21,13 @@ type PropertyOption = { id: string; name: string }
 type SectionOption = { id: string; name: string; property_id: string; section_type: string }
 type UnitOption = { id: string; unit_name: string; property_id: string; section_id: string | null; unit_identifier: string | null }
 type TenantOption = { id: string; full_name: string | null; business_name: string | null; phone: string; user_id: string }
-type TopupRow = Database['public']['Tables']['electricity_topups']['Row']
+type TopupRow = Database['public']['Tables']['electricity_topups']['Row'] & {
+  verified_by_name?: string | null
+  recorded_by_name?: string
+}
 type MainMeterBalanceRow = Database['public']['Tables']['electricity_main_meter_balances']['Row']
 type CutoffEvent = Database['public']['Tables']['electricity_cutoff_events']['Row']
+type EntryAuditRow = Database['public']['Tables']['electricity_entry_audit']['Row'] & { actor_name: string }
 type StaffActivity = {
   occurred_at: string
   action: 'reading' | 'topup' | 'topup_verified' | 'adjustment' | 'disconnected' | 'restored'
@@ -62,6 +70,7 @@ type WorkspaceData = {
   topups: TopupRow[]
   cutoffEvents: CutoffEvent[]
   adjustments: Database['public']['Tables']['electricity_balance_adjustments']['Row'][]
+  entryAudit: EntryAuditRow[]
   staff: StaffRow[]
   staffLoginEvents: StaffLoginEvent[]
 }
@@ -84,6 +93,11 @@ const daysAgoISO = (days: number) => {
   const date = new Date(`${todayISO()}T00:00:00.000Z`)
   date.setUTCDate(date.getUTCDate() - days)
   return date.toISOString().slice(0, 10)
+}
+const dayAfterISO = (date: string) => {
+  const next = new Date(`${date}T00:00:00.000Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return next.toISOString().slice(0, 10)
 }
 const numeric = (value: number | string) => Number(value || 0).toLocaleString('en-TZ', { maximumFractionDigits: 3 })
 const formatTimestamp = (value: string) => new Intl.DateTimeFormat('en-GB', {
@@ -126,7 +140,10 @@ export function ElectricityWorkspace() {
   const [mainBalanceAccountId, setMainBalanceAccountId] = useState('')
   const [mainBalanceDate, setMainBalanceDate] = useState(todayISO())
   const [mainBalanceUnits, setMainBalanceUnits] = useState('')
+  const [mainBalancePurchasedUnits, setMainBalancePurchasedUnits] = useState('0')
+  const [mainBalanceThreshold, setMainBalanceThreshold] = useState('50')
   const [mainBalanceNotes, setMainBalanceNotes] = useState('')
+  const [confirmZeroMainBalance, setConfirmZeroMainBalance] = useState(false)
   const [quickReadingDate, setQuickReadingDate] = useState(todayISO())
   const [quickReadingNotes, setQuickReadingNotes] = useState('')
   const [quickReadingValues, setQuickReadingValues] = useState<Record<string, string>>({})
@@ -154,7 +171,7 @@ export function ElectricityWorkspace() {
   const [resetPin, setResetPin] = useState('')
   const [editingStaffId, setEditingStaffId] = useState('')
   const [assignmentPropertyIds, setAssignmentPropertyIds] = useState<string[]>([])
-  const [activeView, setActiveView] = useState<'overview' | 'readings' | 'topups' | 'meters' | 'reports' | 'staff'>('overview')
+  const [activeView, setActiveView] = useState<'overview' | 'readings' | 'topups' | 'meters' | 'reports' | 'staff' | 'help' | 'entries' | 'issues' | 'history'>('overview')
   const [reportStartDate, setReportStartDate] = useState(daysAgoISO(6))
   const [reportEndDate, setReportEndDate] = useState(todayISO())
   const [weeklyTarget, setWeeklyTarget] = useState<2 | 3>(2)
@@ -163,6 +180,12 @@ export function ElectricityWorkspace() {
   const [adjustmentDirection, setAdjustmentDirection] = useState<'add' | 'remove'>('add')
   const [adjustmentDate, setAdjustmentDate] = useState(todayISO())
   const [adjustmentReason, setAdjustmentReason] = useState('')
+  const [editingSubmeterId, setEditingSubmeterId] = useState('')
+  const [editingSubmeterTenantId, setEditingSubmeterTenantId] = useState('')
+  const [editingSubmeterName, setEditingSubmeterName] = useState('')
+  const [handoffReading, setHandoffReading] = useState('')
+  const [handoffDate, setHandoffDate] = useState(todayISO())
+  const [handoffBalance, setHandoffBalance] = useState('')
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -174,7 +197,6 @@ export function ElectricityWorkspace() {
       setData(workspace)
       setPropertyId((current) => current || workspace.properties[0]?.id || '')
       setAccountForm((current) => ({ ...current, propertyId: current.propertyId || workspace.properties[0]?.id || '' }))
-      setActionState(null)
     } catch (error) {
       setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.checkMigrationAccess') })
     } finally {
@@ -191,28 +213,146 @@ export function ElectricityWorkspace() {
   const units = useMemo(() => (data?.units || []).filter((unit) => unit.property_id === propertyId), [data?.units, propertyId])
   const accounts = useMemo(() => (data?.accounts || []).filter((account) => account.property_id === propertyId), [data?.accounts, propertyId])
   const activeAccounts = accounts.filter((account) => account.active)
+  const archivedSubmeters = accounts.filter((account) => account.meter_kind === 'submeter' && !account.active)
   const submeters = activeAccounts.filter((account) => account.meter_kind === 'submeter')
   const mainMeters = activeAccounts.filter((account) => account.meter_kind === 'floor_main')
   const mainMeterBalances = (data?.mainMeterBalances || [])
     .filter((balance) => mainMeters.some((account) => account.id === balance.account_id))
     .sort((left, right) => right.reading_date.localeCompare(left.reading_date) || right.created_at.localeCompare(left.created_at))
   const latestMainBalanceByAccount = new Map<string, MainMeterBalanceRow>()
+  const previousMainBalanceById = new Map<string, MainMeterBalanceRow>()
   for (const balance of mainMeterBalances) {
     if (!latestMainBalanceByAccount.has(balance.account_id)) latestMainBalanceByAccount.set(balance.account_id, balance)
   }
-  const reconciliations = reconcileMainMeters(activeAccounts, data?.readings || [])
+  const orderedBalancesByAccount = new Map<string, MainMeterBalanceRow[]>()
+  for (const balance of mainMeterBalances) {
+    const history = orderedBalancesByAccount.get(balance.account_id) || []
+    history.push(balance)
+    orderedBalancesByAccount.set(balance.account_id, history)
+  }
+  for (const [accountId, history] of orderedBalancesByAccount) {
+    history.sort((left, right) => left.reading_date.localeCompare(right.reading_date))
+    if (history.length > 0) latestMainBalanceByAccount.set(accountId, history[history.length - 1])
+    for (let index = 1; index < history.length; index += 1) previousMainBalanceById.set(history[index].id, history[index - 1])
+  }
+  const reconciliations = reconcileMainMeters(activeAccounts, data?.readings || [], mainMeterBalances)
   const accountById = new Map(accounts.map((account) => [account.id, account]))
   const propertyTopups = (data?.topups || [])
     .filter((topup) => accountById.has(topup.account_id))
     .sort((left, right) => right.purchase_date.localeCompare(left.purchase_date) || right.created_at.localeCompare(left.created_at))
-  const attention = submeters.map((account) => ({
-    account,
-    status: classifyElectricityBalance({
+  const recordedByName = (userId: string) => data?.staff.find((staff) => staff.auth_user_id === userId)?.full_name
+    || data?.staff.find((staff) => staff.auth_user_id === userId)?.staff_id
+    || (userId === data?.currentUserId ? data.currentStaffId || t('electricity.propertyOwner') : userId.slice(0, 8))
+  const entryLabel = (accountId: string) => {
+    const account = accountById.get(accountId)
+    return account ? `${accountTitle(account)} · ${account.unit_name || account.floor_label}` : t('electricity.meters')
+  }
+  const correctionEntries: CorrectableEntry[] = [
+    ...(data?.readings || []).map((reading) => ({
+      id: reading.id,
+      entryType: 'reading' as ElectricityEntryType,
+      accountId: reading.account_id,
+      accountLabel: entryLabel(reading.account_id),
+      occurredAt: reading.created_at,
+      recordedBy: recordedByName(reading.recorded_by),
+      summary: `${t('electricity.currentMeterReading')}: ${numeric(reading.current_meter_reading)} kWh · ${t('electricity.unitsConsumed')}: ${numeric(reading.usage_units)} kWh`,
+      fields: [
+        { name: 'reading_date', label: 'electricity.readingDate', type: 'date' as const, value: reading.reading_date },
+        { name: 'current_meter_reading', label: 'electricity.currentReading', type: 'number' as const, min: '0', step: '0.001', value: reading.current_meter_reading },
+        { name: 'notes', label: 'electricity.noteOptional', type: 'textarea' as const, value: reading.notes },
+      ] as EditorField[],
+    })),
+    ...propertyTopups.map((topup) => ({
+      id: topup.id,
+      entryType: 'topup' as ElectricityEntryType,
+      accountId: topup.account_id,
+      accountLabel: entryLabel(topup.account_id),
+      occurredAt: topup.created_at,
+      recordedBy: topup.recorded_by_name || recordedByName(topup.recorded_by),
+      summary: `${numeric(topup.units)} kWh · ${formatCurrency(Number(topup.purchase_amount_tzs || 0), 'TZS')} · ${t(topup.status === 'verified' ? 'electricity.verified' : 'electricity.reported')}`,
+      fields: [
+        { name: 'purchase_date', label: 'electricity.purchaseDate', type: 'date' as const, value: topup.purchase_date },
+        { name: 'units', label: 'electricity.unitsLoaded', type: 'number' as const, min: '0.001', step: '0.001', value: topup.units },
+        { name: 'purchase_amount_tzs', label: 'electricity.purchaseValueTzs', type: 'number' as const, min: '0.01', step: '0.01', value: topup.purchase_amount_tzs },
+        { name: 'token_code', label: 'electricity.tokenCode', type: 'text' as const, value: topup.token_code, required: false },
+        { name: 'notes', label: 'electricity.noteOptional', type: 'textarea' as const, value: topup.notes },
+      ] as EditorField[],
+    })),
+    ...(data?.mainMeterBalances || []).filter((balance) => accountById.has(balance.account_id)).map((balance) => ({
+      id: balance.id,
+      entryType: 'main_balance' as ElectricityEntryType,
+      accountId: balance.account_id,
+      accountLabel: entryLabel(balance.account_id),
+      occurredAt: balance.created_at,
+      recordedBy: recordedByName(balance.recorded_by),
+      summary: `${numeric(balance.units_remaining)} kWh remaining · ${formatDate(balance.reading_date)}`,
+      fields: [
+        { name: 'reading_date', label: 'electricity.readingDate', type: 'date' as const, value: balance.reading_date },
+        { name: 'units_remaining', label: 'electricity.unitsRemainingOnMain', type: 'number' as const, min: '0', step: '0.001', value: balance.units_remaining },
+        { name: 'units_purchased_since_previous', label: 'electricity.unitsAddedSincePrevious', type: 'number' as const, min: '0', step: '0.001', value: balance.units_purchased_since_previous, required: false },
+        { name: 'notes', label: 'electricity.noteOptional', type: 'textarea' as const, value: balance.notes },
+      ] as EditorField[],
+    })),
+    ...(data?.adjustments || []).filter((adjustment) => accountById.has(adjustment.account_id)).map((adjustment) => ({
+      id: adjustment.id,
+      entryType: 'adjustment' as ElectricityEntryType,
+      accountId: adjustment.account_id,
+      accountLabel: entryLabel(adjustment.account_id),
+      occurredAt: adjustment.created_at,
+      recordedBy: recordedByName(adjustment.recorded_by),
+      summary: `${numeric(adjustment.adjustment_units)} kWh · ${adjustment.reason}`,
+      fields: [
+        { name: 'adjustment_date', label: 'electricity.adjustmentDate', type: 'date' as const, value: adjustment.adjustment_date },
+        { name: 'adjustment_units', label: 'electricity.adjustmentUnitsOnly', type: 'number' as const, step: '0.001', value: adjustment.adjustment_units },
+        { name: 'entry_reason', label: 'electricity.adjustmentReason', type: 'textarea' as const, value: adjustment.reason },
+      ] as EditorField[],
+    })),
+    ...(data?.cutoffEvents || []).filter((event) => accountById.has(event.account_id)).map((event) => ({
+      id: event.id,
+      entryType: 'cutoff' as ElectricityEntryType,
+      accountId: event.account_id,
+      accountLabel: entryLabel(event.account_id),
+      occurredAt: event.performed_at,
+      recordedBy: recordedByName(event.performed_by),
+      summary: `${t(event.action === 'disconnected' ? 'electricity.disconnected' : 'electricity.powerRestoration')} · ${event.reason}`,
+      fields: [
+        { name: 'action', label: 'electricity.manualAction', type: 'select' as const, value: event.action, options: [
+          { value: 'disconnected', label: 'electricity.disconnected' as const },
+          { value: 'restored', label: 'electricity.powerRestoration' as const },
+        ] },
+        { name: 'meter_reading', label: 'electricity.readingOptional', type: 'number' as const, min: '0', step: '0.001', value: event.meter_reading, required: false },
+        { name: 'entry_reason', label: 'electricity.onSiteReason', type: 'textarea' as const, value: event.reason },
+      ] as EditorField[],
+    })),
+  ]
+  const attention = [
+    ...submeters.map((account) => ({
+      account,
+      isMain: false,
       balanceUnits: account.estimated_balance_units,
-      lowThresholdUnits: Number(account.low_units_threshold),
       readingDate: account.latest_reading?.reading_date || null,
+      status: classifyElectricityBalance({
+        balanceUnits: account.estimated_balance_units,
+        lowThresholdUnits: Number(account.low_units_threshold),
+        readingDate: account.latest_reading?.reading_date || null,
+      }),
+    })),
+    ...mainMeters.map((account) => {
+      const balance = latestMainBalanceByAccount.get(account.id) || null
+      return {
+        account,
+        isMain: true,
+        balanceUnits: balance ? Number(balance.units_remaining) : null,
+        readingDate: balance?.reading_date || null,
+        status: classifyMainMeterBalance({
+          balanceUnits: balance ? Number(balance.units_remaining) : null,
+          lowThresholdUnits: Number(account.low_units_threshold),
+          readingDate: balance?.reading_date || null,
+          today: todayISO(),
+        }),
+      }
     }),
-  })).filter(({ status }) => status !== 'okay').sort((left, right) => {
+  ].filter(({ status }) => status !== 'okay').sort((left, right) => {
     const rank: Record<ElectricityBalanceStatus, number> = { exhausted: 0, low: 1, soon: 2, reading_due: 3, okay: 4 }
     return rank[left.status] - rank[right.status]
   })
@@ -227,10 +367,22 @@ export function ElectricityWorkspace() {
     && Number(topupPurchaseAmountTzs) > 0
     && Number(topupPurchaseAmountTzs) <= 1_000_000_000
   const topupReady = topupAmountMatches && topupTokenMatches && topupValueValid
+  const selectedMainBalanceAccount = mainMeters.find((account) => account.id === mainBalanceAccountId) || null
+  const selectedMainPreviousBalance = selectedMainBalanceAccount
+    ? latestMainBalanceByAccount.get(selectedMainBalanceAccount.id) || null
+    : null
+  const parsedMainBalance = mainBalanceUnits.trim() ? Number(mainBalanceUnits) : Number.NaN
+  const parsedMainPurchasedUnits = mainBalancePurchasedUnits.trim() ? Number(mainBalancePurchasedUnits) : Number.NaN
+  const mainBalanceUsagePreview = selectedMainPreviousBalance
+    && Number.isFinite(parsedMainBalance)
+    && Number.isFinite(parsedMainPurchasedUnits)
+    ? Number(selectedMainPreviousBalance.units_remaining) + parsedMainPurchasedUnits - parsedMainBalance
+    : null
+  const mainBalanceZeroNeedsConfirmation = Number.isFinite(parsedMainBalance) && parsedMainBalance <= 0
 
   const reportRows = useMemo(() => {
     if (!data) return []
-    const accountMap = new Map(data.accounts.filter((account) => account.property_id === propertyId).map((account) => [account.id, account]))
+    const accountMap = new Map(data.accounts.filter((account) => account.property_id === propertyId && account.meter_kind === 'submeter').map((account) => [account.id, account]))
     return data.readings
       .filter((reading) => reading.reading_date >= reportStartDate && reading.reading_date <= reportEndDate && accountMap.has(reading.account_id))
       .map((reading) => {
@@ -288,7 +440,7 @@ export function ElectricityWorkspace() {
   }, [data, propertyId])
   const readingSessions = useMemo(() => {
     if (!data) return []
-    const accountIds = new Set(data.accounts.filter((account) => account.property_id === propertyId).map((account) => account.id))
+    const accountIds = new Set(data.accounts.filter((account) => account.property_id === propertyId && account.meter_kind === 'submeter').map((account) => account.id))
     const sessions = new Map<string, ElectricityReadingRow[]>()
     for (const reading of data.readings) {
       if (!accountIds.has(reading.account_id)) continue
@@ -369,8 +521,12 @@ export function ElectricityWorkspace() {
     { key: 'overview' as const, label: t('electricity.areaOverview') },
     { key: 'readings' as const, label: t('electricity.areaReadings') },
     { key: 'topups' as const, label: t('electricity.areaTopups') },
+    { key: 'history' as const, label: t('electricity.areaHistory') },
     { key: 'meters' as const, label: t('electricity.areaMeters') },
     { key: 'reports' as const, label: t('electricity.areaReports') },
+    { key: 'entries' as const, label: t('electricity.areaEntries') },
+    { key: 'issues' as const, label: t('electricity.areaIssues') },
+    ...(data && !data.ownerMode ? [{ key: 'help' as const, label: t('electricity.areaHelpTab') }] : []),
     ...(data?.ownerMode ? [{ key: 'staff' as const, label: t('electricity.areaStaff') }] : []),
   ]
 
@@ -430,7 +586,11 @@ export function ElectricityWorkspace() {
   const submitMainBalance = async (event: React.FormEvent) => {
     event.preventDefault()
     const unitsRemaining = Number(mainBalanceUnits)
-    if (saving || !mainMeters.some((account) => account.id === mainBalanceAccountId) || !Number.isFinite(unitsRemaining) || unitsRemaining < 0) return
+    const unitsPurchased = Number(mainBalancePurchasedUnits)
+    if (saving || !mainMeters.some((account) => account.id === mainBalanceAccountId)
+      || !Number.isFinite(unitsRemaining) || unitsRemaining < 0
+      || !Number.isFinite(unitsPurchased) || unitsPurchased < 0
+      || (unitsRemaining === 0 && !confirmZeroMainBalance)) return
     setSaving(true)
     setActionState(null)
     try {
@@ -438,10 +598,14 @@ export function ElectricityWorkspace() {
         accountId: mainBalanceAccountId,
         readingDate: mainBalanceDate,
         unitsRemaining,
+        unitsPurchasedSincePrevious: unitsPurchased,
+        zeroConfirmed: confirmZeroMainBalance,
         notes: mainBalanceNotes.trim() || null,
       })
       setMainBalanceUnits('')
+      setMainBalancePurchasedUnits('0')
       setMainBalanceNotes('')
+      setConfirmZeroMainBalance(false)
       setActionState({ type: 'success', message: t('electricity.mainBalanceSaved') })
       await fetchData(false)
     } catch (error) {
@@ -451,7 +615,109 @@ export function ElectricityWorkspace() {
     }
   }
 
+  const submitMainBalanceThreshold = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const threshold = Number(mainBalanceThreshold)
+    if (saving || !data?.ownerMode || !selectedMainBalanceAccount || !Number.isFinite(threshold) || threshold <= 0 || threshold > 100_000) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      await postJson('/api/electricity/accounts', {
+        id: selectedMainBalanceAccount.id,
+        lowUnitsThreshold: threshold,
+      }, 'PATCH')
+      setActionState({ type: 'success', message: t('electricity.mainThresholdSaved') })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.mainThresholdSaveFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const beginSubmeterEdit = (account: AccountView) => {
+    const lastReading = account.latest_reading
+    setEditingSubmeterId(account.id)
+    setEditingSubmeterTenantId(account.tenant_id || '')
+    setEditingSubmeterName(account.display_name || account.tenant_name)
+    setHandoffReading(String(lastReading?.current_meter_reading ?? account.initial_meter_reading))
+    setHandoffDate(lastReading?.reading_date || todayISO())
+    setHandoffBalance('0')
+  }
+
+  const saveSubmeterEdit = async (event: React.FormEvent, account: AccountView) => {
+    event.preventDefault()
+    const displayName = editingSubmeterName.trim()
+    if (saving || !data?.ownerMode || !editingSubmeterTenantId || !displayName || displayName.length > 100) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      const tenantChanged = editingSubmeterTenantId !== account.tenant_id
+      if (tenantChanged) {
+        const meterReading = Number(handoffReading)
+        const latestReading = account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+        const latestReadingDate = account.latest_reading?.reading_date || account.initial_reading_date
+        const openingBalance = Number(handoffBalance)
+        if (!Number.isFinite(meterReading) || meterReading < latestReading || !Number.isFinite(openingBalance)
+          || Math.abs(openingBalance) > 1_000_000 || handoffDate < latestReadingDate || handoffDate > todayISO()) {
+          throw new Error(t('electricity.handoffInvalid'))
+        }
+        await postJson('/api/electricity/accounts', {
+          id: account.id,
+          replaceTenantId: editingSubmeterTenantId,
+          currentMeterReading: meterReading,
+          readingDate: handoffDate,
+          openingBalanceUnits: openingBalance,
+          displayName,
+        }, 'PATCH')
+      } else {
+        await postJson('/api/electricity/accounts', { id: account.id, displayName }, 'PATCH')
+      }
+      setEditingSubmeterId('')
+      setActionState({
+        type: 'success',
+        message: t(tenantChanged ? 'electricity.submeterHandoffSaved' : 'electricity.submeterNameSaved'),
+      })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.requestFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const archiveSubmeter = async (account: AccountView) => {
+    if (!data?.ownerMode || saving || !window.confirm(t('electricity.archiveSubmeterConfirm', { name: accountTitle(account) }))) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      await postJson('/api/electricity/accounts', { id: account.id, active: false }, 'PATCH')
+      setActionState({ type: 'success', message: t('electricity.submeterArchived') })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.requestFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const reactivateSubmeter = async (account: AccountView) => {
+    if (!data?.ownerMode || saving) return
+    setSaving(true)
+    setActionState(null)
+    try {
+      await postJson('/api/electricity/accounts', { id: account.id, active: true }, 'PATCH')
+      setActionState({ type: 'success', message: t('electricity.submeterReactivated') })
+      await fetchData(false)
+    } catch (error) {
+      setActionState({ type: 'error', message: error instanceof Error ? error.message : t('electricity.requestFailed') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const submitQuickReading = async (account: AccountView) => {
+    if (account.meter_kind !== 'submeter') return
     const currentReading = Number(quickReadingValues[account.id])
     const context = getElectricityReadingContext(account, data?.readings.filter((reading) => reading.account_id === account.id) || [], quickReadingDate)
     const canSave = context.dateAfterBaseline && !context.duplicateDate && quickReadingDate <= todayISO()
@@ -676,7 +942,7 @@ export function ElectricityWorkspace() {
     }
   }
 
-  const selectedRecordAccount = accounts.find((account) => account.id === recordAccountId) || null
+  const selectedRecordAccount = submeters.find((account) => account.id === recordAccountId) || null
   const selectedRecordContext = selectedRecordAccount
     ? getElectricityReadingContext(selectedRecordAccount, data?.readings.filter((reading) => reading.account_id === recordAccountId) || [], readingDate)
     : null
@@ -748,11 +1014,19 @@ export function ElectricityWorkspace() {
 
   const renderMeterCard = (account: AccountView) => {
     const isMain = account.meter_kind === 'floor_main'
-    const status = isMain ? null : classifyElectricityBalance({
-      balanceUnits: account.estimated_balance_units,
-      lowThresholdUnits: Number(account.low_units_threshold),
-      readingDate: account.latest_reading?.reading_date || null,
-    })
+    const latestMainBalance = isMain ? latestMainBalanceByAccount.get(account.id) || null : null
+    const status = isMain
+      ? classifyMainMeterBalance({
+          balanceUnits: latestMainBalance ? Number(latestMainBalance.units_remaining) : null,
+          lowThresholdUnits: Number(account.low_units_threshold),
+          readingDate: latestMainBalance?.reading_date || null,
+          today: todayISO(),
+        })
+      : classifyElectricityBalance({
+          balanceUnits: account.estimated_balance_units,
+          lowThresholdUnits: Number(account.low_units_threshold),
+          readingDate: account.latest_reading?.reading_date || null,
+        })
     const presentation = status ? statusPresentation[status] : null
     const cutOff = account.last_cutoff_event?.action === 'disconnected'
     const balanceClass = status === 'exhausted' || status === 'low'
@@ -765,36 +1039,67 @@ export function ElectricityWorkspace() {
             ? 'border-slate-300 bg-slate-100 text-slate-900'
             : 'border-sky-300 bg-sky-50 text-sky-950'
     const displayedUnits = isMain
-      ? account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
-      : account.estimated_balance_units
-    const latestMainBalance = isMain ? latestMainBalanceByAccount.get(account.id) : null
+      ? latestMainBalance ? Number(latestMainBalance.units_remaining) : null
+      : account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+    const daysRemaining = latestMainBalance
+      ? estimateMainMeterDaysRemaining(previousMainBalanceById.get(latestMainBalance.id) || null, latestMainBalance)
+      : null
 
     return <article key={account.id} className={`grid grid-cols-1 gap-3 border-l-4 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4 ${isMain ? 'border-l-sky-600 bg-sky-50/30' : 'border-l-emerald-600'}`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{accountTitle(account)}</h3><span className={`border px-2 py-1 text-xs font-semibold ${isMain ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{t(isMain ? 'electricity.floorMain' : 'electricity.clientSubmeter')}</span>{presentation && <span className={`border px-2 py-1 text-xs font-semibold ${presentation.className}`}>{t(presentation.labelKey)}</span>}{cutOff && <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800">{t('electricity.disconnected')}</span>}</div>
         <p className="mt-1 text-sm text-slate-600">{account.property_name} · {account.unit_name || account.floor_label}{account.section_name ? ` · ${account.section_name}` : ''}{account.meter_number ? ` · Meter ${account.meter_number}` : ''}</p>
         <div className={`mt-3 flex min-h-[76px] items-center justify-between gap-3 border px-3 py-3 sm:min-h-[84px] sm:px-4 ${balanceClass}`}>
-          <div className="min-w-0"><p className="text-xs font-semibold">{isMain ? t('electricity.currentMeterReading') : t('electricity.estimatedBalance')}</p>{status && <p className="mt-1 text-xs font-medium">{t(statusPresentation[status].labelKey)}</p>}<p className="mt-1 text-xs opacity-80">{account.latest_reading ? `${t('electricity.lastReading')} ${formatDate(account.latest_reading.reading_date)}` : `${t('electricity.baselineOn')} ${formatDate(account.initial_reading_date)}`}</p></div>
-          <p className="flex shrink-0 items-baseline gap-1 tabular-nums"><span className="text-3xl font-bold leading-none sm:text-4xl">{numeric(displayedUnits)}</span><span className="text-sm font-semibold">kWh</span></p>
+          <div className="min-w-0"><p className="text-xs font-semibold">{isMain ? t('electricity.remainingTanescoCredit') : t('electricity.latestClientSubmeterReading')}</p>{status && <p className="mt-1 text-xs font-semibold">{t(statusPresentation[status].labelKey)}</p>}<p className="mt-1 text-xs opacity-80">{isMain
+            ? latestMainBalance ? `${t('electricity.lastReading')} ${formatDate(latestMainBalance.reading_date)}` : t('electricity.noMainBalances')
+            : account.latest_reading ? `${t('electricity.lastReading')} ${formatDate(account.latest_reading.reading_date)}` : `${t('electricity.baselineOn')} ${formatDate(account.initial_reading_date)}`}</p></div>
+          <p className="flex shrink-0 items-baseline gap-1 tabular-nums"><span className="text-3xl font-bold leading-none sm:text-4xl">{displayedUnits === null ? '—' : numeric(displayedUnits)}</span>{displayedUnits !== null && <span className="text-sm font-semibold">kWh</span>}</p>
         </div>
-        {isMain && <div className="mt-2 flex min-h-16 items-center justify-between gap-3 border-y border-sky-200 bg-sky-50 px-3 py-2.5 text-sky-950 sm:px-4">
-          <div className="min-w-0"><p className="text-xs font-bold uppercase">{t('electricity.latestMainBalance')}</p><p className="mt-1 text-xs text-sky-800">{latestMainBalance ? formatDate(latestMainBalance.reading_date) : t('electricity.noMainBalances')}</p></div>
-          <p className="shrink-0 text-2xl font-extrabold tabular-nums sm:text-3xl">{latestMainBalance ? numeric(latestMainBalance.units_remaining) : '—'}<span className="ml-1 text-sm font-semibold">kWh</span></p>
+        {isMain && latestMainBalance && Number(latestMainBalance.units_remaining) <= Number(account.low_units_threshold) * 2 && <p className={`mt-2 border-l-4 px-3 py-2 text-sm font-medium ${Number(latestMainBalance.units_remaining) <= Number(account.low_units_threshold) ? 'border-rose-600 bg-rose-50 text-rose-900' : 'border-amber-500 bg-amber-50 text-amber-900'}`}>{Number(latestMainBalance.units_remaining) <= 0 ? t('electricity.mainBalanceZeroWarning') : t('electricity.mainCreditWarning')}</p>}
+        {isMain && daysRemaining !== null && <p className="mt-2 text-sm font-semibold text-slate-800">{t('electricity.mainDaysRemaining', { days: daysRemaining })}</p>}
+        {!isMain && <div className="mt-2 flex min-h-14 items-center justify-between gap-3 border-y border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-950 sm:px-4">
+          <p className="text-xs font-semibold">{t('electricity.estimatedBalance')}</p>
+          <p className="text-xl font-extrabold tabular-nums">{numeric(account.estimated_balance_units)} <span className="text-sm font-semibold">kWh</span></p>
         </div>}
         {account.pending_reported_topup_units > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{numeric(account.pending_reported_topup_units)} {t('electricity.pendingVerification')}</p>}
         {account.pending_adjustment_count > 0 && <p className="mt-1 text-xs font-medium text-blue-700">{numeric(account.pending_adjustment_units)} kWh {t('electricity.adjustmentPending')}</p>}
       </div>
+      {editingSubmeterId === account.id && !isMain && <form onSubmit={(event) => void saveSubmeterEdit(event, account)} className="grid grid-cols-1 gap-3 border border-emerald-200 bg-emerald-50/50 p-3 sm:col-span-2 sm:grid-cols-2 sm:p-4">
+        <Field label={t('electricity.client')}><select required className="input min-h-11" value={editingSubmeterTenantId} onChange={(event) => {
+          const tenant = data.tenants.find((item) => item.id === event.target.value)
+          setEditingSubmeterTenantId(event.target.value)
+          if (tenant) setEditingSubmeterName(tenant.business_name || tenant.full_name || '')
+          setHandoffBalance(event.target.value === account.tenant_id ? String(account.estimated_balance_units) : '0')
+        }}>
+          {data.tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.business_name || tenant.full_name || tenant.id}</option>)}
+        </select></Field>
+        <Field label={t('electricity.submeterDisplayName')}><input required maxLength={100} className="input min-h-11" value={editingSubmeterName} onChange={(event) => setEditingSubmeterName(event.target.value)} /></Field>
+        {editingSubmeterTenantId !== account.tenant_id && <>
+          <div className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2">{t('electricity.handoffHistoryHelp')}</div>
+          <Field label={t('electricity.currentReading')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min={account.latest_reading?.current_meter_reading ?? account.initial_meter_reading} max="1000000000" step="0.001" value={handoffReading} onChange={(event) => setHandoffReading(event.target.value)} /></Field>
+          <Field label={t('electricity.readingDate')}><input required className="input min-h-11" type="date" min={account.latest_reading?.reading_date || account.initial_reading_date} max={todayISO()} value={handoffDate} onChange={(event) => setHandoffDate(event.target.value)} /></Field>
+          <Field label={t('electricity.handoffOpeningBalance')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="-1000000" max="1000000" step="0.001" value={handoffBalance} onChange={(event) => setHandoffBalance(event.target.value)} /></Field>
+        </>}
+        <div className="flex flex-col-reverse gap-2 sm:col-span-2 sm:flex-row sm:justify-end">
+          <button type="button" className="btn-secondary min-h-11" onClick={() => setEditingSubmeterId('')}>{t('electricity.cancel')}</button>
+          <button className="btn-primary min-h-11" disabled={saving || !editingSubmeterName.trim() || (editingSubmeterTenantId !== account.tenant_id && (!handoffReading.trim() || !handoffBalance.trim()))}>{saving ? t('electricity.saving') : t('electricity.saveMeterChanges')}</button>
+        </div>
+      </form>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => { setRecordAccountId(account.id); setActiveView('readings') }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordReading')}</button>
+        {isMain
+          ? <button type="button" onClick={() => { setMainBalanceAccountId(account.id); setMainBalanceThreshold(String(account.low_units_threshold)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false); setActiveView('meters'); window.setTimeout(() => document.getElementById('main-balance-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0) }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordMainBalance')}</button>
+          : <button type="button" onClick={() => { setRecordAccountId(account.id); setActiveView('readings') }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordReading')}</button>}
         {data.ownerMode && !isMain && <button type="button" className="min-h-11 flex-1 border border-blue-300 bg-blue-50 px-3 text-sm font-semibold text-blue-900 hover:bg-blue-100 sm:flex-none" onClick={() => { setAdjustmentTarget(account); setAdjustmentUnits(''); setAdjustmentDirection('add'); setAdjustmentDate(todayISO()); setAdjustmentReason('') }}><Plus className="mr-2 inline h-4 w-4" />{t('electricity.ownerAddRemove')}</button>}
         {!isMain && account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.notify')}</button>}
         {!isMain && <button className={`min-h-11 border px-3 text-sm font-semibold ${cutOff ? 'border-emerald-300 text-emerald-800 hover:bg-emerald-50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`} onClick={() => submitManualAction(account)}>{cutOff ? t('electricity.logRestore') : t('electricity.logCutoff')}</button>}
+        {data.ownerMode && !isMain && <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => editingSubmeterId === account.id ? setEditingSubmeterId('') : beginSubmeterEdit(account)}><Pencil className="mr-2 h-4 w-4" />{t(editingSubmeterId === account.id ? 'electricity.cancel' : 'electricity.editSubmeter')}</button>}
+        {data.ownerMode && !isMain && <button type="button" className="min-h-11 flex-1 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50 sm:flex-none" disabled={saving} onClick={() => void archiveSubmeter(account)}><Archive className="mr-2 inline h-4 w-4" />{t('electricity.archiveSubmeter')}</button>}
       </div>
     </article>
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
+    <div className="electricity-workspace mx-auto max-w-7xl space-y-6 pb-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700"><Bolt className="h-4 w-4" />{t('electricity.metered')}</div>
@@ -803,7 +1108,7 @@ export function ElectricityWorkspace() {
         </div>
         <div className="flex items-center gap-2">
           {data.ownerMode && <button className="btn-secondary min-h-11" onClick={() => setShowAccountSetup((show) => !show)}><Plus className="mr-2 h-4 w-4" />{t('electricity.setupMeter')}</button>}
-          <button className="icon-button h-11 w-11" onClick={() => void fetchData()} aria-label={t('electricity.refresh')} title={t('electricity.refresh')}><RefreshCw className="h-4 w-4" /></button>
+          <button className="icon-button h-11 w-11" onClick={() => { setActionState(null); void fetchData() }} aria-label={t('electricity.refresh')} title={t('electricity.refresh')}><RefreshCw className="h-4 w-4" /></button>
         </div>
       </header>
 
@@ -866,7 +1171,10 @@ export function ElectricityWorkspace() {
         </div>
         <form onSubmit={submitAccount} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label={t('electricity.property')}><select className="input" required value={accountForm.propertyId} onChange={(event) => { setAccountForm({ ...accountForm, propertyId: event.target.value, unitId: '', tenantId: '', floorLabel: '' }); setPropertyId(event.target.value) }}>{data.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></Field>
-          <Field label={t('electricity.meterType')}><select className="input" value={accountForm.meterKind} onChange={(event) => setAccountForm({ ...accountForm, meterKind: event.target.value as AccountForm['meterKind'], unitId: '', tenantId: '' })}><option value="submeter">{t('electricity.clientSubmeter')}</option><option value="floor_main">{t('electricity.floorMain')}</option></select></Field>
+          <Field label={t('electricity.meterType')}><select className="input" value={accountForm.meterKind} onChange={(event) => {
+            const meterKind = event.target.value as AccountForm['meterKind']
+            setAccountForm({ ...accountForm, meterKind, unitId: '', tenantId: '', lowUnitsThreshold: meterKind === 'floor_main' ? '50' : '10' })
+          }}><option value="submeter">{t('electricity.clientSubmeter')}</option><option value="floor_main">{t('electricity.floorMain')}</option></select></Field>
           <Field label={accountForm.meterKind === 'submeter' ? t('electricity.floorGroup') : t('electricity.floorArea')}><input className="input" required maxLength={80} placeholder={t('electricity.floorLabelExample')} value={accountForm.floorLabel} onChange={(event) => setAccountForm({ ...accountForm, floorLabel: event.target.value })} /></Field>
           {accountForm.meterKind === 'submeter' && <>
             <Field label={t('electricity.unit')}><select required className="input" value={accountForm.unitId} onChange={(event) => {
@@ -877,12 +1185,16 @@ export function ElectricityWorkspace() {
             <Field label={t('electricity.client')}><select required className="input" value={accountForm.tenantId} onChange={(event) => setAccountForm({ ...accountForm, tenantId: event.target.value })}><option value="">{t('electricity.selectClient')}</option>{data.tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name || tenant.business_name || 'Unnamed client'}</option>)}</select></Field>
           </>}
           <Field label={t('electricity.meterNumberOptional')}><input className="input" maxLength={80} value={accountForm.meterNumber} onChange={(event) => setAccountForm({ ...accountForm, meterNumber: event.target.value })} /></Field>
-          <Field label={t('electricity.startReading')}><input className="input" type="number" inputMode="decimal" min="0" step="0.001" required value={accountForm.initialMeterReading} onChange={(event) => setAccountForm({ ...accountForm, initialMeterReading: event.target.value })} /></Field>
-          <Field label={t('electricity.startDate')}><input className="input" type="date" required value={accountForm.initialReadingDate} max={todayISO()} onChange={(event) => setAccountForm({ ...accountForm, initialReadingDate: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.actualDateHelp')}</span></Field>
+          {accountForm.meterKind === 'submeter'
+            ? <>
+              <Field label={t('electricity.startReading')}><input className="input" type="number" inputMode="decimal" min="0" step="0.001" required value={accountForm.initialMeterReading} onChange={(event) => setAccountForm({ ...accountForm, initialMeterReading: event.target.value })} /></Field>
+              <Field label={t('electricity.startDate')}><input className="input" type="date" required value={accountForm.initialReadingDate} max={todayISO()} onChange={(event) => setAccountForm({ ...accountForm, initialReadingDate: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.actualDateHelp')}</span></Field>
+            </>
+            : <p className="border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">{t('electricity.mainBalanceFirstAfterSetup')}</p>}
           {accountForm.meterKind === 'submeter' && <>
             <Field label={t('electricity.openingUnits')}><input className="input" type="number" inputMode="decimal" step="0.001" value={accountForm.openingBalanceUnits} onChange={(event) => setAccountForm({ ...accountForm, openingBalanceUnits: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.openingUnitsHelp')}</span></Field>
-            <Field label={t('electricity.lowThreshold')}><input className="input" type="number" inputMode="decimal" min="0" step="0.001" value={accountForm.lowUnitsThreshold} onChange={(event) => setAccountForm({ ...accountForm, lowUnitsThreshold: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.lowThresholdHelp')}</span></Field>
           </>}
+          <Field label={t('electricity.lowThreshold')}><input className="input" type="number" inputMode="decimal" min={accountForm.meterKind === 'floor_main' ? '0.001' : '0'} step="0.001" value={accountForm.lowUnitsThreshold} onChange={(event) => setAccountForm({ ...accountForm, lowUnitsThreshold: event.target.value })} /><span className="mt-1 block text-xs text-slate-500">{t(accountForm.meterKind === 'floor_main' ? 'electricity.mainLowThresholdHelp' : 'electricity.lowThresholdHelp')}</span></Field>
           <div className="flex items-end"><button className="btn-primary min-h-11 w-full" disabled={saving}>{saving ? t('electricity.saving') : t('electricity.saveMeter')}</button></div>
         </form>
       </section>}
@@ -896,6 +1208,10 @@ export function ElectricityWorkspace() {
           {reconciliations.map((report) => {
             const statusText = report.status === 'baseline'
               ? t('electricity.baselineOnly')
+              : report.status === 'purchase_unknown'
+                ? t('electricity.purchaseHistoryUnknown')
+                : report.status === 'balance_anomaly'
+                  ? t('electricity.mainBalanceRiseWarning')
               : report.status === 'unassigned'
                 ? t('electricity.noSubmeters')
                 : report.status === 'incomplete'
@@ -905,21 +1221,23 @@ export function ElectricityWorkspace() {
                     : report.status === 'shortage'
                       ? `${numeric(report.difference || 0)} kWh ${t('electricity.unaccountedUnits')}`
                       : `${numeric(Math.abs(report.difference || 0))} kWh ${t('electricity.moreSubmeterThanMain')}`
-            const statusClass = report.status === 'shortage'
+            const statusClass = report.status === 'shortage' || report.status === 'balance_anomaly'
               ? 'border-rose-200 bg-rose-50 text-rose-800'
               : report.status === 'balanced'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : report.status === 'excess'
+                : report.status === 'excess' || report.status === 'purchase_unknown' || report.status === 'incomplete'
                   ? 'border-amber-200 bg-amber-50 text-amber-800'
                   : 'border-slate-200 bg-slate-50 text-slate-700'
             return <article key={report.mainAccount.id} className="px-4 py-4 sm:px-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{report.mainAccount.floor_label}</h3><span className={`border px-2 py-1 text-xs font-semibold ${statusClass}`}>{statusText}</span></div>
-                  <p className="mt-1 text-sm text-slate-600">{t('electricity.mainMeterReading')}: {numeric(report.mainCurrentReading)} kWh · {report.mainReading ? `${t('electricity.read')} ${formatDate(report.mainReading.reading_date)}` : `${t('electricity.baseline')} ${formatDate(report.mainAccount.initial_reading_date)}`}</p>
+                  <p className="mt-1 text-sm text-slate-600">{t('electricity.remainingTanescoCredit')}: {report.mainCurrentBalance === null ? '—' : `${numeric(report.mainCurrentBalance)} kWh`} · {report.currentBalance ? `${t('electricity.read')} ${formatDate(report.currentBalance.reading_date)}` : t('electricity.noMainBalances')}</p>
                   {report.periodStart && report.periodEnd && <p className="mt-1 text-xs text-slate-500">{t('electricity.period')} {formatDate(report.periodStart)} - {formatDate(report.periodEnd)}</p>}
                   {report.status === 'incomplete' && <p className="mt-1 text-xs text-amber-800">{t('electricity.stillNeed')}: {report.unmatchedSubmeters.map((account) => account.tenant_name || t('electricity.clientSubmeter')).join(', ')}. {t('electricity.noFinalShortfall')}</p>}
                   {report.status === 'baseline' && <p className="mt-1 text-xs text-slate-500">{t('electricity.baselineExplanation')}</p>}
+                  {report.status === 'purchase_unknown' && <p className="mt-1 text-xs text-amber-800">{t('electricity.mainBalancePurchaseNeeded')}</p>}
+                  {report.status === 'balance_anomaly' && report.unexplainedBalanceIncrease !== null && <p className="mt-1 text-xs font-medium text-rose-800">{t('electricity.mainBalanceRiseBy', { units: numeric(report.unexplainedBalanceIncrease) })}</p>}
                 </div>
                 {report.mainUsage !== null && <dl className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm sm:min-w-64">
                   <dt className="text-slate-500">{t('electricity.mainUnitsUsed')}</dt><dd className="text-right font-semibold text-slate-900">{numeric(report.mainUsage)} kWh</dd>
@@ -941,19 +1259,23 @@ export function ElectricityWorkspace() {
       {activeView === 'overview' && <section id="attention" aria-labelledby="attention-heading" className="scroll-mt-20">
         <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="attention-heading" className="text-lg font-semibold text-slate-950">{t('electricity.needsAttention')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.attentionHelp')}</p></div><span className="text-sm font-semibold text-slate-500">{attention.length} {t('electricity.items')}</span></div>
         {attention.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noAttention')}</div> : <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
-          {attention.map(({ account, status }) => {
+          {attention.map(({ account, status, isMain, balanceUnits, readingDate }) => {
             const presentation = statusPresentation[status]
             const StatusIcon = presentation.icon
             return <article key={account.id} className="grid grid-cols-1 gap-3 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold text-slate-950">{account.tenant_name}</h3><span className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-semibold ${presentation.className}`}><StatusIcon className="h-3.5 w-3.5" />{t(presentation.labelKey)}</span></div>
-                <p className="mt-1 text-sm text-slate-600">{account.unit_name || account.floor_label} · {account.section_name || account.floor_label}</p>
-                <p className="mt-1 text-xs text-slate-500">{t('electricity.estimate')}: <strong className="text-slate-800">{numeric(account.estimated_balance_units)} kWh</strong> · {t('electricity.lastChecked')} {account.latest_reading ? formatDate(account.latest_reading.reading_date) : t('electricity.notYetRead')}{account.pending_reported_topup_units > 0 ? ` · ${numeric(account.pending_reported_topup_units)} ${t('electricity.reportedUnverified')}` : ''}</p>
+                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold text-slate-950">{isMain ? `${account.floor_label} ${t('electricity.mainMeter')}` : account.tenant_name}</h3><span className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-semibold ${presentation.className}`}><StatusIcon className="h-3.5 w-3.5" />{t(presentation.labelKey)}</span></div>
+                <p className="mt-1 text-sm text-slate-600">{account.property_name} · {isMain ? t('electricity.remainingTanescoCredit') : `${account.unit_name || account.floor_label} · ${account.section_name || account.floor_label}`}</p>
+                <p className="mt-1 text-xs text-slate-500">{isMain ? t('electricity.currentLukuBalance') : t('electricity.estimate')}: <strong className="text-slate-800">{balanceUnits === null ? '—' : `${numeric(balanceUnits)} kWh`}</strong> · {t('electricity.lastChecked')} {readingDate ? formatDate(readingDate) : t('electricity.notYetRead')}{!isMain && account.pending_reported_topup_units > 0 ? ` · ${numeric(account.pending_reported_topup_units)} ${t('electricity.reportedUnverified')}` : ''}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.draftWhatsApp')}</button>}
-                {status === 'exhausted' && account.last_cutoff_event?.action !== 'disconnected' && <button className="min-h-11 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50" onClick={() => submitManualAction(account)}>{t('electricity.logCutoff')}</button>}
-                {status === 'reading_due' && <a className="btn-secondary min-h-11" href="#record">{t('electricity.recordCheck')}</a>}
+                {isMain
+                ? <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => { setMainBalanceAccountId(account.id); setMainBalanceThreshold(String(account.low_units_threshold)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false); setActiveView('meters'); window.setTimeout(() => document.getElementById('main-balance-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0) }}>{t('electricity.recordMainBalance')}</button>
+                  : <>
+                    {account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.draftWhatsApp')}</button>}
+                    {status === 'exhausted' && account.last_cutoff_event?.action !== 'disconnected' && <button className="min-h-11 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50" onClick={() => submitManualAction(account)}>{t('electricity.logCutoff')}</button>}
+                    {status === 'reading_due' && <a className="btn-secondary min-h-11" href="#record">{t('electricity.recordCheck')}</a>}
+                  </>}
               </div>
             </article>
           })}
@@ -963,7 +1285,7 @@ export function ElectricityWorkspace() {
       {activeView === 'readings' && <section id="record" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="record-heading">
           <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-amber-50 text-amber-700"><Gauge className="h-5 w-5" /></span><div><h2 id="record-heading" className="text-lg font-semibold text-slate-950">{t('electricity.recordReadingTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.recordReadingHelp')}</p></div></div>
           <form onSubmit={submitReading} className="space-y-4">
-            <Field label={t('electricity.meterType')}><select required className="input min-h-11" value={recordAccountId} onChange={(event) => setRecordAccountId(event.target.value)}><option value="">{t('electricity.selectMeter')}</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.meter_kind === 'floor_main' ? `${account.floor_label} · ${t('electricity.mainMeter')}` : `${account.tenant_name} · ${account.unit_name || account.floor_label}`}</option>)}</select></Field>
+            <Field label={t('electricity.meterType')}><select required className="input min-h-11" value={recordAccountId} onChange={(event) => setRecordAccountId(event.target.value)}><option value="">{t('electricity.selectMeter')}</option>{submeters.map((account) => <option key={account.id} value={account.id}>{account.tenant_name} · {account.unit_name || account.floor_label}</option>)}</select></Field>
             {selectedRecordAccount && <div className="grid grid-cols-2 gap-3 border border-slate-200 bg-slate-50 p-3 text-sm">
               <div><p className="text-xs text-slate-500">{t('electricity.previousReading')}</p><p className="mt-1 font-semibold text-slate-950">{numeric(recordPreviousReading)} kWh</p></div>
               <div><p className="text-xs text-slate-500">{t('electricity.startingBalance')}</p><p className="mt-1 font-semibold text-slate-950">{selectedRecordAccount.meter_kind === 'floor_main' ? t('electricity.notApplicable') : `${numeric(effectiveOpeningBalance + applicableVerifiedTopups + applicablePendingAdjustments)} kWh`}</p></div>
@@ -992,9 +1314,9 @@ export function ElectricityWorkspace() {
           <div className="min-w-0"><h2 id="quick-sheet-heading" className="text-lg font-semibold text-slate-950">{t('electricity.quickEntrySheet')}</h2><p className="mt-1 max-w-2xl text-sm text-slate-600">{t('electricity.quickEntryHelp')}</p><p className="mt-1 text-xs font-medium text-blue-800">{t('electricity.historicalSessionHelp')}</p></div>
           <div className="grid w-full gap-3 sm:max-w-xl sm:grid-cols-2"><Field label={t('electricity.visitDate')}><input className="input min-h-11" type="date" value={quickReadingDate} max={todayISO()} onChange={(event) => setQuickReadingDate(event.target.value)} /></Field><Field label={t('electricity.quickSessionNote')}><input className="input min-h-11" maxLength={500} value={quickReadingNotes} onChange={(event) => setQuickReadingNotes(event.target.value)} /></Field></div>
         </div>
-        {activeAccounts.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">{t('electricity.noMeters')}</p> : <>
+        {submeters.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">{t('electricity.noSubmetersForReadings')}</p> : <>
           <div className="divide-y divide-slate-200 md:hidden">
-            {activeAccounts.map((account) => {
+            {submeters.map((account) => {
               const value = quickReadingValues[account.id] || ''
               const { context, canSave, usage, remaining } = getQuickReadingPreview(account, value)
               return <article key={account.id} className="space-y-3 p-4">
@@ -1011,7 +1333,7 @@ export function ElectricityWorkspace() {
           <div className="hidden overflow-x-auto md:block">
             <table className="min-w-[900px] w-full border-collapse text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-4 py-3">{t('electricity.client')}</th><th className="px-4 py-3">{t('electricity.previousReading')}</th><th className="px-4 py-3">{t('electricity.currentMeterReading')}</th><th className="px-4 py-3">{t('electricity.unitsConsumed')}</th><th className="px-4 py-3">{t('electricity.carriedForward')}</th><th className="px-4 py-3"><span className="sr-only">{t('electricity.saveMeterRow')}</span></th></tr></thead>
-              <tbody className="divide-y divide-slate-100">{activeAccounts.map((account) => {
+              <tbody className="divide-y divide-slate-100">{submeters.map((account) => {
                 const value = quickReadingValues[account.id] || ''
                 const { context, canSave, usage, remaining } = getQuickReadingPreview(account, value)
                 return <tr key={account.id}>
@@ -1073,6 +1395,7 @@ export function ElectricityWorkspace() {
                 const tokenVisible = visibleTopupTokenIds.has(topup.id)
                 return <div key={topup.id} className="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0"><p className="font-medium text-slate-900">{accountById.get(topup.account_id)?.tenant_name} · {numeric(topup.units)} kWh · {typeof topup.purchase_amount_tzs === 'number' ? formatCurrency(topup.purchase_amount_tzs, 'TZS') : '—'}</p><p className="text-xs text-slate-500">{formatDate(topup.purchase_date)}{topup.token_suffix ? ` · •••• ${topup.token_suffix}` : ''} · {topup.status === 'verified' ? t('electricity.verified') : t('electricity.reportedNotVerified')}</p>
+                  {topup.status === 'verified' && topup.verified_at && <p className="mt-1 text-xs font-medium text-emerald-800">{t('electricity.entryConfirmedBy')} {topup.verified_by_name || (topup.verified_by ? recordedByName(topup.verified_by) : t('electricity.propertyOwner'))} · {formatTimestamp(topup.verified_at)}</p>}
                   {topup.token_code ? <div className="mt-2 flex flex-wrap items-center gap-2">
                     {tokenVisible && <code className="rounded bg-slate-100 px-2 py-1 font-mono text-sm tracking-wide text-slate-900">{formatLukuToken(topup.token_code)}</code>}
                     <button type="button" className="min-h-10 border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50" aria-expanded={tokenVisible} onClick={() => setVisibleTopupTokenIds((current) => {
@@ -1089,6 +1412,65 @@ export function ElectricityWorkspace() {
             </div>}
           </section>
         </section>}
+
+      {activeView === 'help' && !data.ownerMode && <section className="space-y-4" aria-labelledby="staff-help-heading">
+        <header className="border-b border-slate-200 pb-3">
+          <h2 id="staff-help-heading" className="text-lg font-semibold text-slate-950">{t('electricity.staffHelpTitle')}</h2>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">{t('electricity.staffHelpIntro')}</p>
+        </header>
+        <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+          <details className="group px-4 py-3" open>
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-slate-900">{t('electricity.staffHelpReadingTitle')}</summary>
+            <ol className="list-decimal space-y-2 py-2 pl-5 text-sm leading-6 text-slate-700">
+              <li>{t('electricity.staffHelpReadingStep1')}</li>
+              <li>{t('electricity.staffHelpReadingStep2')}</li>
+              <li>{t('electricity.staffHelpReadingStep3')}</li>
+              <li>{t('electricity.staffHelpReadingStep4')}</li>
+            </ol>
+          </details>
+          <details className="group px-4 py-3">
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-slate-900">{t('electricity.staffHelpTopupTitle')}</summary>
+            <p className="py-2 text-sm leading-6 text-slate-700">{t('electricity.staffHelpTopupBody')}</p>
+          </details>
+          <details className="group px-4 py-3">
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-slate-900">{t('electricity.staffHelpMainTitle')}</summary>
+            <p className="py-2 text-sm leading-6 text-slate-700">{t('electricity.staffHelpMainBody')}</p>
+          </details>
+          <details className="group px-4 py-3">
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-slate-900">{t('electricity.staffHelpAlertsTitle')}</summary>
+            <p className="py-2 text-sm leading-6 text-slate-700">{t('electricity.staffHelpAlertsBody')}</p>
+          </details>
+          <details className="group px-4 py-3">
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-slate-900">{t('electricity.staffHelpStuckTitle')}</summary>
+            <p className="py-2 text-sm leading-6 text-slate-700">{t('electricity.staffHelpStuckBody')}</p>
+          </details>
+        </div>
+        <p className="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950">{t('electricity.staffHelpOwnerOnly')}</p>
+      </section>}
+
+      {activeView === 'history' && <ElectricityHistoryPanel
+        propertyId={propertyId}
+        meters={accounts}
+      />}
+
+      {activeView === 'entries' && <ElectricityEntryCorrections
+        entries={correctionEntries.filter((entry) => accountById.has(entry.accountId))}
+        audit={(data.entryAudit || []).filter((event) => accountById.has(event.account_id))}
+        ownerMode={data.ownerMode}
+        onChanged={() => { void fetchData(false) }}
+      />}
+
+      {activeView === 'issues' && <ElectricityIssuesPanel
+        propertyId={propertyId}
+        ownerMode={data.ownerMode}
+        meters={activeAccounts.map((account) => ({
+          id: account.id,
+          meter_kind: account.meter_kind,
+          floor_label: account.floor_label,
+          tenant_name: account.tenant_name,
+          unit_name: account.unit_name,
+        }))}
+      />}
 
       {activeView === 'reports' && <section id="electricity-ledger" className="space-y-4 scroll-mt-20" aria-labelledby="ledger-heading">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1183,20 +1565,44 @@ export function ElectricityWorkspace() {
             <p className="mt-1 text-sm text-sky-900">{t('electricity.mainBalanceHelp')}</p>
           </header>
           <form onSubmit={submitMainBalance} className="grid grid-cols-1 gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label={t('electricity.selectMainMeter')}><select required className="input min-h-11" value={mainBalanceAccountId} onChange={(event) => setMainBalanceAccountId(event.target.value)}><option value="">{t('electricity.selectMainMeter')}</option>{mainMeters.map((account) => <option key={account.id} value={account.id}>{account.floor_label}</option>)}</select></Field>
-            <Field label={t('electricity.visitDate')}><input required className="input min-h-11" type="date" max={todayISO()} value={mainBalanceDate} onChange={(event) => setMainBalanceDate(event.target.value)} /></Field>
-            <Field label={t('electricity.unitsRemainingOnMain')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalanceUnits} onChange={(event) => setMainBalanceUnits(event.target.value)} /></Field>
+            <Field label={t('electricity.selectMainMeter')}><select required className="input min-h-11" value={mainBalanceAccountId} onChange={(event) => { const account = mainMeters.find((item) => item.id === event.target.value); setMainBalanceAccountId(event.target.value); setMainBalanceThreshold(String(account?.low_units_threshold ?? 50)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false) }}><option value="">{t('electricity.selectMainMeter')}</option>{mainMeters.map((account) => <option key={account.id} value={account.id}>{account.floor_label}</option>)}</select></Field>
+            <Field label={t('electricity.visitDate')}><input required className="input min-h-11" type="date" min={selectedMainPreviousBalance ? dayAfterISO(selectedMainPreviousBalance.reading_date) : undefined} max={todayISO()} value={mainBalanceDate} onChange={(event) => { setMainBalanceDate(event.target.value); setConfirmZeroMainBalance(false) }} /></Field>
+            <Field label={t('electricity.unitsRemainingOnMain')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalanceUnits} onChange={(event) => { setMainBalanceUnits(event.target.value); setConfirmZeroMainBalance(false) }} /></Field>
+            {selectedMainPreviousBalance
+              ? <Field label={t('electricity.unitsAddedSincePrevious')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalancePurchasedUnits} onChange={(event) => setMainBalancePurchasedUnits(event.target.value)} /></Field>
+              : <p className="self-end border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">{t('electricity.firstMainBalanceBaselineHelp')}</p>}
             <Field label={t('electricity.quickSessionNote')}><input className="input min-h-11" maxLength={500} value={mainBalanceNotes} onChange={(event) => setMainBalanceNotes(event.target.value)} /></Field>
-            <div className="sm:col-span-2 lg:col-span-4"><button className="btn-primary min-h-11 w-full sm:w-auto" disabled={saving || !mainMeters.some((account) => account.id === mainBalanceAccountId) || mainBalanceUnits.trim() === ''}>{saving ? t('electricity.saving') : t('electricity.saveMainBalance')}</button></div>
+            {selectedMainPreviousBalance && mainBalanceUnits.trim() !== '' && Number.isFinite(mainBalanceUsagePreview) && <div className={`border px-3 py-3 text-sm ${mainBalanceUsagePreview! < -0.001 ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-slate-200 bg-slate-50 text-slate-800'}`}>
+              <p className="text-xs font-semibold">{mainBalanceUsagePreview! < -0.001 ? t('electricity.mainBalanceRiseWarning') : t('electricity.mainUsagePreview')}</p>
+              {mainBalanceUsagePreview! >= -0.001 && <p className="mt-1 font-bold">{numeric(Math.max(0, mainBalanceUsagePreview!))} kWh</p>}
+            </div>}
+            {selectedMainBalanceAccount && Number.isFinite(parsedMainBalance) && parsedMainBalance > 0 && parsedMainBalance <= Number(selectedMainBalanceAccount.low_units_threshold) * 2 && <p className="border border-amber-300 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-900">{t('electricity.mainCreditWarning')}</p>}
+            {mainBalanceZeroNeedsConfirmation && <div className="space-y-2 border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900 sm:col-span-2 lg:col-span-4"><p role="alert" className="font-semibold">{t('electricity.mainBalanceZeroWarning')}</p><label className="flex min-h-11 items-center gap-3 font-semibold"><input type="checkbox" className="h-5 w-5 accent-rose-700" checked={confirmZeroMainBalance} onChange={(event) => setConfirmZeroMainBalance(event.target.checked)} />{t('electricity.confirmMainBalanceZero')}</label></div>}
+            <div className="sm:col-span-2 lg:col-span-4"><button className="btn-primary min-h-11 w-full sm:w-auto" disabled={saving || !selectedMainBalanceAccount || mainBalanceUnits.trim() === '' || (selectedMainPreviousBalance !== null && mainBalancePurchasedUnits.trim() === '') || (mainBalanceZeroNeedsConfirmation && !confirmZeroMainBalance)}>{saving ? t('electricity.saving') : t('electricity.saveMainBalance')}</button></div>
           </form>
+          {selectedMainBalanceAccount && <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
+            {data.ownerMode
+              ? <form onSubmit={submitMainBalanceThreshold} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <Field label={`${selectedMainBalanceAccount.floor_label} · ${t('electricity.lowThreshold')}`}><input required className="input min-h-11 w-full sm:w-48" type="number" inputMode="decimal" min="0.001" max="100000" step="0.001" value={mainBalanceThreshold} onChange={(event) => setMainBalanceThreshold(event.target.value)} /><span className="mt-1 block text-xs text-slate-500">{t('electricity.mainLowThresholdHelp')}</span></Field>
+                <button className="btn-secondary min-h-11" disabled={saving || !Number.isFinite(Number(mainBalanceThreshold)) || Number(mainBalanceThreshold) <= 0}>{saving ? t('electricity.saving') : t('electricity.saveMainThreshold')}</button>
+              </form>
+              : <p className="text-sm font-medium text-slate-700">{t('electricity.mainAlertThresholdValue', { units: numeric(selectedMainBalanceAccount.low_units_threshold) })}</p>}
+          </div>}
           {mainMeterBalances.length === 0 ? <p className="px-4 py-4 text-sm text-slate-600">{t('electricity.noMainBalances')}</p> : <div className="divide-y divide-slate-200">
             {mainMeterBalances.slice(0, 24).map((balance) => {
               const account = mainMeters.find((item) => item.id === balance.account_id)
               const staff = data.staff.find((item) => item.auth_user_id === balance.recorded_by)
               const recordedBy = staff?.full_name || (balance.recorded_by === data.currentUserId ? t('electricity.propertyOwner') : t('electricity.readingByStaff'))
+              const previous = previousMainBalanceById.get(balance.id) || null
+              const usage = calculateMainMeterUsage(previous, balance)
+              const usageText = usage === null
+                ? t('electricity.purchaseHistoryUnknown')
+                : usage < -0.001
+                  ? t('electricity.mainBalanceRiseBy', { units: numeric(Math.abs(usage)) })
+                  : `${t('electricity.mainUnitsUsed')}: ${numeric(Math.max(0, usage))} kWh`
               return <article key={balance.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
-                <div className="min-w-0"><p className="font-semibold text-slate-900">{account?.floor_label || t('electricity.mainMeter')} <span className="font-normal text-slate-500">· {formatDate(balance.reading_date)}</span></p><p className="mt-1 text-xs text-slate-600">{recordedBy}{balance.notes ? ` · ${balance.notes}` : ''}</p></div>
-                <p className="text-xl font-extrabold tabular-nums text-sky-900 sm:text-2xl">{numeric(balance.units_remaining)} <span className="text-sm font-semibold">kWh</span></p>
+                <div className="min-w-0"><p className="font-semibold text-slate-900">{account?.floor_label || t('electricity.mainMeter')} <span className="font-normal text-slate-500">· {formatDate(balance.reading_date)}</span></p><p className="mt-1 text-xs text-slate-600">{balance.units_purchased_since_previous === null ? t('electricity.purchaseHistoryUnknown') : `${t('electricity.unitsAddedSincePrevious')}: ${numeric(balance.units_purchased_since_previous)} kWh`} · {usageText}</p><p className="mt-1 text-xs text-slate-500">{recordedBy}{balance.notes ? ` · ${balance.notes}` : ''}</p></div>
+                <p className={`text-xl font-extrabold tabular-nums sm:text-2xl ${Number(balance.units_remaining) <= Number(account?.low_units_threshold || 50) ? 'text-rose-800' : 'text-sky-900'}`}>{numeric(balance.units_remaining)} <span className="text-sm font-semibold">kWh</span></p>
               </article>
             })}
           </div>}
@@ -1211,6 +1617,19 @@ export function ElectricityWorkspace() {
             <div className="divide-y divide-emerald-100 bg-white">{submeters.map(renderMeterCard)}</div>
           </section>}
         </div>}
+        {data.ownerMode && archivedSubmeters.length > 0 && <section className="mt-6 border border-slate-300 bg-slate-50" aria-labelledby="archived-submeters-heading">
+          <header className="border-b border-slate-200 px-4 py-3"><h3 id="archived-submeters-heading" className="font-semibold text-slate-900">{t('electricity.archivedSubmeters')}</h3><p className="mt-1 text-sm text-slate-600">{t('electricity.archivedSubmetersHelp')}</p></header>
+          <div className="divide-y divide-slate-200">
+            {archivedSubmeters.map((account) => {
+              const occupiedByActiveMeter = activeAccounts.some((active) => active.meter_kind === 'submeter' && active.unit_id === account.unit_id)
+              const lastReading = account.latest_reading?.current_meter_reading ?? account.initial_meter_reading
+              return <article key={account.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0"><p className="font-semibold text-slate-900">{accountTitle(account)} <span className="font-normal text-slate-500">· {account.unit_name || account.floor_label}</span></p><p className="mt-1 text-xs text-slate-600">{t('electricity.archivedLastReading', { reading: numeric(lastReading), date: formatDate(account.latest_reading?.reading_date || account.initial_reading_date) })}</p></div>
+                <div className="flex flex-col gap-2 sm:items-end"><button type="button" className="btn-secondary min-h-11" disabled={saving || occupiedByActiveMeter} onClick={() => void reactivateSubmeter(account)}><RefreshCw className="mr-2 h-4 w-4" />{t('electricity.reactivateSubmeter')}</button>{occupiedByActiveMeter && <p className="max-w-sm text-xs text-amber-800">{t('electricity.reactivateBlocked')}</p>}</div>
+              </article>
+            })}
+          </div>
+        </section>}
       </section>}
 
       {adjustmentTarget && data.ownerMode && <section className="border border-blue-200 bg-blue-50 p-4 sm:p-5" aria-labelledby="adjustment-heading">

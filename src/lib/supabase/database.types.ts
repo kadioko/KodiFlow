@@ -768,6 +768,7 @@ export interface Database {
           tenant_id: string | null
           floor_label: string
           ledger_tenant_label: string | null
+          display_name: string | null
           meter_number: string | null
           initial_meter_reading: number
           initial_reading_date: string
@@ -787,6 +788,7 @@ export interface Database {
           tenant_id?: string | null
           floor_label: string
           ledger_tenant_label?: string | null
+          display_name?: string | null
           meter_number?: string | null
           initial_meter_reading?: number
           initial_reading_date?: string
@@ -806,6 +808,7 @@ export interface Database {
           tenant_id?: string | null
           floor_label?: string
           ledger_tenant_label?: string | null
+          display_name?: string | null
           meter_number?: string | null
           initial_meter_reading?: number
           initial_reading_date?: string
@@ -835,6 +838,9 @@ export interface Database {
           recorded_by: string
           notes: string | null
           created_at: string
+          reversed_at: string | null
+          reversed_by: string | null
+          reversal_reason: string | null
         }
         Insert: {
           id?: string
@@ -852,6 +858,9 @@ export interface Database {
           recorded_by: string
           notes?: string | null
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Update: {
           id?: string
@@ -869,6 +878,9 @@ export interface Database {
           recorded_by?: string
           notes?: string | null
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Relationships: []
       }
@@ -879,9 +891,13 @@ export interface Database {
           owner_user_id: string
           reading_date: string
           units_remaining: number
+          units_purchased_since_previous: number | null
           notes: string | null
           recorded_by: string
           created_at: string
+          reversed_at: string | null
+          reversed_by: string | null
+          reversal_reason: string | null
         }
         Insert: {
           id?: string
@@ -889,9 +905,13 @@ export interface Database {
           owner_user_id: string
           reading_date: string
           units_remaining: number
+          units_purchased_since_previous?: number | null
           notes?: string | null
           recorded_by: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Update: {
           id?: string
@@ -899,9 +919,13 @@ export interface Database {
           owner_user_id?: string
           reading_date?: string
           units_remaining?: number
+          units_purchased_since_previous?: number | null
           notes?: string | null
           recorded_by?: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Relationships: []
       }
@@ -922,6 +946,9 @@ export interface Database {
           notes: string | null
           recorded_by: string
           created_at: string
+          reversed_at: string | null
+          reversed_by: string | null
+          reversal_reason: string | null
         }
         Insert: {
           id?: string
@@ -938,6 +965,9 @@ export interface Database {
           notes?: string | null
           recorded_by: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Update: {
           id?: string
@@ -954,6 +984,9 @@ export interface Database {
           notes?: string | null
           recorded_by?: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Relationships: []
       }
@@ -967,6 +1000,9 @@ export interface Database {
           reason: string
           performed_by: string
           performed_at: string
+          reversed_at: string | null
+          reversed_by: string | null
+          reversal_reason: string | null
         }
         Insert: {
           id?: string
@@ -977,6 +1013,9 @@ export interface Database {
           reason: string
           performed_by: string
           performed_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Update: {
           id?: string
@@ -987,6 +1026,9 @@ export interface Database {
           reason?: string
           performed_by?: string
           performed_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Relationships: []
       }
@@ -1001,6 +1043,9 @@ export interface Database {
           applied_reading_id: string | null
           recorded_by: string
           created_at: string
+          reversed_at: string | null
+          reversed_by: string | null
+          reversal_reason: string | null
         }
         Insert: {
           id?: string
@@ -1012,6 +1057,9 @@ export interface Database {
           applied_reading_id?: string | null
           recorded_by: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
         Update: {
           id?: string
@@ -1023,7 +1071,118 @@ export interface Database {
           applied_reading_id?: string | null
           recorded_by?: string
           created_at?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reversal_reason?: string | null
         }
+        Relationships: []
+      }
+      electricity_entry_audit: {
+        Row: {
+          id: string
+          owner_user_id: string
+          account_id: string
+          entry_type: 'reading' | 'topup' | 'main_balance' | 'adjustment' | 'cutoff'
+          entry_id: string
+          action: 'confirmed' | 'edited' | 'reversed'
+          reason: string | null
+          previous_values: Json
+          new_values: Json
+          acted_by: string
+          acted_at: string
+        }
+        Insert: {
+          id?: string
+          owner_user_id: string
+          account_id: string
+          entry_type: 'reading' | 'topup' | 'main_balance' | 'adjustment' | 'cutoff'
+          entry_id: string
+          action: 'confirmed' | 'edited' | 'reversed'
+          reason?: string | null
+          previous_values?: Json
+          new_values?: Json
+          acted_by: string
+          acted_at?: string
+        }
+        Update: {
+          id?: string
+          owner_user_id?: string
+          account_id?: string
+          entry_type?: 'reading' | 'topup' | 'main_balance' | 'adjustment' | 'cutoff'
+          entry_id?: string
+          action?: 'confirmed' | 'edited' | 'reversed'
+          reason?: string | null
+          previous_values?: Json
+          new_values?: Json
+          acted_by?: string
+          acted_at?: string
+        }
+        Relationships: []
+      }
+      electricity_issue_tickets: {
+        Row: {
+          id: string
+          owner_user_id: string
+          property_id: string
+          account_id: string
+          title: string
+          description: string
+          priority: 'low' | 'normal' | 'high' | 'urgent'
+          status: 'open' | 'in_progress' | 'waiting_on_staff' | 'resolved' | 'closed'
+          resolution: string | null
+          opened_by: string
+          updated_by: string
+          resolved_by: string | null
+          resolved_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          owner_user_id: string
+          property_id: string
+          account_id: string
+          title: string
+          description: string
+          priority?: 'low' | 'normal' | 'high' | 'urgent'
+          status?: 'open' | 'in_progress' | 'waiting_on_staff' | 'resolved' | 'closed'
+          resolution?: string | null
+          opened_by: string
+          updated_by: string
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          owner_user_id?: string
+          property_id?: string
+          account_id?: string
+          title?: string
+          description?: string
+          priority?: 'low' | 'normal' | 'high' | 'urgent'
+          status?: 'open' | 'in_progress' | 'waiting_on_staff' | 'resolved' | 'closed'
+          resolution?: string | null
+          opened_by?: string
+          updated_by?: string
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      electricity_issue_comments: {
+        Row: { id: string; ticket_id: string; owner_user_id: string; body: string; created_by: string; created_at: string }
+        Insert: { id?: string; ticket_id: string; owner_user_id: string; body: string; created_by: string; created_at?: string }
+        Update: { id?: string; ticket_id?: string; owner_user_id?: string; body?: string; created_by?: string; created_at?: string }
+        Relationships: []
+      }
+      electricity_issue_events: {
+        Row: { id: string; ticket_id: string; owner_user_id: string; action: 'opened' | 'status_changed' | 'resolved' | 'reopened'; previous_status: string | null; new_status: string | null; details: string | null; performed_by: string; performed_at: string }
+        Insert: { id?: string; ticket_id: string; owner_user_id: string; action: 'opened' | 'status_changed' | 'resolved' | 'reopened'; previous_status?: string | null; new_status?: string | null; details?: string | null; performed_by: string; performed_at?: string }
+        Update: { id?: string; ticket_id?: string; owner_user_id?: string; action?: 'opened' | 'status_changed' | 'resolved' | 'reopened'; previous_status?: string | null; new_status?: string | null; details?: string | null; performed_by?: string; performed_at?: string }
         Relationships: []
       }
     }
@@ -1105,8 +1264,19 @@ export interface Database {
         Returns: Database['public']['Tables']['electricity_readings']['Row']
       }
       record_electricity_main_meter_balance: {
-        Args: { p_account_id: string; p_units_remaining: number; p_reading_date: string; p_notes?: string | null }
+        Args: { p_account_id: string; p_units_remaining: number; p_reading_date: string; p_notes?: string | null; p_units_purchased_since_previous?: number; p_zero_confirmed?: boolean }
         Returns: Database['public']['Tables']['electricity_main_meter_balances']['Row']
+      }
+      replace_electricity_submeter: {
+        Args: {
+          p_account_id: string
+          p_tenant_id: string
+          p_current_meter_reading: number
+          p_reading_date: string
+          p_opening_balance_units: number
+          p_display_name?: string | null
+        }
+        Returns: Database['public']['Tables']['electricity_accounts']['Row']
       }
       adjust_electricity_balance: {
         Args: {
@@ -1147,6 +1317,10 @@ export interface Database {
       verify_electricity_topup: {
         Args: { p_topup_id: string }
         Returns: Database['public']['Tables']['electricity_topups']['Row']
+      }
+      manage_electricity_entry: {
+        Args: { p_entry_type: string; p_entry_id: string; p_action: string; p_changes?: Json; p_reason?: string | null }
+        Returns: Json
       }
     }
     Enums: {

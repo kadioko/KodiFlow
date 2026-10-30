@@ -227,6 +227,16 @@
 
     .input { font-size: 16px; }
 
+    .electricity-workspace :is(button, [role="tab"]) {
+      min-height: 48px;
+      touch-action: manipulation;
+    }
+
+    .electricity-workspace :is(input, select, textarea) {
+      min-height: 48px;
+      font-size: 16px;
+    }
+
     .btn, .btn-primary, .btn-secondary, .btn-danger, .btn-success, .icon-button {
       min-height: 48px;
       touch-action: manipulation;

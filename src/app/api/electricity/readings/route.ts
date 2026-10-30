@@ -19,6 +19,17 @@ export async function POST(request: NextRequest) {
     }
     if (notes && notes.length > 500) return NextResponse.json({ error: 'Notes must be 500 characters or less.' }, { status: 400 })
 
+    const { data: account, error: accountError } = await actor.client
+      .from('electricity_accounts')
+      .select('meter_kind')
+      .eq('id', accountId)
+      .maybeSingle()
+    if (accountError) return NextResponse.json({ error: accountError.message }, { status: 400 })
+    if (!account) return NextResponse.json({ error: 'Meter not found or access denied.' }, { status: 404 })
+    if (account.meter_kind === 'floor_main') {
+      return NextResponse.json({ error: 'Shared main meters use TANESCO LUKU balance snapshots. Record this in Meters and balances.' }, { status: 400 })
+    }
+
     const { data, error } = await actor.client.rpc('record_electricity_meter_reading', {
       p_account_id: accountId,
       p_current_reading: currentReading,
