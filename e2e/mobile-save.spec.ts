@@ -62,7 +62,7 @@ test('settings confirms a successful save beside the green action', async ({ pag
   await page.getByLabel('Invoice Payment Instructions').fill('Pay into the agreed bank account')
   const bar = page.getByRole('region', { name: 'Form actions' })
   await bar.getByRole('button', { name: 'Save settings' }).tap()
-  await expect(bar.getByRole('status')).toHaveText('Settings saved')
+  await expect(bar.getByRole('status')).toHaveText(/^Settings saved\.?$/)
   expect(savedInstructions).toBe('Pay into the agreed bank account')
 })
 

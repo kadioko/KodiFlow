@@ -26,7 +26,7 @@ for (const viewport of [
     await page.screenshot({ path: testInfo.outputPath('save-action.png') })
 
     await page.goto('/documents')
-    await page.getByRole('button', { name: 'Open quick actions' }).tap()
+    await page.getByRole('button', { name: 'Quick actions', exact: true }).tap()
     const dialog = page.getByRole('dialog', { name: 'Quick actions', exact: true })
     await dialog.getByRole('button', { name: 'All sections', exact: true }).click({ trial: true })
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
@@ -34,7 +34,7 @@ for (const viewport of [
     const search = page.getByRole('dialog', { name: 'Search KodiFlow', exact: true })
     await search.getByRole('searchbox').fill('Twilight')
     await search.getByRole('button', { name: 'Search KodiFlow', exact: true }).click({ trial: true })
-    await search.getByRole('button', { name: 'Close search' }).tap()
+    await search.getByRole('button', { name: 'Close quick actions', exact: true }).tap()
     await expect(search).toBeHidden()
   })
 }
