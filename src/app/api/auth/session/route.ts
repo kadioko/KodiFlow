@@ -15,6 +15,17 @@ export async function GET() {
     }
 
     const serviceClient = createServiceClient()
+    const { data: electricityStaff } = await serviceClient
+      .from('electricity_staff')
+      .select('active')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
+
+    if (electricityStaff) {
+      if (!electricityStaff.active) return NextResponse.json({ user: null }, { status: 401 })
+      return NextResponse.json({ user, adminRole: 'electricity_staff' })
+    }
+
     const { data: profile } = await serviceClient
       .from('profiles')
       .select('admin_role')

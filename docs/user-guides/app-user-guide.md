@@ -231,6 +231,20 @@ Typical workflow:
 3. Review usage and charge calculations.
 4. Use the utility information when preparing invoices or reports.
 
+### Manual Electricity Tracking
+
+The **Electricity** workspace is for properties that track prepaid electricity manually, such as Dora Tower. It tracks meter units and LUKU top-ups; KodiFlow does not purchase tokens, collect token payments, or disconnect power remotely.
+
+Owners can create a submeter account for a unit/client or a floor main meter. For each meter, record the starting reading and its actual date; later readings are compared against that dated baseline. For each submeter, also set any opening units already available and the low-balance alert threshold. Floor main readings are recorded separately and are not automatically divided between tenants.
+
+Staff sign in with the Staff ID and numeric PIN provided by the owner. When creating or editing a staff login, explicitly select only the properties that person is responsible for; unselected properties and their meter history are not available to that login. Owners can change the assignment later, including removing all property access. To record a meter visit, staff enter the current physical reading: KodiFlow calculates usage from the previous reading, applies verified tenant-reported top-ups, and shows the remaining unit balance. Readings are saved atomically so concurrent updates cannot reuse the same previous reading.
+
+The **Main meter reconciliation** section compares a floor main meter's usage against the sum of its active tenant submeters. It uses matching start and end dates only. A floor is marked incomplete until every active submeter has a reading for that exact period; no final missing-unit amount is shown for partial periods. Positive variance means main-meter use exceeds tenant submeter use (unaccounted units); negative variance means submeters report more usage than the main meter. Starting readings from the Dora Tower ledger are baselines only because the paper sheet does not include the previous main-meter readings; record the next round of main and submeter readings to get a valid comparison.
+
+When a tenant buys LUKU, staff can record the purchased units. A reported top-up does not increase the available balance until staff verify it. If verification happens after a reading in that purchase period, KodiFlow reconciles it into the first applicable reading and recalculates later balances. Do not enter the full token code; only an optional short suffix is stored for identification. The attention queue highlights low, exhausted, or overdue-for-reading meters and can draft a tenant reminder.
+
+If staff physically disconnect or restore a meter, record that action and its reason in the account timeline. This is an audit record only; KodiFlow never controls the meter switch. Owners can manage staff IDs, reset PINs, and deactivate staff access from the Electricity workspace.
+
 ## 14. Documents
 
 Use **Documents** to store files such as lease agreements, tenant IDs, receipts, property photos, inspection records, or supporting paperwork.

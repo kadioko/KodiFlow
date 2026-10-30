@@ -21,6 +21,7 @@ import {
   Settings,
   Shield,
   Wrench,
+  Bolt,
   ChevronLeft,
   ChevronRight,
   X,
@@ -29,7 +30,7 @@ import { useState } from 'react'
 
 interface SidebarProps {
   user: User
-  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
+  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin' | 'electricity_staff'
 }
 
 export const navigation = [
@@ -44,6 +45,7 @@ export const navigation = [
   { name: 'Expenses', href: '/expenses', icon: Wallet },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { name: 'Utilities', href: '/utilities', icon: Gauge },
+  { name: 'Electricity Tracking', href: '/electricity', icon: Bolt },
   { name: 'Documents', href: '/documents', icon: FileStack },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Tenant Portal', href: '/tenant-portal', icon: UserRound },
@@ -57,7 +59,9 @@ const adminNavigation = [
 export function Sidebar({ user, adminRole }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
-  const visibleNavigation = ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
+  const visibleNavigation = adminRole === 'electricity_staff'
+    ? navigation.filter((item) => item.href === '/electricity')
+    : ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
 
   return (
     <div className={`${collapsed ? 'w-16' : 'w-64'} hidden flex-shrink-0 bg-slate-950 text-white shadow-2xl shadow-slate-950/20 transition-all duration-300 lg:flex lg:flex-col`}>
@@ -121,14 +125,16 @@ export function Sidebar({ user, adminRole }: SidebarProps) {
 
 interface MobileSidebarProps {
   user: User
-  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
+  adminRole: 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin' | 'electricity_staff'
   open: boolean
   onClose: () => void
 }
 
 export function MobileSidebar({ user, adminRole, open, onClose }: MobileSidebarProps) {
   const pathname = usePathname()
-  const visibleNavigation = ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
+  const visibleNavigation = adminRole === 'electricity_staff'
+    ? navigation.filter((item) => item.href === '/electricity')
+    : ['admin', 'super_admin'].includes(adminRole) ? [...navigation, ...adminNavigation] : navigation
 
   if (!open) return null
 

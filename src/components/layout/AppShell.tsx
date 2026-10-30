@@ -9,7 +9,7 @@ import { LoadingState, PageSkeleton } from '@/components/ui/LoadingState'
 import { MobileBottomBar } from '@/components/layout/MobileBottomBar'
 import { useMobileViewport } from '@/components/layout/useMobileViewport'
 
-type AppRole = 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin'
+type AppRole = 'none' | 'viewer' | 'property_manager' | 'accountant' | 'maintenance_manager' | 'admin' | 'super_admin' | 'electricity_staff'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -73,6 +73,12 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [isPublicPage, loading, pathname, user])
 
+  useEffect(() => {
+    if (!loading && user && adminRole === 'electricity_staff' && !pathname.startsWith('/electricity')) {
+      window.location.replace('/electricity')
+    }
+  }, [adminRole, loading, pathname, user])
+
   if (isPublicPage) {
     return <>{children}</>
   }
@@ -93,17 +99,21 @@ export function AppShell({ children }: AppShellProps) {
     )
   }
 
+  if (adminRole === 'electricity_staff' && !pathname.startsWith('/electricity')) {
+    return <LoadingState title="Opening electricity workspace" message="Taking you to your assigned meters..." fullHeight />
+  }
+
   return (
     <div className="min-h-[100dvh] bg-gray-50">
       <div className="flex min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden">
         <Sidebar user={user} adminRole={adminRole} />
         <MobileSidebar user={user} adminRole={adminRole} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
-          <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} />
+          <Header user={user} onOpenMobileMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
           <main id="main-content" className="mobile-page-content min-w-0 flex-1 p-4 sm:p-6 lg:overflow-y-auto lg:p-8">
             {children}
           </main>
-          <MobileBottomBar onOpenMenu={() => setMobileMenuOpen(true)} />
+          <MobileBottomBar onOpenMenu={() => setMobileMenuOpen(true)} electricityStaff={adminRole === 'electricity_staff'} />
         </div>
       </div>
     </div>

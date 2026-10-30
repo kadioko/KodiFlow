@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { CreditCard, FilePlus2, FileText, LayoutDashboard, Menu, Plus, Receipt, Search, UserPlus, X } from 'lucide-react'
+import { Bolt, CreditCard, FilePlus2, FileText, Gauge, LayoutDashboard, Menu, Plus, Receipt, Search, UserPlus, X } from 'lucide-react'
 
 const primaryNavigation = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -19,7 +19,7 @@ const quickActions = [
   { label: 'Create lease', detail: 'Assign a tenant to a unit', href: '/leases/new', icon: FileText, tone: 'bg-amber-100 text-amber-700' },
 ]
 
-export function MobileBottomBar({ onOpenMenu }: { onOpenMenu: () => void }) {
+export function MobileBottomBar({ onOpenMenu, electricityStaff = false }: { onOpenMenu: () => void; electricityStaff?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -37,6 +37,30 @@ export function MobileBottomBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     if (!term) return
     setShowSearch(false)
     router.push(`/search?q=${encodeURIComponent(term)}`)
+  }
+
+  if (electricityStaff) {
+    const staffLinks = [
+      { label: 'Overview', href: '/electricity', icon: Gauge },
+      { label: 'Alerts', href: '/electricity#attention', icon: Bolt },
+      { label: 'Meters', href: '/electricity#meters', icon: Receipt },
+    ]
+    return (
+      <nav aria-label="Electricity staff mobile navigation" className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.10)] backdrop-blur lg:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-5 items-end">
+          <MobileLink item={staffLinks[0]} active={pathname === '/electricity'} />
+          <MobileLink item={staffLinks[1]} active={false} />
+          <Link href="/electricity#record" className="flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-semibold text-slate-600">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 text-white"><Plus className="h-6 w-6" /></span>
+            Read
+          </Link>
+          <MobileLink item={staffLinks[2]} active={false} />
+          <button type="button" onClick={onOpenMenu} className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-semibold text-slate-500" aria-label="Open electricity navigation">
+            <Menu className="h-5 w-5" /><span>More</span>
+          </button>
+        </div>
+      </nav>
+    )
   }
 
   return (

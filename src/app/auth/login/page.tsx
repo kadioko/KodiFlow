@@ -6,8 +6,11 @@ import { Eye, EyeOff } from 'lucide-react'
 import { safeLoginDestination } from '@/utils/navigation'
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<'owner' | 'staff'>('owner')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [staffId, setStaffId] = useState('')
+  const [pin, setPin] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,12 +24,12 @@ export default function LoginPage() {
       const controller = new AbortController()
       const timeoutId = window.setTimeout(() => controller.abort(), 20000)
 
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(mode === 'staff' ? '/api/auth/staff-login' : '/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(mode === 'staff' ? { staffId, pin } : { email, password }),
         signal: controller.signal,
       })
       window.clearTimeout(timeoutId)
@@ -40,7 +43,7 @@ export default function LoginPage() {
 
       const params = new URLSearchParams(window.location.search)
       const nextPath = params.get('next')
-      window.location.assign(safeLoginDestination(nextPath, window.location.origin))
+      window.location.assign(mode === 'staff' ? '/electricity' : safeLoginDestination(nextPath, window.location.origin))
     } catch (error) {
       setError(
         error instanceof DOMException && error.name === 'AbortError'
@@ -54,6 +57,11 @@ export default function LoginPage() {
 
   return (
     <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <div className="mb-6 grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Sign-in type">
+        <button type="button" onClick={() => { setMode('owner'); setError('') }} className={`min-h-11 rounded-md px-3 text-sm font-semibold ${mode === 'owner' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Owner / manager</button>
+        <button type="button" onClick={() => { setMode('staff'); setError('') }} className={`min-h-11 rounded-md px-3 text-sm font-semibold ${mode === 'staff' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Staff ID</button>
+      </div>
+
       <form className="space-y-6" onSubmit={handleLogin}>
         {error && (
           <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg">
@@ -61,6 +69,7 @@ export default function LoginPage() {
           </div>
         )}
 
+        {mode === 'owner' ? <>
         <div>
           <label htmlFor="email" className="label">
             Email address
@@ -102,8 +111,19 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+        </> : <>
+          <div>
+            <label htmlFor="staff-id" className="label">Staff ID</label>
+            <input id="staff-id" name="staff-id" type="text" autoComplete="username" autoCapitalize="characters" required value={staffId} onChange={(event) => setStaffId(event.target.value.toUpperCase())} className="input" />
+          </div>
+          <div>
+            <label htmlFor="staff-pin" className="label">PIN</label>
+            <input id="staff-pin" name="staff-pin" type="password" inputMode="numeric" pattern="[0-9]{8,12}" autoComplete="current-password" required value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 12))} className="input" />
+            <p className="mt-1 text-xs text-slate-500">Enter the 8–12 digit PIN provided by your manager.</p>
+          </div>
+        </>}
 
-        <div className="flex items-center justify-between">
+        {mode === 'owner' && <div className="flex items-center justify-between">
           <div className="flex items-center">
             <input
               id="remember-me"
@@ -121,18 +141,18 @@ export default function LoginPage() {
               Forgot your password?
             </Link>
           </div>
-        </div>
+        </div>}
 
         <button
           type="submit"
           disabled={loading}
           className="btn-primary w-full"
         >
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? 'Signing in...' : mode === 'staff' ? 'Open electricity workspace' : 'Sign in'}
         </button>
       </form>
 
-      <div className="mt-6">
+      {mode === 'owner' && <div className="mt-6">
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300" />
@@ -150,7 +170,7 @@ export default function LoginPage() {
             Create new account
           </Link>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

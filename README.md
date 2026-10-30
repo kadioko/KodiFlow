@@ -45,7 +45,7 @@ KodiFlow is a full-stack property management web app for residential, commercial
 - Payment records can be viewed, edited, and reversed with an auditable correction trail.
 - Payment amount inputs use comma-formatted text entry to reduce number-entry mistakes.
 - Expense tracking by property and category.
-- Water and electricity meter readings with charge previews.
+- Water and electricity meter readings with charge previews, plus manual prepaid-electricity tracking with staff access, verified tenant top-ups, low-balance alerts, and reading history.
 - TZS default currency with USD, EUR, and GBP preference support.
 - TZS money displays as whole shillings with comma separators.
 - Financial activity timelines show invoice voids, payment reversals, and maintenance events on related records.
@@ -224,6 +224,7 @@ kodiflow/
 | `/admin` | Team users, operational roles, and platform administration |
 | `/documents` | Uploads and document metadata |
 | `/utilities` | Water/electricity readings |
+| `/electricity` | Manual LUKU and submeter tracking with property-scoped staff access |
 | `/tenant-portal` | Tenant self-service portal |
 | `/reports` | Financial and operational reports |
 | `/settings` | Currency, language, late fee, PWA install help, and light/dark mode |

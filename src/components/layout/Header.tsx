@@ -13,9 +13,10 @@ interface HeaderProps {
   dashboardVisible?: boolean
   onToggleDashboard?: () => void
   onOpenMobileMenu?: () => void
+  electricityStaff?: boolean
 }
 
-export function Header({ user: _user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu }: HeaderProps) {
+export function Header({ user: _user, dashboardVisible = true, onToggleDashboard, onOpenMobileMenu, electricityStaff = false }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
   const [loggingOut, setLoggingOut] = useState(false)
@@ -40,9 +41,9 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
           <Menu className="h-5 w-5" />
         </button>
         <div className="lg:hidden">
-          <BrandLogo href="/dashboard" size="sm" tone="dark" priorityLabel="KodiFlow dashboard" />
+          <BrandLogo href={electricityStaff ? '/electricity' : '/dashboard'} size="sm" tone="dark" priorityLabel={electricityStaff ? 'KodiFlow electricity tracking workspace' : 'KodiFlow dashboard'} />
         </div>
-        {onToggleDashboard && (
+        {!electricityStaff && onToggleDashboard && (
           <button
             type="button"
             onClick={onToggleDashboard}
@@ -53,7 +54,7 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
             <span className="ml-2 hidden xl:inline">{dashboardVisible ? 'Hide dashboard' : 'Show dashboard'}</span>
           </button>
         )}
-        <form action="/search" className="hidden w-full max-w-xl md:block lg:max-w-md">
+        {!electricityStaff && <form action="/search" className="hidden w-full max-w-xl md:block lg:max-w-md">
           <label htmlFor="search" className="sr-only">Search</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -67,11 +68,11 @@ export function Header({ user: _user, dashboardVisible = true, onToggleDashboard
               type="search"
             />
           </div>
-        </form>
+        </form>}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <NotificationManager />
+        {!electricityStaff && <NotificationManager />}
 
         <div className="h-6 w-px bg-slate-200"></div>
 

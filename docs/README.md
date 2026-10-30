@@ -44,7 +44,7 @@ docs/
 
 The maintained docs now cover:
 
-- Property, section, unit, tenant, lease, invoice, payment, utility, document, report, maintenance, search, settings, and administration workflows.
+- Property, section, unit, tenant, lease, invoice, payment, utility, manual prepaid-electricity, document, report, maintenance, search, settings, and administration workflows.
 - Mobile navigation through the header menu, bottom bar, and quick-action sheet; desktop navigation through the sidebar.
 - PWA installation from Settings, including mobile add-to-home-screen help.
 - Light and dark appearance modes.
