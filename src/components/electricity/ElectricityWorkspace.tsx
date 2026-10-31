@@ -6,10 +6,12 @@ import { calculateElectricityBalance, classifyElectricityBalance, type Electrici
 import { getElectricityReadingContext } from '@/lib/electricity/reading-context'
 import { digitsOnlyLukuToken, formatLukuToken } from '@/lib/electricity/luku-token'
 import { calculateMainMeterUsage, classifyMainMeterBalance, estimateMainMeterDaysRemaining } from '@/lib/electricity/main-meter-balance'
+import { calculateFloorCreditCoverage } from '@/lib/electricity/floor-credit-coverage'
 import { reconcileMainMeters } from '@/lib/electricity/reconciliation'
 import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electricity/database.types'
 import type { Database } from '@/lib/supabase/database.types'
 import { ElectricityEntryCorrections, type CorrectableEntry, type ElectricityEntryType, type EditorField } from '@/components/electricity/ElectricityEntryCorrections'
+import { ElectricityFloorCoverage } from '@/components/electricity/ElectricityFloorCoverage'
 import { ElectricityHistoryPanel } from '@/components/electricity/ElectricityHistoryPanel'
 import { ElectricityIssuesPanel } from '@/components/electricity/ElectricityIssuesPanel'
 import { formatCurrency, formatDate } from '@/utils/currency'
@@ -60,6 +62,7 @@ type WorkspaceData = {
   ownerMode: boolean
   currentUserId: string
   currentStaffId: string | null
+  coverageDataTruncated: boolean
   properties: PropertyOption[]
   sections: SectionOption[]
   units: UnitOption[]
@@ -236,6 +239,10 @@ export function ElectricityWorkspace() {
     for (let index = 1; index < history.length; index += 1) previousMainBalanceById.set(history[index].id, history[index - 1])
   }
   const reconciliations = reconcileMainMeters(activeAccounts, data?.readings || [], mainMeterBalances)
+  const floorCreditCoverage = calculateFloorCreditCoverage(activeAccounts, mainMeterBalances, {
+    today: todayISO(),
+    dataTruncated: Boolean(data?.coverageDataTruncated),
+  })
   const accountById = new Map(accounts.map((account) => [account.id, account]))
   const propertyTopups = (data?.topups || [])
     .filter((topup) => accountById.has(topup.account_id))
@@ -1144,6 +1151,8 @@ export function ElectricityWorkspace() {
         <Metric label={t('electricity.estimatedUnitsLeft')} value={numeric(verifiedReadingBalance)} detail={t('electricity.latestBalances')} />
         <Metric label={t('electricity.mainMeters')} value={String(mainMeters.length)} detail={t('electricity.sharedReadings')} />
       </section>}
+
+      {(activeView === 'overview' || activeView === 'meters') && <ElectricityFloorCoverage coverage={floorCreditCoverage} />}
 
       {activeView === 'overview' && mainMeters.length > 0 && <section aria-labelledby="main-meter-directory-heading" className="border-y border-slate-200 bg-white">
         <div className="flex items-end justify-between gap-3 px-4 py-3 sm:px-5">

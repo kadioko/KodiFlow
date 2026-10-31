@@ -94,6 +94,7 @@ describe('electricity meter reading transaction', () => {
       '202610300014_main_luku_balance_alerts_and_reconciliation.sql',
       '202610300015_electricity_submeter_handoffs.sql',
       '202610300016_electricity_corrections_and_issues.sql',
+      '202610300017_electricity_entry_audit_guards.sql',
     ]) {
       const migration = readFileSync(resolve('supabase/migrations', migrationFile), 'utf8')
       for (const [index, statement] of splitSqlStatements(migration).entries()) {
@@ -716,6 +717,68 @@ describe('electricity meter reading transaction', () => {
       [accountId, '2026-10-26', 'Replacement after reversal'],
     )
     expect(replacement.rows).toHaveLength(1)
+  })
+
+  it('rolls back direct corrections without a reason or with a future or pre-baseline date', async () => {
+    const reading = await db.query<{ id: string }>(
+      'SELECT id FROM public.record_electricity_meter_reading($1, 115, $2, NULL)', [accountId, '2026-10-26'],
+    )
+    await db.exec('SAVEPOINT before_missing_reason;')
+    await expect(db.query(
+      "SELECT public.manage_electricity_entry('reading', $1, 'reverse', '{}'::JSONB, NULL)", [reading.rows[0].id],
+    )).rejects.toThrow(/electricity_entry_audit_reason_required/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_missing_reason;')
+    for (const invalidDate of ['2099-01-01', '2026-10-25']) {
+      await db.exec('SAVEPOINT before_invalid_date;')
+      await expect(db.query(
+        "SELECT public.manage_electricity_entry('reading', $1, 'edit', $2::JSONB, 'Correct date')",
+        [reading.rows[0].id, JSON.stringify({ reading_date: invalidDate })],
+      )).rejects.toThrow(/after the meter baseline and no later than today/)
+      await db.exec('ROLLBACK TO SAVEPOINT before_invalid_date;')
+    }
+    const saved = await db.query<{ reading_date: Date; reversed_at: Date | null }>(
+      'SELECT reading_date, reversed_at FROM public.electricity_readings WHERE id = $1', [reading.rows[0].id],
+    )
+    expect(saved.rows[0]).toEqual({ reading_date: new Date('2026-10-26T00:00:00.000Z'), reversed_at: null })
+  })
+
+  it('blocks future dates when correcting top-ups, main snapshots, or balance adjustments', async () => {
+    const topup = await db.query<{ id: string }>("SELECT id FROM public.record_electricity_topup($1, '2026-10-25', 10, NULL, FALSE, NULL)", [accountId])
+    const balance = await db.query<{ id: string }>("SELECT id FROM public.record_electricity_main_meter_balance($1, 100, '2026-10-26', NULL, 0, FALSE)", [mainAccountId])
+    const adjustment = await db.query<{ id: string }>("SELECT id FROM public.adjust_electricity_balance($1, 5, '2026-10-25', 'Paper correction')", [accountId])
+    for (const [type, id, field] of [
+      ['topup', topup.rows[0].id, 'purchase_date'],
+      ['main_balance', balance.rows[0].id, 'reading_date'],
+      ['adjustment', adjustment.rows[0].id, 'adjustment_date'],
+    ]) {
+      await db.exec('SAVEPOINT before_future_correction;')
+      await expect(db.query(
+        "SELECT public.manage_electricity_entry($1, $2, 'edit', $3::JSONB, 'Correct date')",
+        [type, id, JSON.stringify({ [field]: '2099-01-01' })],
+      )).rejects.toThrow(/today or earlier/)
+      await db.exec('ROLLBACK TO SAVEPOINT before_future_correction;')
+    }
+  })
+
+  it('prevents staff from editing owner balance adjustments but permits normal readings', async () => {
+    const adjustment = await db.query<{ id: string }>("SELECT id FROM public.adjust_electricity_balance($1, 5, '2026-10-25', 'Paper correction')", [accountId])
+    await db.query(`
+      INSERT INTO public.electricity_staff (owner_user_id, auth_user_id, staff_id, login_email, full_name, created_by)
+      VALUES ($1, $2, 'DT-04', 'adjustment-staff@test.invalid', 'Meter Staff', $1)
+    `, [ownerId, staffAuthId])
+    const staff = await db.query<{ id: string }>('SELECT id FROM public.electricity_staff WHERE auth_user_id = $1', [staffAuthId])
+    await db.query('SELECT public.set_electricity_staff_properties($1, ARRAY[$2::UUID])', [staff.rows[0].id, propertyId])
+    await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [staffAuthId])
+    await db.exec('SAVEPOINT before_staff_adjustment_edit;')
+    await expect(db.query(
+      "SELECT public.manage_electricity_entry('adjustment', $1, 'edit', $2::JSONB, 'Correct units')",
+      [adjustment.rows[0].id, JSON.stringify({ adjustment_units: 50 })],
+    )).rejects.toThrow(/Only the property owner can change a balance adjustment/)
+    await db.exec('ROLLBACK TO SAVEPOINT before_staff_adjustment_edit;')
+    const reading = await db.query<{ closing_balance_units: string }>(
+      "SELECT closing_balance_units FROM public.record_electricity_meter_reading($1, 115, '2026-10-26', NULL)", [accountId],
+    )
+    expect(reading.rows[0].closing_balance_units).toBe('10.000')
   })
 
   it('records confirmation identity and time without copying the full token into the audit trail', async () => {

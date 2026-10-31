@@ -49,7 +49,7 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
   const [visibleTokens, setVisibleTokens] = useState<Set<string>>(() => new Set())
   const [copiedToken, setCopiedToken] = useState('')
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (signal: AbortSignal) => {
     if (!propertyId) return
     setLoading(true)
     setError('')
@@ -59,20 +59,21 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
     if (fromDate) params.set('from', fromDate)
     if (toDate) params.set('to', toDate)
     try {
-      const response = await fetch(`/api/electricity/history?${params}`, { cache: 'no-store' })
+      const response = await fetch(`/api/electricity/history?${params}`, { cache: 'no-store', signal })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || t('electricity.historyLoadFailed'))
-      setData(result as HistoryResponse)
+      if (!signal.aborted) setData(result as HistoryResponse)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t('electricity.historyLoadFailed'))
+      if (!signal.aborted) setError(caught instanceof Error ? caught.message : t('electricity.historyLoadFailed'))
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }, [accountId, fromDate, meters, page, propertyId, search, status, t, toDate, type])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void loadHistory() }, search.trim() ? 250 : 0)
-    return () => window.clearTimeout(timer)
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => { void loadHistory(controller.signal) }, search.trim() ? 250 : 0)
+    return () => { window.clearTimeout(timer); controller.abort() }
   }, [loadHistory, search])
 
   useEffect(() => {

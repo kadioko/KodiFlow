@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     const staffNames = new Map((staffResult.data || []).map((member) => [member.auth_user_id, member.full_name || member.staff_id]))
     const actorName = (userId: unknown) => typeof userId !== 'string'
       ? '—'
-      : staffNames.get(userId) || (userId === actor.ownerUserId ? actor.user.email || 'Owner' : userId.slice(0, 8))
+      : staffNames.get(userId) || (userId === actor.ownerUserId ? (actor.isOwner ? actor.user.email || 'Owner' : 'Owner') : userId.slice(0, 8))
 
     return NextResponse.json({
       rows: rows.map((row) => ({

@@ -144,7 +144,7 @@ export function ElectricityEntryCorrections({ entries, audit, ownerMode, onChang
             <p className="mt-1 break-words text-xs text-slate-600">{entry.accountLabel} · {t('electricity.entryCreatedBy')} {entry.recordedBy}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" className="btn-secondary min-h-12 w-full sm:w-auto" onClick={() => openEditor(entry)}><Pencil className="mr-2 inline h-4 w-4" />{t('electricity.editEntry')}</button>
+            {(ownerMode || entry.entryType !== 'adjustment') && <button type="button" className="btn-secondary min-h-12 w-full sm:w-auto" onClick={() => openEditor(entry)}><Pencil className="mr-2 inline h-4 w-4" />{t('electricity.editEntry')}</button>}
             {ownerMode && <button type="button" className="btn-danger min-h-12 w-full sm:w-auto" onClick={() => openEditor(entry, true)}><RotateCcw className="mr-2 inline h-4 w-4" />{t('electricity.reverseEntry')}</button>}
           </div>
         </article>)}

@@ -18,7 +18,7 @@ export async function GET() {
       service.from('properties').select('id, name').eq('user_id', ownerId).in('id', propertyIds).order('name'),
       service.from('property_sections').select('id, name, property_id, section_type').eq('user_id', ownerId).in('property_id', propertyIds).order('name'),
       service.from('units').select('id, unit_name, property_id, section_id, unit_identifier').eq('user_id', ownerId).in('property_id', propertyIds).order('unit_name'),
-      service.from('electricity_accounts').select('*').eq('owner_user_id', ownerId).in('property_id', propertyIds).order('floor_label').order('created_at'),
+      service.from('electricity_accounts').select('*', { count: 'exact' }).eq('owner_user_id', ownerId).in('property_id', propertyIds).order('floor_label').order('created_at'),
       actor.isOwner
         ? service.from('electricity_staff').select('id, auth_user_id, staff_id, full_name, active, created_at, last_login_at').eq('owner_user_id', ownerId).order('full_name')
         : Promise.resolve({ data: [], error: null }),
@@ -50,19 +50,19 @@ export async function GET() {
 
     const [readingResult, topupResult, cutoffResult, adjustmentResult, mainBalanceResult, entryAuditResult] = accountIds.length > 0
       ? await Promise.all([
-          service.from('electricity_readings').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(2000),
-          service.from('electricity_topups').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
+          service.from('electricity_readings').select('*', { count: 'exact' }).in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(2000),
+          service.from('electricity_topups').select('*', { count: 'exact' }).in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
           service.from('electricity_cutoff_events').select('*').in('account_id', accountIds).is('reversed_at', null).order('performed_at', { ascending: false }).limit(1000),
-          service.from('electricity_balance_adjustments').select('*').in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
-          service.from('electricity_main_meter_balances').select('*').in('account_id', accountIds).is('reversed_at', null).order('reading_date', { ascending: false }).limit(1000),
+          service.from('electricity_balance_adjustments').select('*', { count: 'exact' }).in('account_id', accountIds).is('reversed_at', null).order('created_at', { ascending: false }).limit(1000),
+          service.from('electricity_main_meter_balances').select('*', { count: 'exact' }).in('account_id', accountIds).is('reversed_at', null).order('reading_date', { ascending: false }).limit(1000),
           service.from('electricity_entry_audit').select('*').in('account_id', accountIds).order('acted_at', { ascending: false }).limit(1000),
         ])
       : [
+          { data: [], error: null, count: 0 },
+          { data: [], error: null, count: 0 },
           { data: [], error: null },
-          { data: [], error: null },
-          { data: [], error: null },
-          { data: [], error: null },
-          { data: [], error: null },
+          { data: [], error: null, count: 0 },
+          { data: [], error: null, count: 0 },
           { data: [], error: null },
         ]
 
@@ -195,6 +195,9 @@ export async function GET() {
       ownerMode: actor.isOwner,
       currentUserId: actor.user.id,
       currentStaffId: actor.staff?.staff_id || null,
+      coverageDataTruncated: accountResult.count === null || accountResult.count > accounts.length
+        || [readingResult, topupResult, adjustmentResult, mainBalanceResult]
+          .some((result) => Boolean(result.error) || result.count === null || result.count > (result.data?.length || 0)),
       properties,
       sections,
       units,

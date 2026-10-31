@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:mobile": "playwright test mobile-shell.spec.ts mobile-save.spec.ts --project=mobile",
+    "test:e2e:mobile": "playwright test mobile-shell.spec.ts mobile-save.spec.ts electricity-mobile.spec.ts --project=mobile",
     "db:types": "supabase gen types typescript --linked --schema public > src/lib/supabase/database.types.ts"
   },
   "keywords": [

@@ -210,6 +210,71 @@ test('LUKU history searches token digits and keeps the complete token masked unt
   await expect(page.getByText(/Confirmed by Property Owner/)).toBeVisible()
 })
 
+test('floor coverage clearly shows a main-meter shortfall and reserve top-up on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 })
+  await openWorkspace(page, false)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+  const data = workspace(false)
+  data.accounts[0].latest_reading!.reading_date = today
+  data.accounts[1].floor_label = 'Floor 2'
+  data.mainMeterBalances = [{ ...data.mainMeterBalances[1], reading_date: today, units_remaining: 20 }]
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.reload()
+
+  const coverage = page.getByRole('region', { name: 'Floor LUKU coverage' })
+  await expect(coverage).toBeVisible()
+  await expect(coverage.getByText('Estimated credit shortfall')).toBeVisible()
+  await expect(coverage.getByText('15 kWh', { exact: true })).toBeVisible()
+  await expect(coverage.getByText('65 kWh', { exact: true })).toBeVisible()
+  await coverage.getByText('View matched client balances').tap()
+  await expect(coverage.getByText(/Twilight Office Services Limited/)).toBeVisible()
+  await expectNoPageOverflow(page)
+  await page.getByRole('tab', { name: 'Meters and balances' }).tap()
+  await expect(page.getByRole('region', { name: 'Floor LUKU coverage' }).getByText('Estimated credit shortfall')).toBeVisible()
+})
+
+test('staff can see owner adjustments but cannot edit or reverse them', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 })
+  await openWorkspace(page, false)
+  const data = {
+    ...workspace(false),
+    adjustments: [{ id: 'adjustment-1', account_id: submeterId, owner_user_id: fixtureId, adjustment_date: '2026-10-29', adjustment_units: 5, reason: 'Owner checked the balance', recorded_by: fixtureId, created_at: '2026-10-29T08:00:00.000Z', applied_reading_id: null }],
+  }
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.reload()
+  await page.getByRole('tab', { name: 'Entries & corrections' }).tap()
+  await page.getByLabel('Entry type').selectOption('adjustment')
+  await expect(page.getByText('Owner checked the balance')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit entry' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Reverse entry' })).toHaveCount(0)
+})
+
+test('a slow old history search cannot overwrite the latest search', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 })
+  await openWorkspace(page, false)
+  let oldSearchStarted = false
+  await page.route('**/api/electricity/history*', async (route) => {
+    const search = new URL(route.request().url()).searchParams.get('search') || ''
+    if (search === 'first') {
+      oldSearchStarted = true
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+    }
+    try {
+      await route.fulfill({ json: { rows: [], total: search === 'first' ? 9 : search === 'second' ? 2 : 0, page: 1, pageSize: 40 } })
+    } catch {
+      // The browser may cancel the superseded request before the mock responds.
+    }
+  })
+  await page.getByRole('tab', { name: 'History & search' }).tap()
+  const search = page.getByLabel('Search records')
+  await search.fill('first')
+  await expect.poll(() => oldSearchStarted).toBe(true)
+  await search.fill('second')
+  await expect(page.getByText('2 records', { exact: true })).toBeVisible()
+  await page.waitForTimeout(1400)
+  await expect(page.getByText('2 records', { exact: true })).toBeVisible()
+})
+
 test('owner meter handoff and staff setup remain usable on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 874 })
   await openWorkspace(page, true)
