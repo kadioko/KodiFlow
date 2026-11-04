@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Download, RefreshCw, Share2 } from 'lucide-react'
 import { useLanguage } from '@/components/i18n/LanguageProvider'
-import { buildElectricityFollowUp, getFollowUpAction, type FollowUpAccount, type FollowUpAction, type FollowUpPriority } from '@/lib/electricity/follow-up-report'
+import { buildElectricityFollowUp, getFollowUpAction, totalNegativeClientBalances, type FollowUpAccount, type FollowUpAction, type FollowUpPriority } from '@/lib/electricity/follow-up-report'
 import { formatDate } from '@/utils/currency'
 import type { TranslationKey } from '@/utils/i18n'
 
@@ -33,6 +33,7 @@ export function ElectricityFollowUpReport({ accounts, property, propertyId, inco
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null)
   const today = todayInNairobi()
   const items = useMemo(() => buildElectricityFollowUp(accounts, today), [accounts, today])
+  const totalNegativeUnits = useMemo(() => totalNegativeClientBalances(items), [items])
 
   const generate = async (share: boolean) => {
     if (busy || incomplete) return
@@ -60,6 +61,9 @@ export function ElectricityFollowUpReport({ accounts, property, propertyId, inco
         clients: t('electricity.followUpClients'),
         unitsLeft: t('electricity.followUpUnitsLeft'),
         unitsOwed: t('electricity.followUpOwes'),
+        totalNegativeUnits: t('electricity.totalNegativeUnits'),
+        totalNegativeUnitsHelp: t('electricity.totalNegativeUnitsHelp'),
+        totalNegativeUnitsPartial: t('electricity.totalNegativeUnitsPartial'),
         actionLabel: t('electricity.followUpAction'),
         lastReading: t('electricity.followUpLastReading'),
         unknown: t('electricity.followUpUnknown'),
@@ -126,7 +130,7 @@ export function ElectricityFollowUpReport({ accounts, property, propertyId, inco
             <span className={`border px-2 py-1 text-xs font-semibold ${item.priority === 'urgent' || item.priority === 'low' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{t(priorityKeys[item.priority])}</span>
           </div>
           <p className="mt-1 break-words text-sm text-slate-600">{item.location}</p>
-          <p className="mt-1 text-sm text-slate-700">{t(item.balance !== null && item.balance < 0 ? 'electricity.followUpOwes' : 'electricity.followUpUnitsLeft')}: <strong className="tabular-nums">{item.balance === null ? t('electricity.followUpUnknown') : `${unitsFormatter.format(Math.abs(item.balance))} kWh`}</strong> · {t('electricity.followUpLastReading')}: {item.readingDate ? formatDate(item.readingDate) : t('electricity.followUpUnknown')}</p>
+          <div className="mt-2"><p className="text-xs font-semibold text-slate-600">{t(item.balance !== null && item.balance < 0 ? 'electricity.followUpOwes' : 'electricity.followUpUnitsLeft')}</p><p className={`mt-1 break-all tabular-nums ${item.balance !== null && item.balance < 0 ? 'text-3xl font-extrabold text-rose-700' : 'text-lg font-bold text-slate-900'}`}>{item.balance === null ? t('electricity.followUpUnknown') : `${unitsFormatter.format(item.balance)} kWh`}</p><p className="mt-1 text-xs text-slate-600">{t('electricity.followUpLastReading')}: {item.readingDate ? formatDate(item.readingDate) : t('electricity.followUpUnknown')}</p></div>
           <p className="mt-1 text-sm font-medium text-slate-900">{t('electricity.followUpAction')}: {t(actionKeys[getFollowUpAction(item)])}</p>
           {item.readingNeedsCheck && <p className="mt-1 text-xs text-amber-800">{t('electricity.followUpStale')}</p>}
           {item.unconfirmedTopup && <p className="mt-1 text-xs text-amber-800">{t('electricity.followUpUnconfirmed')}</p>}
@@ -134,6 +138,12 @@ export function ElectricityFollowUpReport({ accounts, property, propertyId, inco
       </ol>
       {visibleCount < items.length && <button type="button" className="btn-secondary mt-3 min-h-11" onClick={() => setVisibleCount((count) => count + 8)}>{t('electricity.followUpShowMore')}</button>}
     </>}
+    <div className="mt-4 border-l-4 border-rose-600 bg-rose-50 px-3 py-3" aria-label={t('electricity.totalNegativeUnits')}>
+      <p className="text-sm font-semibold text-rose-950">{t('electricity.totalNegativeUnits')}</p>
+      <p className="mt-1 break-all text-3xl font-extrabold tabular-nums text-rose-700">{unitsFormatter.format(totalNegativeUnits)} kWh</p>
+      <p className="mt-1 text-xs text-rose-900">{t('electricity.totalNegativeUnitsHelp')}</p>
+      {(incomplete || items.some((item) => item.balance === null)) && <p className="mt-1 text-xs font-bold text-rose-900">{t('electricity.totalNegativeUnitsPartial')}</p>}
+    </div>
     {message && <p role={message.error ? 'alert' : 'status'} className={`mt-3 text-sm ${message.error ? 'text-rose-800' : 'text-emerald-800'}`}>{message.text}</p>}
   </section>
 }

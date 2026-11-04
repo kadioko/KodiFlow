@@ -165,9 +165,142 @@ test('follow-up list gives staff a next step and flags an old reading', async ({
   await page.goto('/electricity')
   const report = page.getByRole('region', { name: 'Electricity follow-up' })
   await expect(report.getByText('Twilight Office Services Limited')).toBeVisible()
-  await expect(report.getByText('Units used beyond recorded credit:')).toContainText('5 kWh')
+  await expect(report.getByText('Units used beyond recorded credit')).toBeVisible()
+  await expect(report.getByText('-5 kWh', { exact: true })).toBeVisible()
+  await expect(report.getByLabel('Current total to clear negative client balances')).toContainText('5 kWh')
   await expect(report.getByText('Next step:')).toContainText('Check the meter')
   await expect(report.getByText('Reading missing or more than 4 days old: check the meter.')).toBeVisible()
+})
+
+test('negative meter balances and their total are prominent in the list and PDF', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 })
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = -5
+  data.accounts.push({ ...data.accounts[0], id: 'second-submeter', tenant_name: 'Second Client', unit_name: 'Unit 52', estimated_balance_units: -10.25 })
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  const report = page.getByRole('region', { name: 'Electricity follow-up' })
+  await expect(report.getByLabel('Current total to clear negative client balances')).toContainText('15.25 kWh')
+  const downloadPromise = page.waitForEvent('download')
+  await report.getByRole('button', { name: 'Download follow-up PDF' }).click()
+  const content = (await readFile(await (await downloadPromise).path())).toString('latin1')
+  expect(content).toContain('-5 kWh')
+  expect(content).toContain('-10.25 kWh')
+  expect(content).toContain('15.25 kWh')
+  expect(content).toContain('Current total to clear negative client balances')
+  expect(content).toContain('/F2 16 Tf')
+  expect(content).toContain('/F2 18 Tf')
+  expect(content).toContain('0.725 0.11 0.11 rg')
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
+  const group = page.locator('section[aria-labelledby="client-meter-group-heading"]')
+  const negative = group.getByText('-5 kWh', { exact: true })
+  await expect(negative).toBeVisible()
+  const style = await negative.evaluate((element) => {
+    const reference = document.createElement('span')
+    reference.className = 'text-rose-700'
+    document.body.appendChild(reference)
+    const expectedColor = getComputedStyle(reference).color
+    reference.remove()
+    return { color: getComputedStyle(element).color, expectedColor, size: parseFloat(getComputedStyle(element).fontSize), weight: Number(getComputedStyle(element).fontWeight) }
+  })
+  expect(style.color).toBe(style.expectedColor)
+  expect(style.size).toBeGreaterThanOrEqual(30)
+  expect(style.weight).toBeGreaterThanOrEqual(700)
+  await expect(page.locator('#meters').getByLabel('Current total to clear negative client balances')).toContainText('15.25 kWh')
+  await expectNoPageOverflow(page)
+})
+
+test('meter search finds clients and main-meter numbers without changing property totals', async ({ page }) => {
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = -5
+  data.accounts.push({ ...data.accounts[0], id: 'second-submeter', tenant_name: 'Second Client', unit_name: 'Unit 52', estimated_balance_units: -10.25 })
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
+  const meters = page.locator('#meters')
+  const search = meters.getByRole('searchbox', { name: 'Search meters' })
+  await search.fill('Twilight 51')
+  await expect(meters.getByRole('heading', { name: 'Twilight Office Services Limited' })).toBeVisible()
+  await expect(meters.getByRole('heading', { name: 'Second Client' })).toHaveCount(0)
+  await expect(meters.getByLabel('Current total to clear negative client balances')).toContainText('15.25 kWh')
+  await search.fill('001234567890')
+  await expect(meters.getByRole('button', { name: 'View meter history: Ground / Reception main TANESCO meter' })).toBeVisible()
+  await expect(meters.getByRole('heading', { name: 'Twilight Office Services Limited' })).toHaveCount(0)
+  await meters.getByRole('button', { name: 'Record LUKU balance' }).last().click()
+  await expect(search).toHaveValue('')
+  await expect(meters.getByRole('heading', { name: 'Main LUKU balances' })).toBeVisible()
+  await search.fill('does not exist')
+  await expect(meters.getByText('No meters match this search.')).toBeVisible()
+  await meters.getByRole('button', { name: 'Clear meter search' }).click()
+  await expect(search).toHaveValue('')
+})
+
+test('full main-meter history can be opened without selecting a meter', async ({ page }) => {
+  await mockMobileData(page)
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: workspace(false) }))
+  let requested = ''
+  await page.route('**/api/electricity/history*', (route) => {
+    requested = route.request().url()
+    return route.fulfill({ json: { total: 0, page: 1, pageSize: 40, rows: [] } })
+  })
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
+  await page.getByRole('button', { name: 'View all main-meter history' }).click()
+  await expect(page.getByRole('combobox', { name: 'Record type' })).toHaveValue('main_balances')
+  await expect.poll(() => requested).not.toBe('')
+  expect(new URL(requested).searchParams.get('type')).toBe('main_balances')
+  expect(new URL(requested).searchParams.has('accountId')).toBe(false)
+})
+
+test('main-meter history opens with the selected meter, its number and recorded details', async ({ page }) => {
+  await mockMobileData(page)
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: workspace(true) }))
+  let requested = ''
+  await page.route('**/api/electricity/history*', (route) => {
+    requested = route.request().url()
+    return route.fulfill({ json: { total: 1, page: 1, pageSize: 40, rows: [{
+      id: 'balance-1', type: 'main_balances', accountId: mainMeterId, occurredAt: '2026-10-29T08:00:00Z', actorId: fixtureId,
+      actorName: 'Meter Staff', confirmedAt: null, confirmedByName: null, reversedAt: null, reversedByName: null, reversalReason: null,
+      payload: { reading_date: '2026-10-29', units_remaining: 42.5, units_purchased_since_previous: 140, notes: 'Meter checked' },
+    }] } })
+  })
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
+  await page.getByRole('button', { name: 'View meter history: Ground / Reception main TANESCO meter' }).click()
+  await expect(page.getByRole('tab', { name: 'History & search' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: 'Record type' })).toHaveValue('main_balances')
+  await expect(page.getByRole('combobox', { name: 'Meter / client' })).toHaveValue(mainMeterId)
+  await expect(page.getByRole('region', { name: 'Main meter details' })).toContainText('001234567890')
+  await expect(page.getByText('42.5 kWh')).toBeVisible()
+  await expect(page.getByText('140 kWh')).toBeVisible()
+  await expect(page.getByText('Meter checked')).toBeVisible()
+  await expect(page.getByText(/Meter Staff/).last()).toBeVisible()
+  expect(new URL(requested).searchParams.get('accountId')).toBe(mainMeterId)
+  expect(new URL(requested).searchParams.get('type')).toBe('main_balances')
+})
+
+test('changing property clears the previously selected main-meter history', async ({ page }) => {
+  await mockMobileData(page)
+  const otherProperty = '20000000-0000-4000-8000-000000000002'
+  const data = workspace(true)
+  data.properties.push({ id: otherProperty, name: 'Other Property' })
+  data.accounts.push({ ...data.accounts[1], id: 'other-main', property_id: otherProperty, floor_label: 'Other Floor' })
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  let requested = ''
+  await page.route('**/api/electricity/history*', (route) => {
+    requested = route.request().url()
+    return route.fulfill({ json: { total: 0, page: 1, pageSize: 40, rows: [] } })
+  })
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
+  await page.getByRole('button', { name: 'View meter history: Ground / Reception main TANESCO meter' }).click()
+  await expect(page.getByRole('combobox', { name: 'Meter / client' })).toHaveValue(mainMeterId)
+  await page.getByLabel('Property', { exact: true }).selectOption(otherProperty)
+  await expect(page.getByRole('combobox', { name: 'Meter / client' })).toHaveValue('')
+  await expect.poll(() => requested && new URL(requested).searchParams.get('propertyId')).toBe(otherProperty)
+  expect(new URL(requested).searchParams.has('accountId')).toBe(false)
 })
 
 test('follow-up report is blocked when the meter dataset is incomplete', async ({ page }) => {

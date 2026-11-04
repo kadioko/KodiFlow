@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildElectricityFollowUp, getFollowUpAction, type FollowUpAccount } from './follow-up-report'
+import { buildElectricityFollowUp, getFollowUpAction, totalNegativeClientBalances, type FollowUpAccount } from './follow-up-report'
 
 const account: FollowUpAccount = {
   id: 'a', property_id: 'p', active: true, meter_kind: 'submeter', tenant_name: 'Client', unit_name: '12', floor_label: 'First',
@@ -29,8 +29,20 @@ describe('electricity follow-up report', () => {
     ], today)
     expect(result.find((item) => item.id === 'stale')).toMatchObject({ priority: 'urgent', readingNeedsCheck: true })
     expect(getFollowUpAction(result.find((item) => item.id === 'stale')!)).toBe('check')
-    expect(result.find((item) => item.id === 'missing')).toMatchObject({ priority: 'review', balance: null, readingNeedsCheck: true })
+    expect(result.find((item) => item.id === 'missing')).toMatchObject({ priority: 'review', balance: 30, readingNeedsCheck: true })
     expect(result.find((item) => item.id === 'old-healthy')).toMatchObject({ priority: 'review', readingNeedsCheck: true })
+  })
+
+  it('totals negative client balances without offsetting credits or including floor meters', () => {
+    const result = buildElectricityFollowUp([
+      { ...account, id: 'debt1', estimated_balance_units: -10.123 },
+      { ...account, id: 'debt2', estimated_balance_units: -2.111, latest_reading: null },
+      { ...account, id: 'credit', estimated_balance_units: 9 },
+      { ...account, id: 'main', meter_kind: 'floor_main', estimated_balance_units: -100 },
+      { ...account, id: 'archived', active: false, estimated_balance_units: -100 },
+    ], today)
+    expect(result.find((item) => item.id === 'debt2')).toMatchObject({ balance: -2.111, readingNeedsCheck: true })
+    expect(totalNegativeClientBalances(result)).toBe(12.234)
   })
 
   it('flags unconfirmed purchases and treats a future reading as needing review', () => {

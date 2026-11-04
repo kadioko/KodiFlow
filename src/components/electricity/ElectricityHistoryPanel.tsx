@@ -13,6 +13,7 @@ type MeterOption = {
   floor_label: string
   tenant_name: string
   unit_name: string | null
+  meter_number: string | null
 }
 type HistoryResponse = { rows: ElectricityHistoryRecord[]; total: number; page: number; pageSize: number }
 
@@ -34,10 +35,15 @@ const timestamp = (value: string) => new Intl.DateTimeFormat('en-GB', {
 const display = (value: unknown) => value === null || value === undefined || value === '' ? '—' : String(value)
 const units = (value: unknown) => value === null || value === undefined ? '—' : `${Number(value).toLocaleString('en-TZ', { maximumFractionDigits: 3 })} kWh`
 
-export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: string; meters: MeterOption[] }) {
+export function ElectricityHistoryPanel({ propertyId, meters, initialType = 'topups', initialAccountId = '' }: {
+  propertyId: string
+  meters: MeterOption[]
+  initialType?: ElectricityHistoryType
+  initialAccountId?: string
+}) {
   const { t } = useLanguage()
-  const [type, setType] = useState<ElectricityHistoryType>('topups')
-  const [accountId, setAccountId] = useState('')
+  const [type, setType] = useState<ElectricityHistoryType>(initialType)
+  const [accountId, setAccountId] = useState(initialAccountId)
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -76,11 +82,6 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
     return () => { window.clearTimeout(timer); controller.abort() }
   }, [loadHistory, search])
 
-  useEffect(() => {
-    setAccountId('')
-    setPage(1)
-  }, [propertyId])
-
   const statusOptions = useMemo(() => {
     if (type === 'topups') return [
       ['all', 'electricity.historyAnyStatus'],
@@ -114,7 +115,7 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
     const meter = meters.find((item) => item.id === id)
     if (!meter) return t('electricity.meters')
     return meter.meter_kind === 'floor_main'
-      ? `${meter.floor_label} · ${t('electricity.mainMeter')}`
+      ? `${meter.floor_label} · ${t('electricity.mainMeter')}${meter.meter_number ? ` · ${meter.meter_number}` : ''}`
       : `${meter.tenant_name} · ${meter.unit_name || meter.floor_label}`
   }
 
@@ -136,6 +137,7 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
   }
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize))
+  const selectedMainMeter = type === 'main_balances' ? meters.find((meter) => meter.id === accountId && meter.meter_kind === 'floor_main') : null
   const inputClass = 'input min-h-12 w-full'
 
   return <section className="space-y-5" aria-labelledby="electricity-history-heading">
@@ -147,14 +149,14 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
     <section className="space-y-3 border-y border-slate-200 bg-white p-4 sm:p-5" aria-label={t('electricity.historyFilters')}>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block text-sm font-medium text-slate-700">{t('electricity.historyType')}
-          <select className={`${inputClass} mt-1`} value={type} onChange={(event) => { setType(event.target.value as ElectricityHistoryType); setStatus('all'); setPage(1) }}>
+          <select className={`${inputClass} mt-1`} value={type} onChange={(event) => { const nextType = event.target.value as ElectricityHistoryType; setType(nextType); if (nextType === 'main_balances' && !meters.some((meter) => meter.id === accountId && meter.meter_kind === 'floor_main')) setAccountId(''); setStatus('all'); setPage(1) }}>
             {(Object.keys(historyTypeLabels) as ElectricityHistoryType[]).map((item) => <option key={item} value={item}>{t(historyTypeLabels[item])}</option>)}
           </select>
         </label>
         <label className="block text-sm font-medium text-slate-700">{t('electricity.historyMeter')}
           <select className={`${inputClass} mt-1`} value={accountId} onChange={(event) => { setAccountId(event.target.value); setPage(1) }}>
             <option value="">{t('electricity.historyAllMeters')}</option>
-            {meters.map((meter) => <option key={meter.id} value={meter.id}>{accountLabel(meter.id)}</option>)}
+            {meters.filter((meter) => type !== 'main_balances' || meter.meter_kind === 'floor_main').map((meter) => <option key={meter.id} value={meter.id}>{accountLabel(meter.id)}</option>)}
           </select>
         </label>
         <label className="block text-sm font-medium text-slate-700">{t('electricity.historyStatus')}
@@ -175,6 +177,11 @@ export function ElectricityHistoryPanel({ propertyId, meters }: { propertyId: st
         <button type="button" className="btn-secondary min-h-12 w-full sm:w-auto" onClick={clearFilters}><X className="mr-2 inline h-4 w-4" />{t('electricity.historyClearFilters')}</button>
       </div>
     </section>
+
+    {selectedMainMeter && <section className="border-l-4 border-sky-600 bg-sky-50 px-4 py-3" aria-label={t('electricity.mainHistoryDetails')}>
+      <h3 className="font-semibold text-sky-950">{selectedMainMeter.floor_label}</h3>
+      <p className="mt-1 break-all text-sm text-sky-900">{t('electricity.mainHistoryNumber')}: <strong>{selectedMainMeter.meter_number || t('electricity.numberMissing')}</strong></p>
+    </section>}
 
     {error && <p role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</p>}
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

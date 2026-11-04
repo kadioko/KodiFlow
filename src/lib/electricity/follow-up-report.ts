@@ -30,6 +30,10 @@ export function getFollowUpAction(item: FollowUpItem): FollowUpAction {
   return item.priority === 'soon' ? 'remind_soon' : 'top_up'
 }
 
+export function totalNegativeClientBalances(items: FollowUpItem[]): number {
+  return items.reduce((total, item) => total + (item.balance !== null && item.balance < 0 ? Math.round(-item.balance * 1000) : 0), 0) / 1000
+}
+
 function daysSince(date: string | null, today: string): number | null {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null
   const start = Date.parse(`${date}T00:00:00Z`)
@@ -45,7 +49,7 @@ export function buildElectricityFollowUp(accounts: FollowUpAccount[], today: str
     const readingDate = account.latest_reading?.reading_date || null
     const age = daysSince(readingDate, today)
     const readingNeedsCheck = age === null || age > 4
-    const balance = readingDate && Number.isFinite(Number(account.estimated_balance_units))
+    const balance = account.estimated_balance_units != null && Number.isFinite(Number(account.estimated_balance_units))
       ? Number(account.estimated_balance_units) : null
     const unconfirmedTopup = Number(account.pending_reported_topup_units) > 0
     const threshold = Math.max(0, Number(account.low_units_threshold) || 0)
