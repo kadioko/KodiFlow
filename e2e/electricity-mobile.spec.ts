@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 import { expectTouchable, fixtureId, mockMobileData, setKeyboardHeight } from './helpers/mobile-fixtures'
 
 const propertyId = '20000000-0000-4000-8000-000000000001'
@@ -126,6 +127,117 @@ async function expectNoPageOverflow(page: Page) {
   const width = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }))
   expect(width.content).toBeLessThanOrEqual(width.viewport + 1)
 }
+
+test('follow-up PDF downloads only client follow-ups and never includes token digits', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 })
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = 35
+  let requests = 0
+  await page.route('**/api/electricity', (route) => {
+    requests += 1
+    if (requests > 1) data.accounts[0].estimated_balance_units = 4.5
+    return route.fulfill({ json: data })
+  })
+  await page.goto('/electricity')
+  const button = page.getByRole('button', { name: 'Download follow-up PDF' })
+  await expect(button).toBeEnabled()
+  await expectNoPageOverflow(page)
+  const downloadPromise = page.waitForEvent('download')
+  await button.click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^electricity-follow-up-\d{4}-\d{2}-\d{2}\.pdf$/)
+  const content = (await readFile(await download.path())).toString('latin1')
+  expect(content.startsWith('%PDF-')).toBe(true)
+  expect(content).toContain('Twilight Office Services Limited')
+  expect(content).toContain('4.5 kWh')
+  expect(content).toContain('Next step')
+  expect(requests).toBeGreaterThan(1)
+  expect(content).not.toContain('001234567890')
+})
+
+test('follow-up list gives staff a next step and flags an old reading', async ({ page }) => {
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = -5
+  data.accounts[0].latest_reading = { ...data.readings[0], reading_date: '2020-01-01' }
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  const report = page.getByRole('region', { name: 'Electricity follow-up' })
+  await expect(report.getByText('Twilight Office Services Limited')).toBeVisible()
+  await expect(report.getByText('Units used beyond recorded credit:')).toContainText('5 kWh')
+  await expect(report.getByText('Next step:')).toContainText('Check the meter')
+  await expect(report.getByText('Reading missing or more than 4 days old: check the meter.')).toBeVisible()
+})
+
+test('follow-up report is blocked when the meter dataset is incomplete', async ({ page }) => {
+  await mockMobileData(page)
+  const data = { ...workspace(true), coverageDataTruncated: true }
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  await expect(page.getByRole('button', { name: 'Download follow-up PDF' })).toBeDisabled()
+  await expect(page.getByRole('alert').filter({ hasText: 'electricity data is incomplete' })).toBeVisible()
+})
+
+test('follow-up PDF can be passed to the device share sheet', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async (data: ShareData) => {
+      document.documentElement.dataset.sharedPdf = data.files?.[0]?.name || ''
+    } })
+  })
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = 4.5
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  await page.getByRole('button', { name: 'Share follow-up PDF' }).click()
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.sharedPdf || '')).toMatch(/^electricity-follow-up-.*\.pdf$/)
+})
+
+test('follow-up PDF downloads when the share sheet is unavailable', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => false })
+  })
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.accounts[0].estimated_balance_units = 4.5
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Share follow-up PDF' }).click()
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/)
+  await expect(page.getByRole('status').filter({ hasText: 'PDF was downloaded instead' })).toBeVisible()
+})
+
+test('electricity tabs remain usable with a large reading history', async ({ page }, testInfo) => {
+  await mockMobileData(page)
+  const data = workspace(true)
+  data.readings = Array.from({ length: 1600 }, (_, index) => ({ ...data.readings[0], id: `reading-${index}` }))
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.goto('/electricity')
+  await page.evaluate(() => {
+    const values: number[] = []
+    Object.assign(window, { electricityInteractionDurations: values })
+    if (PerformanceObserver.supportedEntryTypes.includes('event')) {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if ((entry as PerformanceEventTiming).interactionId && entry.name === 'click') values.push(entry.duration)
+        }
+      }).observe({ type: 'event', buffered: true, durationThreshold: 16 } as PerformanceObserverInit)
+    }
+  })
+  for (const name of ['Meters and balances', 'Entries & corrections', 'Overview']) {
+    const tab = page.getByRole('tab', { name, exact: true })
+    await tab.click()
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+  }
+  await expect(page.getByRole('button', { name: 'Download follow-up PDF' })).toBeVisible()
+  await page.waitForTimeout(150)
+  const durations = await page.evaluate(() => (window as unknown as { electricityInteractionDurations: number[] }).electricityInteractionDurations)
+  console.info(`Synthetic electricity tab click event durations (ms): ${durations.join(', ') || 'none at or above 16 ms'}`)
+  await testInfo.attach('electricity-tab-event-durations.json', { body: JSON.stringify({ durations, note: 'Synthetic Chromium event timings, not real-user INP.' }), contentType: 'application/json' })
+})
 
 for (const viewport of [
   { width: 320, height: 568 },

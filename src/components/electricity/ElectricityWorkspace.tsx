@@ -12,6 +12,7 @@ import type { ElectricityAccountRow, ElectricityReadingRow } from '@/lib/electri
 import type { Database } from '@/lib/supabase/database.types'
 import { ElectricityEntryCorrections, type CorrectableEntry, type ElectricityEntryType, type EditorField } from '@/components/electricity/ElectricityEntryCorrections'
 import { ElectricityFloorCoverage } from '@/components/electricity/ElectricityFloorCoverage'
+import { ElectricityFollowUpReport } from '@/components/electricity/ElectricityFollowUpReport'
 import { ElectricityHistoryPanel } from '@/components/electricity/ElectricityHistoryPanel'
 import { ElectricityIssuesPanel } from '@/components/electricity/ElectricityIssuesPanel'
 import { formatCurrency, formatDate } from '@/utils/currency'
@@ -102,12 +103,14 @@ const dayAfterISO = (date: string) => {
   next.setUTCDate(next.getUTCDate() + 1)
   return next.toISOString().slice(0, 10)
 }
-const numeric = (value: number | string) => Number(value || 0).toLocaleString('en-TZ', { maximumFractionDigits: 3 })
-const formatTimestamp = (value: string) => new Intl.DateTimeFormat('en-GB', {
+const unitsFormatter = new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 3 })
+const numeric = (value: number | string) => unitsFormatter.format(Number(value || 0))
+const timestampFormatter = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'Africa/Nairobi',
-}).format(new Date(value))
+})
+const formatTimestamp = (value: string) => timestampFormatter.format(new Date(value))
 const accountTitle = (account: AccountView) => account.meter_kind === 'floor_main'
   ? `${account.floor_label} main meter`
   : account.tenant_name
@@ -215,46 +218,49 @@ export function ElectricityWorkspace() {
   const sections = useMemo(() => (data?.sections || []).filter((section) => section.property_id === propertyId), [data?.sections, propertyId])
   const units = useMemo(() => (data?.units || []).filter((unit) => unit.property_id === propertyId), [data?.units, propertyId])
   const accounts = useMemo(() => (data?.accounts || []).filter((account) => account.property_id === propertyId), [data?.accounts, propertyId])
-  const activeAccounts = accounts.filter((account) => account.active)
-  const archivedSubmeters = accounts.filter((account) => account.meter_kind === 'submeter' && !account.active)
-  const submeters = activeAccounts.filter((account) => account.meter_kind === 'submeter')
-  const mainMeters = activeAccounts.filter((account) => account.meter_kind === 'floor_main')
-  const mainMeterBalances = (data?.mainMeterBalances || [])
-    .filter((balance) => mainMeters.some((account) => account.id === balance.account_id))
-    .sort((left, right) => right.reading_date.localeCompare(left.reading_date) || right.created_at.localeCompare(left.created_at))
-  const latestMainBalanceByAccount = new Map<string, MainMeterBalanceRow>()
-  const previousMainBalanceById = new Map<string, MainMeterBalanceRow>()
-  for (const balance of mainMeterBalances) {
-    if (!latestMainBalanceByAccount.has(balance.account_id)) latestMainBalanceByAccount.set(balance.account_id, balance)
-  }
-  const orderedBalancesByAccount = new Map<string, MainMeterBalanceRow[]>()
-  for (const balance of mainMeterBalances) {
-    const history = orderedBalancesByAccount.get(balance.account_id) || []
-    history.push(balance)
-    orderedBalancesByAccount.set(balance.account_id, history)
-  }
-  for (const [accountId, history] of orderedBalancesByAccount) {
-    history.sort((left, right) => left.reading_date.localeCompare(right.reading_date))
-    if (history.length > 0) latestMainBalanceByAccount.set(accountId, history[history.length - 1])
-    for (let index = 1; index < history.length; index += 1) previousMainBalanceById.set(history[index].id, history[index - 1])
-  }
-  const reconciliations = reconcileMainMeters(activeAccounts, data?.readings || [], mainMeterBalances)
-  const floorCreditCoverage = calculateFloorCreditCoverage(activeAccounts, mainMeterBalances, {
-    today: todayISO(),
+  const activeAccounts = useMemo(() => accounts.filter((account) => account.active), [accounts])
+  const archivedSubmeters = useMemo(() => accounts.filter((account) => account.meter_kind === 'submeter' && !account.active), [accounts])
+  const submeters = useMemo(() => activeAccounts.filter((account) => account.meter_kind === 'submeter'), [activeAccounts])
+  const mainMeters = useMemo(() => activeAccounts.filter((account) => account.meter_kind === 'floor_main'), [activeAccounts])
+  const mainMeterBalances = useMemo(() => {
+    const mainIds = new Set(mainMeters.map((account) => account.id))
+    return (data?.mainMeterBalances || []).filter((balance) => mainIds.has(balance.account_id))
+      .sort((left, right) => right.reading_date.localeCompare(left.reading_date) || right.created_at.localeCompare(left.created_at))
+  }, [data?.mainMeterBalances, mainMeters])
+  const { latestMainBalanceByAccount, previousMainBalanceById } = useMemo(() => {
+    const latest = new Map<string, MainMeterBalanceRow>()
+    const previous = new Map<string, MainMeterBalanceRow>()
+    const histories = new Map<string, MainMeterBalanceRow[]>()
+    for (const balance of mainMeterBalances) {
+      const history = histories.get(balance.account_id) || []
+      history.push(balance)
+      histories.set(balance.account_id, history)
+    }
+    for (const [accountId, history] of histories) {
+      history.sort((left, right) => left.reading_date.localeCompare(right.reading_date))
+      if (history.length > 0) latest.set(accountId, history[history.length - 1])
+      for (let index = 1; index < history.length; index += 1) previous.set(history[index].id, history[index - 1])
+    }
+    return { latestMainBalanceByAccount: latest, previousMainBalanceById: previous }
+  }, [mainMeterBalances])
+  const reconciliations = useMemo(() => reconcileMainMeters(activeAccounts, data?.readings || [], mainMeterBalances), [activeAccounts, data?.readings, mainMeterBalances])
+  const currentDay = todayISO()
+  const floorCreditCoverage = useMemo(() => calculateFloorCreditCoverage(activeAccounts, mainMeterBalances, {
+    today: currentDay,
     dataTruncated: Boolean(data?.coverageDataTruncated),
-  })
-  const accountById = new Map(accounts.map((account) => [account.id, account]))
-  const propertyTopups = (data?.topups || [])
+  }), [activeAccounts, currentDay, data?.coverageDataTruncated, mainMeterBalances])
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
+  const propertyTopups = useMemo(() => (data?.topups || [])
     .filter((topup) => accountById.has(topup.account_id))
-    .sort((left, right) => right.purchase_date.localeCompare(left.purchase_date) || right.created_at.localeCompare(left.created_at))
-  const recordedByName = (userId: string) => data?.staff.find((staff) => staff.auth_user_id === userId)?.full_name
+    .sort((left, right) => right.purchase_date.localeCompare(left.purchase_date) || right.created_at.localeCompare(left.created_at)), [data?.topups, accountById])
+  const recordedByName = useCallback((userId: string) => data?.staff.find((staff) => staff.auth_user_id === userId)?.full_name
     || data?.staff.find((staff) => staff.auth_user_id === userId)?.staff_id
-    || (userId === data?.currentUserId ? data.currentStaffId || t('electricity.propertyOwner') : userId.slice(0, 8))
-  const entryLabel = (accountId: string) => {
+    || (userId === data?.currentUserId ? data.currentStaffId || t('electricity.propertyOwner') : userId.slice(0, 8)), [data, t])
+  const entryLabel = useCallback((accountId: string) => {
     const account = accountById.get(accountId)
     return account ? `${accountTitle(account)} · ${account.unit_name || account.floor_label}` : t('electricity.meters')
-  }
-  const correctionEntries: CorrectableEntry[] = [
+  }, [accountById, t])
+  const correctionEntries: CorrectableEntry[] = useMemo(() => [
     ...(data?.readings || []).map((reading) => ({
       id: reading.id,
       entryType: 'reading' as ElectricityEntryType,
@@ -331,7 +337,7 @@ export function ElectricityWorkspace() {
         { name: 'entry_reason', label: 'electricity.onSiteReason', type: 'textarea' as const, value: event.reason },
       ] as EditorField[],
     })),
-  ]
+  ], [data, propertyTopups, accountById, entryLabel, recordedByName, t])
   const attention = [
     ...submeters.map((account) => ({
       account,
@@ -1151,6 +1157,8 @@ export function ElectricityWorkspace() {
         <Metric label={t('electricity.estimatedUnitsLeft')} value={numeric(verifiedReadingBalance)} detail={t('electricity.latestBalances')} />
         <Metric label={t('electricity.mainMeters')} value={String(mainMeters.length)} detail={t('electricity.sharedReadings')} />
       </section>}
+
+      {(activeView === 'overview' || activeView === 'meters') && <ElectricityFollowUpReport accounts={accounts} property={selectedProperty?.name || t('electricity.property')} propertyId={propertyId} incomplete={Boolean(data.coverageDataTruncated)} onRefresh={() => fetchData(false)} />}
 
       {(activeView === 'overview' || activeView === 'meters') && <ElectricityFloorCoverage coverage={floorCreditCoverage} />}
 

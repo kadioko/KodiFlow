@@ -43,11 +43,12 @@ const actionLabel: Record<EntryAuditRow['action'], TranslationKey> = {
   reversed: 'electricity.entryActionReversed',
 }
 
-const dateTime = (value: string) => new Intl.DateTimeFormat('en-GB', {
+const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'Africa/Nairobi',
-}).format(new Date(value))
+})
+const dateTime = (value: string) => dateTimeFormatter.format(new Date(value))
 
 function snapshot(value: Json) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, Json> : {}
