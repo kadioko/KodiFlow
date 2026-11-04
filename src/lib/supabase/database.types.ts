@@ -1264,7 +1264,7 @@ export interface Database {
         Returns: Database['public']['Tables']['electricity_readings']['Row']
       }
       record_electricity_main_meter_balance: {
-        Args: { p_account_id: string; p_units_remaining: number; p_reading_date: string; p_notes?: string | null; p_units_purchased_since_previous?: number; p_zero_confirmed?: boolean }
+        Args: { p_account_id: string; p_units_remaining: number; p_reading_date: string; p_notes?: string | null; p_units_purchased_since_previous?: number | null; p_zero_confirmed?: boolean }
         Returns: Database['public']['Tables']['electricity_main_meter_balances']['Row']
       }
       replace_electricity_submeter: {

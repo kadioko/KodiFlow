@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateMainMeterUsage, classifyMainMeterBalance, estimateMainMeterDaysRemaining } from './main-meter-balance'
+import { calculateMainMeterUsage, classifyMainMeterBalance, estimateMainMeterDaysRemaining, parseMainMeterAddedUnits } from './main-meter-balance'
 
 const snapshot = (date: string, remaining: number, added: number | null = 0) => ({
   reading_date: date,
@@ -8,6 +8,12 @@ const snapshot = (date: string, remaining: number, added: number | null = 0) => 
 })
 
 describe('TANESCO main LUKU balance tracking', () => {
+  it('distinguishes an explicitly unknown recharge from zero and invalid input', () => {
+    expect(parseMainMeterAddedUnits(null)).toBeNull()
+    expect(parseMainMeterAddedUnits(0)).toBe(0)
+    expect(parseMainMeterAddedUnits('50.5')).toBe(50.5)
+    for (const value of [undefined, '', ' ', false, {}, 'invalid']) expect(parseMainMeterAddedUnits(value)).toBeNaN()
+  })
   it('calculates use from previous credit, recharge units, and current credit', () => {
     expect(calculateMainMeterUsage(snapshot('2026-10-01', 100), snapshot('2026-10-03', 40, 20))).toBe(80)
   })

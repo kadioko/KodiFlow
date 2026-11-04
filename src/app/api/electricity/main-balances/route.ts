@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getElectricityActor } from '@/lib/electricity/server'
+import { parseMainMeterAddedUnits } from '@/lib/electricity/main-meter-balance'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,17 +10,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const accountId = typeof body.accountId === 'string' ? body.accountId : ''
     const readingDate = typeof body.readingDate === 'string' ? body.readingDate : ''
-    const unitsRemaining = Number(body.unitsRemaining)
+    const hasRemaining = typeof body.unitsRemaining === 'number'
+      || (typeof body.unitsRemaining === 'string' && body.unitsRemaining.trim() !== '')
+    const unitsRemaining = hasRemaining ? Number(body.unitsRemaining) : Number.NaN
     const zeroConfirmed = body.zeroConfirmed === true
-    const hasPurchasedUnits = typeof body.unitsPurchasedSincePrevious === 'number'
-      || (typeof body.unitsPurchasedSincePrevious === 'string' && body.unitsPurchasedSincePrevious.trim() !== '')
-    const unitsPurchasedSincePrevious = hasPurchasedUnits ? Number(body.unitsPurchasedSincePrevious) : Number.NaN
+    const unitsPurchasedSincePrevious = parseMainMeterAddedUnits(body.unitsPurchasedSincePrevious)
     const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
 
     if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(readingDate)
       || !Number.isFinite(unitsRemaining) || unitsRemaining < 0 || unitsRemaining > 1_000_000
-      || !Number.isFinite(unitsPurchasedSincePrevious) || unitsPurchasedSincePrevious < 0 || unitsPurchasedSincePrevious > 1_000_000) {
-      return NextResponse.json({ error: 'Enter a main meter, valid date, remaining balance, and units added since the previous check.' }, { status: 400 })
+      || (unitsPurchasedSincePrevious !== null && (!Number.isFinite(unitsPurchasedSincePrevious) || unitsPurchasedSincePrevious < 0 || unitsPurchasedSincePrevious > 1_000_000))) {
+      return NextResponse.json({ error: 'Enter a main meter, valid date, remaining balance, and valid units added or select unknown.' }, { status: 400 })
     }
     if (unitsRemaining === 0 && !zeroConfirmed) {
       return NextResponse.json({ error: 'Confirm that the main LUKU balance is truly zero before recording an outage.' }, { status: 400 })

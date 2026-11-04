@@ -6,6 +6,12 @@ export type MainMeterBalanceSnapshot = {
   units_purchased_since_previous: number | string | null
 }
 
+export function parseMainMeterAddedUnits(value: unknown): number | null {
+  if (value === null) return null
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return Number.NaN
+  return Number(value)
+}
+
 export function calculateMainMeterUsage(
   previous: MainMeterBalanceSnapshot | null,
   current: MainMeterBalanceSnapshot,

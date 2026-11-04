@@ -148,7 +148,8 @@ export function ElectricityWorkspace() {
   const [mainBalanceAccountId, setMainBalanceAccountId] = useState('')
   const [mainBalanceDate, setMainBalanceDate] = useState(todayISO())
   const [mainBalanceUnits, setMainBalanceUnits] = useState('')
-  const [mainBalancePurchasedUnits, setMainBalancePurchasedUnits] = useState('0')
+  const [mainBalancePurchasedUnits, setMainBalancePurchasedUnits] = useState('')
+  const [mainBalanceAddedKnown, setMainBalanceAddedKnown] = useState(false)
   const [mainBalanceThreshold, setMainBalanceThreshold] = useState('50')
   const [mainBalanceNotes, setMainBalanceNotes] = useState('')
   const [confirmZeroMainBalance, setConfirmZeroMainBalance] = useState(false)
@@ -179,7 +180,7 @@ export function ElectricityWorkspace() {
   const [resetPin, setResetPin] = useState('')
   const [editingStaffId, setEditingStaffId] = useState('')
   const [assignmentPropertyIds, setAssignmentPropertyIds] = useState<string[]>([])
-  const [activeView, setActiveView] = useState<'overview' | 'readings' | 'topups' | 'meters' | 'reports' | 'staff' | 'help' | 'entries' | 'issues' | 'history'>('overview')
+  const [activeView, setActiveView] = useState<'overview' | 'readings' | 'main_meters' | 'topups' | 'meters' | 'reports' | 'staff' | 'help' | 'entries' | 'issues' | 'history'>('overview')
   const [meterSearch, setMeterSearch] = useState('')
   const [mainHistoryTarget, setMainHistoryTarget] = useState<string | null>(null)
   const [reportStartDate, setReportStartDate] = useState(daysAgoISO(6))
@@ -396,8 +397,9 @@ export function ElectricityWorkspace() {
   const selectedMainPreviousBalance = selectedMainBalanceAccount
     ? latestMainBalanceByAccount.get(selectedMainBalanceAccount.id) || null
     : null
+  const mainAlreadyRecordedToday = Boolean(selectedMainPreviousBalance && selectedMainPreviousBalance.reading_date >= currentDay)
   const parsedMainBalance = mainBalanceUnits.trim() ? Number(mainBalanceUnits) : Number.NaN
-  const parsedMainPurchasedUnits = mainBalancePurchasedUnits.trim() ? Number(mainBalancePurchasedUnits) : Number.NaN
+  const parsedMainPurchasedUnits = mainBalanceAddedKnown && mainBalancePurchasedUnits.trim() ? Number(mainBalancePurchasedUnits) : Number.NaN
   const mainBalanceUsagePreview = selectedMainPreviousBalance
     && Number.isFinite(parsedMainBalance)
     && Number.isFinite(parsedMainPurchasedUnits)
@@ -545,6 +547,7 @@ export function ElectricityWorkspace() {
   const workspaceViews = [
     { key: 'overview' as const, label: t('electricity.areaOverview') },
     { key: 'readings' as const, label: t('electricity.areaReadings') },
+    { key: 'main_meters' as const, label: t('electricity.areaMainMeters') },
     { key: 'topups' as const, label: t('electricity.areaTopups') },
     { key: 'history' as const, label: t('electricity.areaHistory') },
     { key: 'meters' as const, label: t('electricity.areaMeters') },
@@ -611,10 +614,10 @@ export function ElectricityWorkspace() {
   const submitMainBalance = async (event: React.FormEvent) => {
     event.preventDefault()
     const unitsRemaining = Number(mainBalanceUnits)
-    const unitsPurchased = Number(mainBalancePurchasedUnits)
+    const unitsPurchased = selectedMainPreviousBalance && mainBalanceAddedKnown ? Number(mainBalancePurchasedUnits) : null
     if (saving || !mainMeters.some((account) => account.id === mainBalanceAccountId)
-      || !Number.isFinite(unitsRemaining) || unitsRemaining < 0
-      || !Number.isFinite(unitsPurchased) || unitsPurchased < 0
+      || !mainBalanceUnits.trim() || !Number.isFinite(unitsRemaining) || unitsRemaining < 0
+      || (selectedMainPreviousBalance && mainBalanceAddedKnown && (!mainBalancePurchasedUnits.trim() || unitsPurchased === null || !Number.isFinite(unitsPurchased) || unitsPurchased < 0))
       || (unitsRemaining === 0 && !confirmZeroMainBalance)) return
     setSaving(true)
     setActionState(null)
@@ -628,7 +631,8 @@ export function ElectricityWorkspace() {
         notes: mainBalanceNotes.trim() || null,
       })
       setMainBalanceUnits('')
-      setMainBalancePurchasedUnits('0')
+      setMainBalancePurchasedUnits('')
+      setMainBalanceAddedKnown(false)
       setMainBalanceNotes('')
       setConfirmZeroMainBalance(false)
       setActionState({ type: 'success', message: t('electricity.mainBalanceSaved') })
@@ -1032,6 +1036,18 @@ export function ElectricityWorkspace() {
     window.setTimeout(() => document.getElementById('electricity-history-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
   }
 
+  const openMainBalance = (account: AccountView) => {
+    setMeterSearch('')
+    setMainBalanceAccountId(account.id)
+    setMainBalanceThreshold(String(account.low_units_threshold))
+    setMainBalanceUnits('')
+    setMainBalancePurchasedUnits('')
+    setMainBalanceAddedKnown(false)
+    setConfirmZeroMainBalance(false)
+    setActiveView('main_meters')
+    window.setTimeout(() => document.getElementById('main-balance-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
+  }
+
   if (loading) return <div className="py-16 text-center text-slate-500">{t('electricity.loadingWorkspace')}</div>
 
   if (!data) return (
@@ -1118,7 +1134,7 @@ export function ElectricityWorkspace() {
       </form>}
       <div className="flex flex-wrap gap-2">
         {isMain
-          ? <button type="button" onClick={() => { setMeterSearch(''); setMainBalanceAccountId(account.id); setMainBalanceThreshold(String(account.low_units_threshold)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false); setActiveView('meters'); window.setTimeout(() => document.getElementById('main-balance-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0) }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordMainBalance')}</button>
+          ? <button type="button" onClick={() => openMainBalance(account)} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordMainBalance')}</button>
           : <button type="button" onClick={() => { setRecordAccountId(account.id); setActiveView('readings') }} className="btn-secondary min-h-11 flex-1 sm:flex-none">{t('electricity.recordReading')}</button>}
         {isMain && <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" aria-label={`${t('electricity.mainHistoryMeter')}: ${account.floor_label}`} onClick={() => openMainHistory(account.id)}><Clock3 className="mr-2 h-4 w-4" />{t('electricity.mainHistoryMeter')}</button>}
         {data.ownerMode && !isMain && <button type="button" className="min-h-11 flex-1 border border-blue-300 bg-blue-50 px-3 text-sm font-semibold text-blue-900 hover:bg-blue-100 sm:flex-none" onClick={() => { setAdjustmentTarget(account); setAdjustmentUnits(''); setAdjustmentDirection('add'); setAdjustmentDate(todayISO()); setAdjustmentReason('') }}><Plus className="mr-2 inline h-4 w-4" />{t('electricity.ownerAddRemove')}</button>}
@@ -1306,7 +1322,7 @@ export function ElectricityWorkspace() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {isMain
-                ? <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => { setMeterSearch(''); setMainBalanceAccountId(account.id); setMainBalanceThreshold(String(account.low_units_threshold)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false); setActiveView('meters'); window.setTimeout(() => document.getElementById('main-balance-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0) }}>{t('electricity.recordMainBalance')}</button>
+                ? <button type="button" className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => openMainBalance(account)}>{t('electricity.recordMainBalance')}</button>
                   : <>
                     {account.tenant_phone && <button className="btn-secondary min-h-11 flex-1 sm:flex-none" onClick={() => draftNotice(account)}><MessageCircle className="mr-2 h-4 w-4" />{t('electricity.draftWhatsApp')}</button>}
                     {status === 'exhausted' && account.last_cutoff_event?.action !== 'disconnected' && <button className="min-h-11 border border-rose-300 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-50" onClick={() => submitManualAction(account)}>{t('electricity.logCutoff')}</button>}
@@ -1408,6 +1424,7 @@ export function ElectricityWorkspace() {
 
       {activeView === 'topups' && <section id="topups" className="scroll-mt-20 border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="topup-heading">
           <div className="mb-4 flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-emerald-50 text-emerald-700"><Bolt className="h-5 w-5" /></span><div><h2 id="topup-heading" className="text-lg font-semibold text-slate-950">{t('electricity.topupTitle')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.topupHelp')}</p></div></div>
+          <div className="mb-4 border-l-4 border-sky-600 bg-sky-50 px-3 py-3 text-sm text-sky-950"><p>{t('electricity.clientTopupMainNote')}</p><button type="button" className="btn-secondary mt-2 min-h-11" onClick={() => setActiveView('main_meters')}>{t('electricity.areaMainMeters')}</button></div>
           <form onSubmit={submitTopup} className="space-y-4">
             <Field label={t('electricity.clientSubmeter')}><select required className="input min-h-11" value={topupAccountId} onChange={(event) => setTopupAccountId(event.target.value)}><option value="">{t('electricity.selectClient')}</option>{submeters.map((account) => <option key={account.id} value={account.id}>{account.tenant_name} · {account.unit_name || account.floor_label}</option>)}</select></Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1597,7 +1614,9 @@ export function ElectricityWorkspace() {
         </section>
       </section>}
 
-      {activeView === 'meters' && <section id="meters" className="scroll-mt-20" aria-labelledby="meters-heading">
+      {(activeView === 'meters' || activeView === 'main_meters') && <section id={activeView === 'meters' ? 'meters' : 'main-meters'} className="scroll-mt-20" aria-label={t(activeView === 'meters' ? 'electricity.metersLatest' : 'electricity.mainAreaTitle')}>
+        {activeView === 'main_meters' && <div className="mb-4 border-l-4 border-sky-600 bg-sky-50 px-4 py-3"><h2 className="text-lg font-semibold text-sky-950">{t('electricity.mainAreaTitle')}</h2><p className="mt-1 text-sm text-sky-900">{t('electricity.mainAreaExplanation')}</p></div>}
+        {activeView === 'meters' && <>
         <div className="mb-3 flex items-end justify-between gap-3"><div><h2 id="meters-heading" className="text-lg font-semibold text-slate-950">{t('electricity.metersLatest')}</h2><p className="mt-1 text-sm text-slate-600">{t('electricity.metersHelp')}</p></div><span className="text-sm text-slate-500">{activeAccounts.length} {t('electricity.activeMeters')}</span></div>
         <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Metric label={t('electricity.estimatedUnitsLeft')} value={`${numeric(verifiedReadingBalance)} kWh`} detail={t('electricity.latestBalances')} />
@@ -1609,19 +1628,23 @@ export function ElectricityWorkspace() {
           <div className="relative mt-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><input id="electricity-meter-search" type="search" className="input min-h-12 w-full pl-10 pr-12" value={meterSearch} onChange={(event) => setMeterSearch(event.target.value)} placeholder={t('electricity.meterSearchPlaceholder')} />{meterSearch && <button type="button" className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-slate-700" aria-label={t('electricity.meterSearchClear')} title={t('electricity.meterSearchClear')} onClick={() => setMeterSearch('')}><X className="h-4 w-4" /></button>}</div>
           {meterSearch.trim() && <p className="mt-1 text-xs text-slate-600">{t('electricity.meterSearchTotalHelp')}</p>}
         </div>
-        {mainMeters.length > 0 && !meterSearch.trim() && <section className="border-y border-sky-200 bg-white" aria-labelledby="main-balance-heading">
+        </>}
+        {activeView === 'main_meters' && mainMeters.length === 0 && <p className="border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600">{t('electricity.mainNoMetersSetup')}</p>}
+        {mainMeters.length > 0 && (activeView === 'main_meters' || !meterSearch.trim()) && <section className="border-y border-sky-200 bg-white" aria-labelledby="main-balance-heading">
           <header className="flex flex-col gap-3 border-b border-sky-200 bg-sky-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div><h3 id="main-balance-heading" className="font-semibold text-sky-950">{t('electricity.mainBalanceTitle')}</h3>
             <p className="mt-1 text-sm text-sky-900">{t('electricity.mainBalanceHelp')}</p></div>
             <button type="button" className="btn-secondary min-h-11" onClick={() => openMainHistory('')}><Clock3 className="mr-2 h-4 w-4" />{t('electricity.mainHistoryAll')}</button>
           </header>
+          <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-700">{t('electricity.mainDailyLimit')}</p><button type="button" className="btn-secondary min-h-11 shrink-0" onClick={() => setActiveView('entries')}>{t('electricity.areaEntries')}</button></div>
           <form onSubmit={submitMainBalance} className="grid grid-cols-1 gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label={t('electricity.selectMainMeter')}><select required className="input min-h-11" value={mainBalanceAccountId} onChange={(event) => { const account = mainMeters.find((item) => item.id === event.target.value); setMainBalanceAccountId(event.target.value); setMainBalanceThreshold(String(account?.low_units_threshold ?? 50)); setMainBalanceUnits(''); setMainBalancePurchasedUnits('0'); setConfirmZeroMainBalance(false) }}><option value="">{t('electricity.selectMainMeter')}</option>{mainMeters.map((account) => <option key={account.id} value={account.id}>{account.floor_label}</option>)}</select></Field>
+            <Field label={t('electricity.selectMainMeter')}><select required className="input min-h-11" value={mainBalanceAccountId} onChange={(event) => { const account = mainMeters.find((item) => item.id === event.target.value); setMainBalanceAccountId(event.target.value); setMainBalanceThreshold(String(account?.low_units_threshold ?? 50)); setMainBalanceUnits(''); setMainBalancePurchasedUnits(''); setMainBalanceAddedKnown(false); setConfirmZeroMainBalance(false) }}><option value="">{t('electricity.selectMainMeter')}</option>{mainMeters.map((account) => <option key={account.id} value={account.id}>{account.floor_label}{account.meter_number ? ` · ${account.meter_number}` : ''}</option>)}</select></Field>
             <Field label={t('electricity.visitDate')}><input required className="input min-h-11" type="date" min={selectedMainPreviousBalance ? dayAfterISO(selectedMainPreviousBalance.reading_date) : undefined} max={todayISO()} value={mainBalanceDate} onChange={(event) => { setMainBalanceDate(event.target.value); setConfirmZeroMainBalance(false) }} /></Field>
             <Field label={t('electricity.unitsRemainingOnMain')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalanceUnits} onChange={(event) => { setMainBalanceUnits(event.target.value); setConfirmZeroMainBalance(false) }} /></Field>
             {selectedMainPreviousBalance
-              ? <Field label={t('electricity.unitsAddedSincePrevious')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalancePurchasedUnits} onChange={(event) => setMainBalancePurchasedUnits(event.target.value)} /></Field>
+              ? <div className="space-y-2"><Field label={t('electricity.mainAddedKnowledge')}><select className="input min-h-11" value={mainBalanceAddedKnown ? 'known' : 'unknown'} onChange={(event) => { setMainBalanceAddedKnown(event.target.value === 'known'); setMainBalancePurchasedUnits('') }}><option value="unknown">{t('electricity.mainAddedUnknown')}</option><option value="known">{t('electricity.mainAddedKnown')}</option></select></Field>{mainBalanceAddedKnown ? <Field label={t('electricity.unitsAddedSincePrevious')}><input required className="input min-h-11 tabular-nums" type="number" inputMode="decimal" min="0" max="1000000" step="0.001" value={mainBalancePurchasedUnits} onChange={(event) => setMainBalancePurchasedUnits(event.target.value)} /><span className="mt-1 block text-xs text-slate-600">{t('electricity.mainAddedKnownHelp')}</span></Field> : <p className="text-xs text-amber-800">{t('electricity.mainAddedUnknownHelp')}</p>}</div>
               : <p className="self-end border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">{t('electricity.firstMainBalanceBaselineHelp')}</p>}
+            {selectedMainPreviousBalance && <p className="self-end border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">{t('electricity.mainPreviousBalance')}: <strong>{numeric(selectedMainPreviousBalance.units_remaining)} kWh</strong> · {formatDate(selectedMainPreviousBalance.reading_date)}</p>}
             <Field label={t('electricity.quickSessionNote')}><input className="input min-h-11" maxLength={500} value={mainBalanceNotes} onChange={(event) => setMainBalanceNotes(event.target.value)} /></Field>
             {selectedMainPreviousBalance && mainBalanceUnits.trim() !== '' && Number.isFinite(mainBalanceUsagePreview) && <div className={`border px-3 py-3 text-sm ${mainBalanceUsagePreview! < -0.001 ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-slate-200 bg-slate-50 text-slate-800'}`}>
               <p className="text-xs font-semibold">{mainBalanceUsagePreview! < -0.001 ? t('electricity.mainBalanceRiseWarning') : t('electricity.mainUsagePreview')}</p>
@@ -1629,7 +1652,8 @@ export function ElectricityWorkspace() {
             </div>}
             {selectedMainBalanceAccount && Number.isFinite(parsedMainBalance) && parsedMainBalance > 0 && parsedMainBalance <= Number(selectedMainBalanceAccount.low_units_threshold) * 2 && <p className="border border-amber-300 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-900">{t('electricity.mainCreditWarning')}</p>}
             {mainBalanceZeroNeedsConfirmation && <div className="space-y-2 border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900 sm:col-span-2 lg:col-span-4"><p role="alert" className="font-semibold">{t('electricity.mainBalanceZeroWarning')}</p><label className="flex min-h-11 items-center gap-3 font-semibold"><input type="checkbox" className="h-5 w-5 accent-rose-700" checked={confirmZeroMainBalance} onChange={(event) => setConfirmZeroMainBalance(event.target.checked)} />{t('electricity.confirmMainBalanceZero')}</label></div>}
-            <div className="sm:col-span-2 lg:col-span-4"><button className="btn-primary min-h-11 w-full sm:w-auto" disabled={saving || !selectedMainBalanceAccount || mainBalanceUnits.trim() === '' || (selectedMainPreviousBalance !== null && mainBalancePurchasedUnits.trim() === '') || (mainBalanceZeroNeedsConfirmation && !confirmZeroMainBalance)}>{saving ? t('electricity.saving') : t('electricity.saveMainBalance')}</button></div>
+            {mainAlreadyRecordedToday && <p role="status" className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 sm:col-span-2 lg:col-span-4">{t('electricity.mainAlreadyRecordedToday')}</p>}
+            <div className="sm:col-span-2 lg:col-span-4"><button className="btn-primary min-h-11 w-full sm:w-auto" disabled={saving || mainAlreadyRecordedToday || !selectedMainBalanceAccount || mainBalanceUnits.trim() === '' || (selectedMainPreviousBalance !== null && mainBalanceAddedKnown && mainBalancePurchasedUnits.trim() === '') || (mainBalanceZeroNeedsConfirmation && !confirmZeroMainBalance)}>{saving ? t('electricity.saving') : t('electricity.saveMainBalance')}</button>{actionState?.type === 'success' && actionState.message === t('electricity.mainBalanceSaved') && <p role="status" className="mt-2 font-semibold text-emerald-800">{actionState.message}</p>}</div>
           </form>
           {selectedMainBalanceAccount && <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
             {data.ownerMode
@@ -1646,19 +1670,24 @@ export function ElectricityWorkspace() {
               const recordedBy = staff?.full_name || (balance.recorded_by === data.currentUserId ? t('electricity.propertyOwner') : t('electricity.readingByStaff'))
               const previous = previousMainBalanceById.get(balance.id) || null
               const usage = calculateMainMeterUsage(previous, balance)
-              const usageText = usage === null
-                ? t('electricity.purchaseHistoryUnknown')
+              const change = previous ? Number(balance.units_remaining) - Number(previous.units_remaining) : null
+              const changeText = change === null ? t('electricity.mainNoPrevious')
+                : Math.abs(change) < 0.0005 ? t('electricity.mainBalanceUnchanged')
+                  : t(change > 0 ? 'electricity.mainBalanceIncreased' : 'electricity.mainBalanceDecreased', { units: numeric(Math.abs(change)) })
+              const usageText = !previous ? t('electricity.mainNoPrevious')
+                : usage === null ? t('electricity.purchaseHistoryUnknown')
                 : usage < -0.001
                   ? t('electricity.mainBalanceRiseBy', { units: numeric(Math.abs(usage)) })
                   : `${t('electricity.mainUnitsUsed')}: ${numeric(Math.max(0, usage))} kWh`
               return <article key={balance.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-5">
-                <div className="min-w-0"><p className="font-semibold text-slate-900">{account?.floor_label || t('electricity.mainMeter')} <span className="font-normal text-slate-500">· {formatDate(balance.reading_date)}</span></p><p className="mt-1 text-xs text-slate-600">{balance.units_purchased_since_previous === null ? t('electricity.purchaseHistoryUnknown') : `${t('electricity.unitsAddedSincePrevious')}: ${numeric(balance.units_purchased_since_previous)} kWh`} · {usageText}</p><p className="mt-1 text-xs text-slate-500">{recordedBy}{balance.notes ? ` · ${balance.notes}` : ''}</p></div>
+                <div className="min-w-0"><p className="font-semibold text-slate-900">{account?.floor_label || t('electricity.mainMeter')} <span className="font-normal text-slate-500">· {formatDate(balance.reading_date)}</span></p><p className="mt-1 text-sm font-semibold text-slate-800">{changeText}</p><p className="mt-1 text-xs text-slate-600">{balance.units_purchased_since_previous === null ? t('electricity.purchaseHistoryUnknown') : `${t('electricity.unitsAddedSincePrevious')}: ${numeric(balance.units_purchased_since_previous)} kWh`} · {usageText}</p><p className="mt-1 text-xs text-slate-500">{recordedBy}{balance.notes ? ` · ${balance.notes}` : ''}</p></div>
                 <p className={`text-xl font-extrabold tabular-nums sm:text-2xl ${Number(balance.units_remaining) <= Number(account?.low_units_threshold || 50) ? 'text-rose-800' : 'text-sky-900'}`}>{numeric(balance.units_remaining)} <span className="text-sm font-semibold">kWh</span></p>
               </article>
             })}
           </div>}
         </section>}
-        {activeAccounts.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noMeters')}</div> : <div className="space-y-5">
+        {activeView === 'main_meters' && mainMeters.length > 0 && <div className="mt-6"><ElectricityHistoryPanel key={`main-history-${propertyId}`} propertyId={propertyId} meters={accounts} initialType="main_balances" /></div>}
+        {activeView === 'meters' && <>{activeAccounts.length === 0 ? <div className="border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">{t('electricity.noMeters')}</div> : <div className="space-y-5">
           {meterSearch.trim() && filteredMainMeters.length === 0 && filteredSubmeters.length === 0 && (!data.ownerMode || filteredArchivedSubmeters.length === 0) && <p role="status" className="border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600">{t('electricity.meterSearchNone')}</p>}
           {filteredMainMeters.length > 0 && <section className="border border-sky-200 bg-sky-50/40" aria-labelledby="main-meter-group-heading">
             <header className="flex items-start gap-3 border-b border-sky-200 bg-sky-50 px-4 py-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center border border-sky-200 bg-white text-sky-700"><Building2 className="h-5 w-5" /></span><div><h3 id="main-meter-group-heading" className="font-semibold text-sky-950">{t('electricity.mainMeters')}</h3><p className="mt-1 text-xs text-sky-900">{t('electricity.mainMeterGroupHelp')}</p></div></header>
@@ -1688,6 +1717,7 @@ export function ElectricityWorkspace() {
             })}
           </div>
         </section>}
+        </>}
       </section>}
 
       {adjustmentTarget && data.ownerMode && <section className="border border-blue-200 bg-blue-50 p-4 sm:p-5" aria-labelledby="adjustment-heading">

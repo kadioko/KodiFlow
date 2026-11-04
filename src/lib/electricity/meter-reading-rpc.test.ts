@@ -95,6 +95,7 @@ describe('electricity meter reading transaction', () => {
       '202610300015_electricity_submeter_handoffs.sql',
       '202610300016_electricity_corrections_and_issues.sql',
       '202610300017_electricity_entry_audit_guards.sql',
+      '202611040001_main_meter_unknown_topups.sql',
     ]) {
       const migration = readFileSync(resolve('supabase/migrations', migrationFile), 'utf8')
       for (const [index, statement] of splitSqlStatements(migration).entries()) {
@@ -332,6 +333,23 @@ describe('electricity meter reading transaction', () => {
       [mainAccountId, dateAfterPurchase],
     )).rejects.toThrow(/duplicate key/)
     await db.exec('ROLLBACK TO SAVEPOINT before_duplicate_main_balance;')
+  })
+
+  it('keeps unknown main-meter recharges unknown and does not alter the main balance for a client purchase', async () => {
+    await db.query("SELECT public.record_electricity_main_meter_balance($1, 100, '2026-10-26', NULL, 0, FALSE)", [mainAccountId])
+    await db.query("SELECT public.record_electricity_topup($1, '2026-10-25', 12, NULL, FALSE, NULL)", [accountId])
+    const topup = await db.query<{ id: string }>('SELECT id FROM public.electricity_topups WHERE account_id = $1', [accountId])
+    await db.query('SELECT public.verify_electricity_topup($1)', [topup.rows[0].id])
+    const before = await db.query<{ units_remaining: string }>('SELECT units_remaining FROM public.electricity_main_meter_balances WHERE account_id = $1', [mainAccountId])
+    expect(before.rows).toEqual([{ units_remaining: '100.000' }])
+
+    const unknown = await db.query<{ id: string; units_remaining: string; units_purchased_since_previous: string | null }>(
+      "SELECT * FROM public.record_electricity_main_meter_balance($1, 150, '2026-10-27', NULL, NULL, FALSE)", [mainAccountId],
+    )
+    expect(unknown.rows[0]).toMatchObject({ units_remaining: '150.000', units_purchased_since_previous: null })
+    await db.query("SELECT public.manage_electricity_entry('main_balance', $1, 'edit', '{\"units_purchased_since_previous\":\"80\"}'::jsonb, 'Confirmed loaded units')", [unknown.rows[0].id])
+    const corrected = await db.query<{ units_purchased_since_previous: string }>('SELECT units_purchased_since_previous FROM public.electricity_main_meter_balances WHERE id = $1', [unknown.rows[0].id])
+    expect(corrected.rows[0].units_purchased_since_previous).toBe('80.000')
   })
 
   it('records a verified zero balance and rejects out-of-order snapshots', async () => {

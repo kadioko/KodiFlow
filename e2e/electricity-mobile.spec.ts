@@ -229,12 +229,68 @@ test('meter search finds clients and main-meter numbers without changing propert
   await expect(meters.getByRole('button', { name: 'View meter history: Ground / Reception main TANESCO meter' })).toBeVisible()
   await expect(meters.getByRole('heading', { name: 'Twilight Office Services Limited' })).toHaveCount(0)
   await meters.getByRole('button', { name: 'Record LUKU balance' }).last().click()
+  await expect(page.getByRole('tab', { name: 'Main floor meters' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: 'Main LUKU balances' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Meters and balances', exact: true }).click()
   await expect(search).toHaveValue('')
-  await expect(meters.getByRole('heading', { name: 'Main LUKU balances' })).toBeVisible()
   await search.fill('does not exist')
   await expect(meters.getByText('No meters match this search.')).toBeVisible()
   await meters.getByRole('button', { name: 'Clear meter search' }).click()
   await expect(search).toHaveValue('')
+})
+
+test('staff can record a main-meter balance when the units added are unknown', async ({ page }) => {
+  await openWorkspace(page, false)
+  let submitted: Record<string, unknown> | null = null
+  await page.route('**/api/electricity/main-balances', async (route) => {
+    submitted = route.request().postDataJSON()
+    await route.fulfill({ status: 201, json: { balance: {} } })
+  })
+  await page.getByRole('tab', { name: 'Main floor meters' }).click()
+  await expect(page.getByText('Client LUKU entries update client credit only', { exact: false })).toBeVisible()
+  await page.getByRole('combobox', { name: 'Select a main meter' }).selectOption(mainMeterId)
+  await expect(page.getByText('Previous main-meter balance:', { exact: false })).toContainText('400 kWh')
+  await expect(page.getByText('Balance decreased by 100 kWh since the previous check.')).toBeVisible()
+  await page.getByLabel('Units remaining (kWh)').fill('350')
+  await page.getByRole('button', { name: 'Save balance', exact: true }).click()
+  await expect.poll(() => submitted).not.toBeNull()
+  expect(submitted).toMatchObject({ accountId: mainMeterId, unitsRemaining: 350, unitsPurchasedSincePrevious: null })
+  await expect(page.getByRole('status').filter({ hasText: 'Main-meter balance saved.' }).last()).toBeVisible()
+})
+
+test('main-meter balance history shows increases and calculates usage only with known added units', async ({ page }) => {
+  await mockMobileData(page)
+  const data = workspace(false)
+  data.mainMeterBalances.push({ ...data.mainMeterBalances[1], id: 'balance-after-recharge', reading_date: '2026-10-30', units_remaining: 450, units_purchased_since_previous: 100 })
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.route('**/api/electricity/history*', (route) => route.fulfill({ json: { rows: [], total: 0, page: 1, pageSize: 40 } }))
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Main floor meters' }).click()
+  await expect(page.getByText('Balance increased by 50 kWh since the previous check.')).toBeVisible()
+  await expect(page.getByText('Balance decreased by 100 kWh since the previous check.')).toBeVisible()
+  await page.getByRole('combobox', { name: 'Select a main meter' }).selectOption(mainMeterId)
+  await page.getByLabel('Units remaining (kWh)').fill('500')
+  await page.getByRole('combobox', { name: 'Units loaded onto this main meter since the last check' }).selectOption('known')
+  await page.getByLabel('Units added since previous check (kWh)').fill('100')
+  await expect(page.getByText('Estimated main-meter use since the last check')).toBeVisible()
+  await expect(page.getByText('50 kWh', { exact: true }).first()).toBeVisible()
+})
+
+test('a second same-day main-meter reading points staff to corrections instead of silently duplicating', async ({ page }) => {
+  await mockMobileData(page)
+  const data = workspace(false)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi' }).format(new Date())
+  data.mainMeterBalances.push({ ...data.mainMeterBalances[1], id: 'today-main', reading_date: today, units_remaining: 400 })
+  await page.route('**/api/electricity', (route) => route.fulfill({ json: data }))
+  await page.route('**/api/electricity/history*', (route) => route.fulfill({ json: { rows: [], total: 0, page: 1, pageSize: 40 } }))
+  await page.goto('/electricity')
+  await page.getByRole('tab', { name: 'Main floor meters' }).click()
+  await page.getByRole('combobox', { name: 'Select a main meter' }).selectOption(mainMeterId)
+  await page.getByLabel('Units remaining (kWh)').fill('350')
+  await expect(page.getByText('This meter already has a balance for today.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save balance', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Entries & corrections', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'Entries & corrections' })).toHaveAttribute('aria-selected', 'true')
 })
 
 test('full main-meter history can be opened without selecting a meter', async ({ page }) => {
@@ -383,7 +439,7 @@ for (const viewport of [
     await openWorkspace(page, false)
     await expectNoPageOverflow(page)
 
-    for (const name of ['Overview', 'Record readings', 'Record LUKU', 'History & search', 'Meters and balances', 'Ledger and reports', 'Entries & corrections', 'Issues & history', 'Staff help']) {
+    for (const name of ['Overview', 'Record readings', 'Main floor meters', 'Record LUKU', 'History & search', 'Meters and balances', 'Ledger and reports', 'Entries & corrections', 'Issues & history', 'Staff help']) {
       const tab = page.getByRole('tab', { name, exact: true })
       await tab.scrollIntoViewIfNeeded()
       await expectTouchable(tab, page)
