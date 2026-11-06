@@ -356,6 +356,8 @@ KodiFlow can request browser notification permission for reminders such as overd
 
 If the tenant pays a service charge, enter it on the lease. Generated invoices will show rent and service charge separately.
 
+Invoices can be prepared in advance, but the complete monthly, quarterly, six-month, or annual billing period must fit within the lease dates. If a lease ends before the selected period finishes, renew the lease or correct its dates before generating the next invoice. KodiFlow blocks a shortened final period so it cannot charge a full billing cycle for only a few days.
+
 ### Move A Tenant To Another Unit
 
 1. Open the current lease.

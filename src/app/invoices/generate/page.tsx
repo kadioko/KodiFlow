@@ -11,9 +11,8 @@ import {
   calculateChargeAmountForPeriod,
   calculateInvoiceTotal as calculateBillingInvoiceTotal,
   getBillingPeriod,
+  getLeaseInvoicePeriodIssue,
   getLeaseBillingPeriod,
-  isBillingPeriodOnCadence,
-  isBillingPeriodWithinLease,
 } from '@/utils/billing'
 import { firstRelation } from '@/utils/supabase-relations'
 import type { Database } from '@/lib/supabase/database.types'
@@ -280,11 +279,28 @@ export default function GenerateInvoicesPage() {
     }) || null
   }
 
-  const isLeaseInvoiceableForPeriod = (lease: Lease) => (
-    isBillingPeriodOnCadence(lease.start_date, billingYear, billingMonth, lease.billing_frequency) &&
-    isBillingPeriodWithinLease(lease.start_date, lease.end_date, billingYear, billingMonth, lease.billing_frequency) &&
-    !getExistingCoverageForPeriod(lease)
-  )
+  const getInvoiceBlockMessage = (lease: Lease, existingCoverage = getExistingCoverageForPeriod(lease)) => {
+    if (existingCoverage) return `Already covered by ${existingCoverage.invoice_number || 'an existing invoice'}`
+
+    const periodIssue = getLeaseInvoicePeriodIssue(
+      lease.start_date,
+      lease.end_date,
+      billingYear,
+      billingMonth,
+      lease.billing_frequency,
+    )
+
+    if (periodIssue === 'incomplete_billing_period') {
+      const { months } = getBillingPeriod(billingYear, billingMonth, lease.billing_frequency)
+      return `Lease ends before this full ${months}-month billing cycle ends. Renew or correct the lease dates before invoicing.`
+    }
+
+    return periodIssue === 'outside_lease'
+      ? `Selected period is outside ${formatDate(lease.start_date)} - ${formatDate(lease.end_date)}`
+      : null
+  }
+
+  const isLeaseInvoiceableForPeriod = (lease: Lease) => !getInvoiceBlockMessage(lease)
 
   useEffect(() => {
     setSelectedLeases(new Set(leases.filter(isLeaseInvoiceableForPeriod).map((lease) => lease.id)))
@@ -452,6 +468,9 @@ export default function GenerateInvoicesPage() {
               </select>
             </div>
           </div>
+          <p className="mt-3 text-sm text-slate-600">
+            Invoices may be prepared in advance, but the full billing cycle must fit within the lease. Renew or correct the lease dates before billing a shortened final cycle.
+          </p>
         </div>
       </div>
 
@@ -500,6 +519,7 @@ export default function GenerateInvoicesPage() {
             const isInvoiceable = isLeaseInvoiceableForPeriod(lease)
             const coverage = getInvoiceCoverage(lease)
             const existingCoverage = getExistingCoverageForPeriod(lease)
+            const blockMessage = getInvoiceBlockMessage(lease, existingCoverage)
             const selected = selectedLeases.has(lease.id)
 
             return (
@@ -521,7 +541,7 @@ export default function GenerateInvoicesPage() {
                   </span>
                   {coverage && <span className="mt-3 block text-sm text-slate-600">{formatDate(coverage.periodStart.toISOString())} to {formatDate(coverage.periodEnd.toISOString())}</span>}
                   {recurringAdditionalTotal + oneTimeTotal > 0 && <span className="mt-1 block text-xs text-success-700">Includes {formatCurrency(recurringAdditionalTotal + oneTimeTotal)} extra charges</span>}
-                  {!isInvoiceable && <span className="mt-2 block text-xs font-semibold text-warning-700">{existingCoverage ? `Already covered by ${existingCoverage.invoice_number || 'an existing invoice'}` : `Outside lease dates: ${formatDate(lease.start_date)} - ${formatDate(lease.end_date)}`}</span>}
+                  {blockMessage && <span className="mt-2 block text-xs font-semibold text-warning-700">{blockMessage}</span>}
                   {isGenerating && <span className="mt-2 flex items-center gap-2 text-sm font-semibold text-primary-700"><Loader2 className="h-4 w-4 animate-spin" />Generating invoice</span>}
                 </span>
               </button>
@@ -556,6 +576,7 @@ export default function GenerateInvoicesPage() {
                 const isInvoiceable = isLeaseInvoiceableForPeriod(lease)
                 const coverage = getInvoiceCoverage(lease)
                 const existingCoverage = getExistingCoverageForPeriod(lease)
+                const blockMessage = getInvoiceBlockMessage(lease, existingCoverage)
 
                 return (
                   <tr key={lease.id} className={`hover:bg-gray-50 ${isGenerating || !isInvoiceable ? 'opacity-50' : ''}`}>
@@ -573,9 +594,7 @@ export default function GenerateInvoicesPage() {
                       <p className="text-xs text-gray-500">{lease.lease_type}</p>
                       {!isInvoiceable && (
                         <p className="text-xs font-medium text-warning-700">
-                          {existingCoverage
-                            ? `Already covered by ${existingCoverage.invoice_number || 'an existing invoice'}`
-                            : `Selected period is outside ${formatDate(lease.start_date)} - ${formatDate(lease.end_date)}`}
+                          {blockMessage}
                         </p>
                       )}
                       {hasWithholding && (

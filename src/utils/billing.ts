@@ -62,6 +62,24 @@ export function isBillingPeriodWithinLease(leaseStartDate: string, leaseEndDate:
   return period.periodStart <= leaseEnd
 }
 
+export function getLeaseInvoicePeriodIssue(
+  leaseStartDate: string,
+  leaseEndDate: string,
+  billingYear: number,
+  billingMonth: number,
+  billingFrequency: string,
+): 'outside_lease' | 'incomplete_billing_period' | null {
+  const period = getLeaseBillingPeriod(leaseStartDate, billingYear, billingMonth, billingFrequency)
+  if (!period) return 'outside_lease'
+
+  const leaseStart = new Date(`${leaseStartDate}T00:00:00Z`)
+  const leaseEnd = new Date(`${leaseEndDate}T00:00:00Z`)
+  if (period.periodStart < leaseStart || period.periodStart > leaseEnd) return 'outside_lease'
+  if (period.periodEnd > leaseEnd) return 'incomplete_billing_period'
+
+  return null
+}
+
 export function getRenewalTerm(previousEndDate: string, billingFrequency: string) {
   const months = billingFrequencyMonths[billingFrequency] || 1
   const startDate = new Date(`${previousEndDate}T00:00:00Z`)

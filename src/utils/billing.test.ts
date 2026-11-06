@@ -5,6 +5,7 @@ import {
   calculatePaymentBalance,
   createProfileInsert,
   getBillingPeriod,
+  getLeaseInvoicePeriodIssue,
   getLeaseBillingPeriod,
   getRenewalTerm,
   isBillingPeriodOnCadence,
@@ -55,6 +56,18 @@ describe('billing helpers', () => {
 
   it('allows the last invoice period to be clipped to the lease end date', () => {
     expect(isBillingPeriodWithinLease('2025-12-01', '2026-05-30', 2025, 12, 'semi_annually')).toBe(true)
+  })
+
+  it('blocks billing a full cycle when the lease ends partway through that cycle', () => {
+    expect(getLeaseInvoicePeriodIssue('2026-05-15', '2026-11-15', 2026, 11, 'semi_annually'))
+      .toBe('incomplete_billing_period')
+    expect(getLeaseInvoicePeriodIssue('2026-05-15', '2026-11-14', 2026, 11, 'semi_annually'))
+      .toBe('outside_lease')
+  })
+
+  it('allows advance billing when the complete cycle fits inside the lease', () => {
+    expect(getLeaseInvoicePeriodIssue('2026-05-15', '2027-05-14', 2026, 11, 'semi_annually'))
+      .toBeNull()
   })
 
   it('anchors invoice billing periods to the original lease start day', () => {
